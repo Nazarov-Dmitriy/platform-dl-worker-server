@@ -1,0 +1,8 @@
+{
+  "baseUrl": "http://192.168.1.50:9000",
+  "token": "выдаётся в админке, показывается один раз",
+  "capabilities": ["media.preview"],
+  "maxParallel": 1,
+  "logLevel": "info",
+  "update": { "checkIntervalSeconds": 900, "channel": "tags" }
+}
