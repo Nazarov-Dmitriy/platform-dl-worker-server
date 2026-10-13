@@ -38,6 +38,10 @@ func (h *HTTP) addAdminRoutes() {
 	h.mux.HandleFunc("GET /api/v2/admin/tokens", h.admin(h.adminListTokens, false))
 	h.mux.HandleFunc("GET /api/v2/admin/models", h.admin(h.adminModels, false))
 	h.mux.HandleFunc("GET /api/v2/admin/audit", h.admin(h.adminAudit, false))
+	h.mux.HandleFunc("GET /api/v2/admin/ops", h.admin(h.adminOps, false))
+	h.mux.HandleFunc("PUT /api/v2/admin/ops", h.admin(h.adminOpsSet, true))
+	h.mux.HandleFunc("POST /api/v2/admin/backup", h.admin(h.adminBackup, true))
+	h.mux.HandleFunc("POST /api/v2/admin/update-prepare", h.admin(h.adminUpdatePrepare, true))
 	h.mux.Handle("GET /panel/", http.StripPrefix("/panel/", http.FileServer(http.FS(panel.Files))))
 	h.mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/panel/", http.StatusFound)
@@ -348,6 +352,50 @@ func (h *HTTP) adminCancelAll(w http.ResponseWriter, r *http.Request, a AdminAct
 		return
 	}
 	v, e := h.store.AdminCancelAll(r.Context(), a, r.PathValue("id"), raw)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	h.reply(w, 200, v)
+}
+func (h *HTTP) adminOps(w http.ResponseWriter, r *http.Request, a AdminActor) {
+	v, e := h.store.OpsStatus(r.Context())
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	h.reply(w, 200, v)
+}
+func (h *HTTP) adminOpsSet(w http.ResponseWriter, r *http.Request, a AdminActor) {
+	raw, e := h.body(w, r)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	var in struct {
+		Maintenance bool `json:"maintenance"`
+	}
+	if json.Unmarshal(raw, &in) != nil {
+		h.failure(w, problem(400, "INVALID_REQUEST", "Invalid ops payload"))
+		return
+	}
+	v, e := h.store.SetMaintenance(r.Context(), a, in.Maintenance)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	h.reply(w, 200, v)
+}
+func (h *HTTP) adminBackup(w http.ResponseWriter, r *http.Request, a AdminActor) {
+	v, e := h.store.AdminSnapshot(r.Context(), a, defaultBackupKeep)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	h.reply(w, 200, v)
+}
+func (h *HTTP) adminUpdatePrepare(w http.ResponseWriter, r *http.Request, a AdminActor) {
+	v, e := h.store.PrepareUpdate(r.Context(), a)
 	if e != nil {
 		h.failure(w, e)
 		return

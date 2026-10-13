@@ -185,6 +185,41 @@ func TestAdminSiteTokenOnceAndPanel(t *testing.T) {
 	page.Body.Close()
 }
 
+func TestAdminOpsOwnerOnly(t *testing.T) {
+	srv, s := adminServer(t)
+	owner, sess := login(t, srv, "owner", "owner-password-1")
+	csrf := sess["csrfToken"].(string)
+	acc := adminDo(t, owner, "POST", srv.URL+"/api/v2/admin/accounts", csrf, map[string]any{
+		"login": "operator1", "password": "operator-pass-1", "enabled": true, "role": "OPERATOR", "manageSites": true,
+	})
+	acc.Body.Close()
+	op, opSess := login(t, srv, "operator1", "operator-pass-1")
+	denied := adminDo(t, op, "PUT", srv.URL+"/api/v2/admin/ops", opSess["csrfToken"].(string), map[string]any{"maintenance": true})
+	if denied.StatusCode != 403 {
+		t.Fatal(denied.Status)
+	}
+	denied.Body.Close()
+	ok := adminDo(t, owner, "PUT", srv.URL+"/api/v2/admin/ops", csrf, map[string]any{"maintenance": true})
+	if ok.StatusCode != 200 {
+		t.Fatal(ok.Status)
+	}
+	ok.Body.Close()
+	snap := adminDo(t, owner, "POST", srv.URL+"/api/v2/admin/backup", csrf, map[string]any{})
+	if snap.StatusCode != 200 {
+		t.Fatal(snap.Status)
+	}
+	snap.Body.Close()
+	ready, e := http.Get(srv.URL + "/readyz")
+	if e != nil || ready.StatusCode != 200 {
+		t.Fatal(e, ready)
+	}
+	ready.Body.Close()
+	st, e := s.OpsStatus(testContext)
+	if e != nil || !st.Maintenance {
+		t.Fatal(e, st)
+	}
+}
+
 func TestAdminResetOwnerPasswordInvalidatesSession(t *testing.T) {
 	srv, s := adminServer(t)
 	_, _ = login(t, srv, "owner", "owner-password-1")

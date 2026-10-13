@@ -16,6 +16,7 @@
       <button data-tab="models">Модели</button>
       <button data-tab="accounts" id="accountsTab" hidden>Аккаунты</button>
       <button data-tab="audit" id="auditTab" hidden>Журнал</button>
+      <button data-tab="ops" id="opsTab" hidden>Эксплуатация</button>
       <button id="logout">Выйти</button>
     </nav>
   </header>
@@ -98,6 +99,16 @@
     <section data-panel="audit" hidden>
       <h2>Журнал</h2>
       <pre id="audit"></pre>
+    </section>
+    <section data-panel="ops" hidden>
+      <h2>Эксплуатация</h2>
+      <p>Обслуживание останавливает новые назначения. Текущие права исполнения дорабатывают. Снимок не содержит задания, принятые после него.</p>
+      <pre id="ops"></pre>
+      <button id="opsMaintenanceOn">Включить обслуживание</button>
+      <button id="opsMaintenanceOff">Снять обслуживание</button>
+      <button id="opsBackup">Согласованный снимок</button>
+      <button id="opsPrepare">Подготовить обновление</button>
+      <pre id="opsOut"></pre>
     </section>
   </main>
   <script src="app.js"></script>

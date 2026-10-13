@@ -56,6 +56,7 @@ type Store struct {
 	validator *Validator
 	now       func() time.Time
 	epoch     string
+	path      string
 }
 
 func Open(path string, config Config) (*Store, error) {
@@ -96,7 +97,7 @@ func Open(path string, config Config) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	s := &Store{db: db, lock: lock, config: config, now: time.Now}
+	s := &Store{db: db, lock: lock, config: config, now: time.Now, path: path}
 	fail := func(e error) (*Store, error) { _ = s.Close(); return nil, e }
 	if e = db.Ping(); e != nil {
 		return fail(e)
@@ -622,4 +623,14 @@ func sortParts(parts []SourcePart) {
 func (s *Store) health(ctx context.Context) error {
 	var n int
 	return s.db.QueryRowContext(ctx, "SELECT 1").Scan(&n)
+}
+func (s *Store) Ready(ctx context.Context) (map[string]any, error) {
+	if e := s.health(ctx); e != nil {
+		return nil, e
+	}
+	st, e := s.OpsStatus(ctx)
+	if e != nil {
+		return nil, e
+	}
+	return map[string]any{"status": "ready", "maintenance": st.Maintenance, "epoch": st.Epoch}, nil
 }

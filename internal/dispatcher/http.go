@@ -28,6 +28,14 @@ func Handler(s *Store) http.Handler {
 		}
 		h.reply(w, 200, map[string]string{"status": "ok"})
 	})
+	h.mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		v, e := s.Ready(r.Context())
+		if e != nil {
+			h.failure(w, e)
+			return
+		}
+		h.reply(w, 200, v)
+	})
 	h.mux.HandleFunc("GET /api/v2/site/capabilities", h.site(h.capabilities))
 	h.mux.HandleFunc("POST /api/v2/site/jobs", h.site(h.submit))
 	h.mux.HandleFunc("GET /api/v2/site/jobs", h.site(h.list))

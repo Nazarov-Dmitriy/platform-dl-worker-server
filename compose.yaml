@@ -1,7 +1,7 @@
 services:
   dispatcher:
     build: .
-    image: titunki-dispatcher:stage2
+    image: titunki-dispatcher:stage7
     command: ["serve", "-db", "/data/dispatcher.db", "-listen", "0.0.0.0:8090"]
     ports:
       - "127.0.0.1:8090:8090"
@@ -15,10 +15,18 @@ services:
     security_opt: [no-new-privileges:true]
     mem_limit: 256m
     cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      DISPATCHER_BACKUP_S3_URI: ${DISPATCHER_BACKUP_S3_URI:-}
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/healthz"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/readyz"]
       interval: 30s
       timeout: 3s
       retries: 3
+      start_period: 5s
 volumes:
   dispatcher-data:

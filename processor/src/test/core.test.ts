@@ -397,3 +397,9 @@ test("catalog-test speech returns original text without translation", (t) => {
     /TRANSLATION_UNAVAILABLE/,
   );
 });
+test("doctor reports node and platform without requiring a token", async () => {
+  const { doctor } = await import("../doctor.js");
+  const report = doctor() as { ok: boolean; nodeOk: boolean; platformOk: boolean };
+  assert.equal(report.nodeOk, true);
+  assert.equal(report.platformOk, true);
+});

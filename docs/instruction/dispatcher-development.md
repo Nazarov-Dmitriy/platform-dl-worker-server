@@ -1,10 +1,10 @@
-> Этап 6: панель `/panel/` и `/api/v2/admin/*`. Миграция 005 — аккаунты/сессии.
-> CLI bootstrap/reset пароля владельца при остановленном диспетчере. [Обработчик](processor-development.md).
+> Этап 7: Compose/health, snapshot/restore, обслуживание и обновление из панели.
+> CLI restore только на остановленном процессе. [Обработчик](processor-development.md).
 
 # Диспетчер: локальная разработка и запуск
 
-Обновлено: 2026-10-13. Реализованы ядро, WSS, transfer, каталог и общая панель.
-Production-веса whisper/NLLB ставятся командами на устройство. HTTPS/proxy — этап 7.
+Обновлено: 2026-10-13. Реализованы ядро, WSS, transfer, каталог, панель и поставка.
+Production-веса whisper/NLLB ставятся командами на устройство.
 
 ## Требования и проверки
 
@@ -23,7 +23,7 @@ python contracts/validate.py
 На Windows без C-компилятора использовать тестовый Docker target:
 
 ```powershell
-docker build --target test -t titunki-dispatcher-tests:stage2 .
+docker build --target test -t titunki-dispatcher-tests:stage7 .
 ```
 
 Тесты проверяют конкурентный приём/назначение, права и повторы renewal, fairness/FIFO,
@@ -144,21 +144,34 @@ SQLite WAL + synchronous FULL, один писатель, миграция 001, 
 ```powershell
 docker compose build
 docker compose run --rm dispatcher init -db /data/dispatcher.db
-docker compose run --rm dispatcher site-create -db /data/dispatcher.db -name courses -weight 4
+docker compose run --rm dispatcher owner-bootstrap -db /data/dispatcher.db -login owner -password "choose-a-long-password"
 docker compose up -d
+docker compose exec dispatcher wget -q -O - http://127.0.0.1:8090/readyz
 docker compose logs dispatcher
 ```
 
-CLI после запуска: сначала `docker compose stop dispatcher`, затем `docker compose run --rm ...`;
-после изменений `docker compose up -d`. Именованный том dispatcher-data сохраняет БД и WAL.
-Compose ограничивает контейнер 256 MiB/1 CPU, публикует порт только на localhost.
-HTTPS-прокси/домен, backup/restore и безопасное обновление ещё требуют этапа 7.
-Образ запускается UID10001; существующий bind mount должен принадлежать этому UID.
+Пока `serve` держит файл БД, второй CLI к тому же тому не открывается. Сайты/токены —
+панель `http://127.0.0.1:8090/panel/` или `docker compose stop dispatcher` и затем
+`docker compose run --rm dispatcher …`. Именованный том dispatcher-data хранит БД, WAL и `backups/`.
+Compose: 256 MiB / 1 CPU, порт только localhost, json-file логи 10m×3, restart unless-stopped.
+Образ UID 10001. Пример HTTPS/WSS: [nginx-dispatcher.conf](../../deploy/nginx-dispatcher.conf).
+Серверная процедура: [dispatcher-server.md](dispatcher-server.md).
+
+```powershell
+# Снимок при работающем serve: панель «Согласованный снимок» или суточный цикл (03:00 UTC).
+# CLI backup/restore к тому же файлу — только после stop (эксклюзивная блокировка).
+docker compose stop dispatcher
+docker compose run --rm dispatcher restore -db /data/dispatcher.db -from /data/backups/dispatcher-YYYYMMDDThhmmssZ.db
+docker compose up -d
+```
+
+Restore меняет epoch, закрывает активные назначения и включает обслуживание.
+Снимок не содержит задания, принятые после него.
 
 ## Воспроизводимый нагрузочный стенд
 
 ```powershell
-docker build -t titunki-dispatcher:stage2 .
+docker build -t titunki-dispatcher:stage7 .
 ./scripts/load-docker.ps1 -Jobs 2000
 ```
 

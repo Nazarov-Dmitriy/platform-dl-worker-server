@@ -1,10 +1,9 @@
 # Обработчик: запуск Windows/macOS/Linux
 
-Этап 5, 2026-10-13. Добавлены каталог моделей, команды INSTALL/ACTIVATE/DELETE,
-расшифровка в текст и VTT-дорожки. Без `ffmpeg`/`ffprobe` нет media.transcode.
+Этап 7, 2026-10-13. Node.js 22.12+ (закреплено в package.json engines и образе тестов
+`node:22.19.0-bookworm-slim`). Без `ffmpeg`/`ffprobe` нет media.transcode.
 `media.transcribe`/`media.subtitles` появляются после ACTIVE моделей.
-`testExecutor: true` по-прежнему только для транспорта и никогда не даёт READY.
-Физический сон Mac, отрыв SSD и замер whisper.cpp — на устройстве.
+`testExecutor: true` только для транспорта и никогда не даёт READY.
 
 ## Подготовка
 
@@ -52,7 +51,31 @@ npm start -- config.json
 `CONNECTED` означает установленную сессию. Ctrl+C останавливает собственные исполнители
 и сохраняет сообщения для повторной отправки. SITE-токен не подходит. Токен берётся из
 окружения; в конфиг, журнал и дочерний исполнитель не записывается.
-Панель диспетчера задаёт паузу/параллельность/каталог через CONFIGURE; OS-автозапуск — этап 7.
+Панель задаёт паузу/параллельность/каталог через CONFIGURE. Проверка среды:
+
+```powershell
+npm start -- --doctor
+npm start -- config.json --doctor
+```
+
+Автозапуск (токен в `processor/data/processor.token` строкой `PROCESSOR_TOKEN=…`, режим 600):
+
+```powershell
+.\packaging\install.ps1
+.\packaging\install.ps1 -Disable
+```
+
+```sh
+chmod +x packaging/install.sh packaging/package.sh
+./packaging/package.sh
+echo "PROCESSOR_TOKEN=…" > data/processor.token
+chmod 600 data/processor.token
+./packaging/install.sh
+./packaging/install.sh --disable
+```
+
+Linux — user systemd `titunki-processor.service`, macOS — LaunchAgent
+`com.titunki.processor`, Windows — задача `TitunkiProcessor` при входе.
 
 ## Параметры и диск
 
@@ -114,7 +137,7 @@ npm test
 Полная проверка Linux из корня:
 
 ```powershell
-docker build -f processor/Dockerfile -t titunki-processor:stage5-test .
+docker build -f processor/Dockerfile -t titunki-processor:stage7-test .
 docker build --target test -t titunki-dispatcher:stage3-test .
 ```
 

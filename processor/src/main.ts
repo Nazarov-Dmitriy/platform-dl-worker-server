@@ -3,9 +3,22 @@ import { Journal } from "./journal.js";
 import { lockInstance } from "./instance.js";
 import { Agent } from "./agent.js";
 import { Resources } from "./resources.js";
+import { doctor } from "./doctor.js";
 async function main() {
   const path = process.argv[2];
-  if (!path) throw new Error("Usage: npm start -- <config.json>");
+  if (path === "--doctor" || process.argv.includes("--doctor") && !path) {
+    const report = doctor(process.argv[3]);
+    console.log(JSON.stringify(report));
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+  if (!path) throw new Error("Usage: npm start -- <config.json> | npm start -- --doctor [config.json]");
+  if (process.argv[3] === "--doctor") {
+    const report = doctor(path);
+    console.log(JSON.stringify(report));
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
   const config = loadConfig(path);
   const bind = process.argv[3] === "--bind-work-volume";
   if (process.argv[3] && !bind) throw new Error("UNKNOWN_ARGUMENT");

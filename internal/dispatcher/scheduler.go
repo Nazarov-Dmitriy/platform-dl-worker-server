@@ -237,6 +237,13 @@ func (s *Store) Offer(ctx context.Context, p Principal, session string) (*Offer,
 		if e := s.expireTx(tx, now); e != nil {
 			return e
 		}
+		var maint string
+		if e := tx.QueryRow("SELECT value FROM metadata WHERE key='maintenance'").Scan(&maint); e != nil && !errors.Is(e, sql.ErrNoRows) {
+			return e
+		}
+		if maint == "1" {
+			return nil
+		}
 		var seen, ready int64
 		var capsRaw, usageRaw string
 		if e := tx.QueryRow("SELECT last_seen,ready_since,capabilities,usage FROM devices WHERE id=?", p.ID).Scan(&seen, &ready, &capsRaw, &usageRaw); e != nil {

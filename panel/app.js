@@ -16,6 +16,7 @@ function showApp() {
   $("nav").hidden = false;
   $("accountsTab").hidden = state.role !== "OWNER";
   $("auditTab").hidden = state.role !== "OWNER";
+  $("opsTab").hidden = state.role !== "OWNER";
 }
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -57,6 +58,7 @@ async function reload() {
   if (state.role === "OWNER") {
     $("accounts").textContent = JSON.stringify((await api("/api/v2/admin/accounts")).items, null, 2);
     $("audit").textContent = JSON.stringify((await api("/api/v2/admin/audit")).items, null, 2);
+    $("ops").textContent = JSON.stringify(await api("/api/v2/admin/ops"), null, 2);
   }
   await loadJobs();
   await loadDevice();
@@ -184,6 +186,20 @@ $("accountForm").addEventListener("submit", async (e) => {
   });
   await reload();
 });
+async function opsAction(method, path, body) {
+  $("opsOut").textContent = "";
+  try {
+    const data = await api(path, { method, mutate: true, body: JSON.stringify(body || {}) });
+    $("opsOut").textContent = JSON.stringify(data, null, 2);
+    $("ops").textContent = JSON.stringify(await api("/api/v2/admin/ops"), null, 2);
+  } catch (err) {
+    $("opsOut").textContent = err.message;
+  }
+}
+$("opsMaintenanceOn").addEventListener("click", () => opsAction("PUT", "/api/v2/admin/ops", { maintenance: true }));
+$("opsMaintenanceOff").addEventListener("click", () => opsAction("PUT", "/api/v2/admin/ops", { maintenance: false }));
+$("opsBackup").addEventListener("click", () => opsAction("POST", "/api/v2/admin/backup", {}));
+$("opsPrepare").addEventListener("click", () => opsAction("POST", "/api/v2/admin/update-prepare", {}));
 api("/api/v2/admin/session").then((s) => {
   state.csrf = s.csrfToken;
   state.role = s.role;

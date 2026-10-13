@@ -43,6 +43,9 @@ func run(args []string) error {
 	commandFile := flags.String("command", "", "JSON AdminCommand for a device")
 	login := flags.String("login", "", "Owner login")
 	password := flags.String("password", "", "Owner password (12+ characters)")
+	from := flags.String("from", "", "SQLite snapshot path for restore")
+	out := flags.String("out", "", "Optional backup destination file")
+	keep := flags.Int("keep", 7, "Local snapshot copies to retain")
 	enabled := flags.Bool("enabled", true, "Enable site/device")
 	history := flags.Int("history-days", 30, "Terminal job history retention")
 	audit := flags.Int("audit-days", 30, "Audit retention")
@@ -63,6 +66,13 @@ func run(args []string) error {
 	config.LeaseTTL = *lease
 	config.StopSafety = *safety
 	config.AdmissionStable = *stable
+	if command == "restore" {
+		epoch, e := dispatcher.RestoreDatabase(*dbPath, *from, config)
+		if e != nil {
+			return e
+		}
+		return output(map[string]any{"status": "restored", "epoch": epoch, "maintenance": true})
+	}
 	store, e := dispatcher.Open(*dbPath, config)
 	if e != nil {
 		return e
@@ -198,6 +208,28 @@ func run(args []string) error {
 			return e
 		}
 		return output(map[string]string{"status": "password-reset"})
+	case "backup":
+		path, e := store.Snapshot(ctx, *keep)
+		if e != nil {
+			return e
+		}
+		if *out != "" && *out != path {
+			raw, e := os.ReadFile(path)
+			if e != nil {
+				return e
+			}
+			if e = os.WriteFile(*out, raw, 0600); e != nil {
+				return e
+			}
+			path = *out
+		}
+		return output(map[string]string{"status": "snapshot", "path": path})
+	case "ops":
+		v, e := store.OpsStatus(ctx)
+		if e != nil {
+			return e
+		}
+		return output(v)
 	case "serve":
 	default:
 		return fmt.Errorf("unknown command %q", command)
@@ -217,9 +249,10 @@ func run(args []string) error {
 	if e = store.Prune(ctx); e != nil {
 		return e
 	}
+	store.StartBackupLoop(ctx)
 	done := make(chan error, 1)
 	go func() { done <- server.ListenAndServe() }()
-	log.Printf("dispatcher listening on %s (stage 6, admin panel at /panel/)", *listen)
+	log.Printf("dispatcher listening on %s (stage 7, panel /panel/, health /healthz /readyz)", *listen)
 	for {
 		select {
 		case e := <-done:
