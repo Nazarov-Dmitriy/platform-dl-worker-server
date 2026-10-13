@@ -1,0 +1,32 @@
+{
+  "schema": "Capabilities",
+  "value": {
+    "protocolVersion": "2.0",
+    "revision": "1",
+    "checkedAt": "2026-10-13T09:00:00Z",
+    "operations": [
+      {
+        "code": "media.transcode",
+        "recognitionLanguages": [
+          "en",
+          "ru"
+        ],
+        "translationDirections": [
+          {
+            "source": "en",
+            "target": "ru"
+          }
+        ],
+        "autoDetect": true,
+        "formats": [
+          "hls",
+          "vtt"
+        ],
+        "availability": "ONLINE",
+        "profilePolicies": [
+          "X264_EXACT"
+        ]
+      }
+    ]
+  }
+}

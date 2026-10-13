@@ -1,0 +1,19 @@
+{
+  "schema": "TransferPage",
+  "value": {
+    "protocolVersion": "2.0",
+    "requests": [
+      {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "kind": "SOURCE",
+        "fence": {
+          "assignmentId": "22222222-2222-4222-8222-222222222222",
+          "generation": 1,
+          "dispatcherEpoch": "55555555-5555-4555-8555-555555555555"
+        },
+        "sourceRevision": "33333333-3333-4333-8333-333333333333"
+      }
+    ],
+    "nextCursor": null
+  }
+}

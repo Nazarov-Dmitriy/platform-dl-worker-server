@@ -1,0 +1,68 @@
+{
+  "schema": "Manifest",
+  "value": {
+    "files": [
+      {
+        "path": "index.m3u8",
+        "bytes": 120,
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "contentType": "application/vnd.apple.mpegurl",
+        "kind": "MASTER"
+      },
+      {
+        "path": "720p/index.m3u8",
+        "bytes": 100,
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "contentType": "application/vnd.apple.mpegurl",
+        "kind": "PLAYLIST"
+      },
+      {
+        "path": "720p/seg_000.ts",
+        "bytes": 1000,
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "contentType": "video/mp2t",
+        "kind": "SEGMENT"
+      },
+      {
+        "path": "subtitles/en.vtt",
+        "bytes": 80,
+        "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "contentType": "text/vtt",
+        "kind": "SUBTITLE"
+      }
+    ],
+    "steps": [
+      {
+        "name": "video",
+        "status": "SUCCEEDED"
+      },
+      {
+        "name": "subtitles",
+        "language": "en",
+        "status": "SUCCEEDED"
+      },
+      {
+        "name": "subtitles",
+        "language": "ru",
+        "status": "FAILED",
+        "error": {
+          "code": "TRANSLATION_UNAVAILABLE",
+          "message": "Russian subtitle translation failed",
+          "permanent": false
+        }
+      }
+    ],
+    "detectedLanguage": "en",
+    "masterPath": "index.m3u8",
+    "renditions": [
+      {
+        "quality": "P720",
+        "width": 1280,
+        "height": 720,
+        "bandwidth": 1011960,
+        "mode": "COPY",
+        "playlist": "720p/index.m3u8"
+      }
+    ]
+  }
+}

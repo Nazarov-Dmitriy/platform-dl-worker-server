@@ -1,0 +1,35 @@
+{
+  "transitions": {
+    "QUEUED": ["ASSIGNED", "REJECTED", "FAILED", "CANCELLED", "RELEASED"],
+    "ASSIGNED": ["RUNNING", "QUEUED", "CANCELLED", "RELEASED"],
+    "RUNNING": ["QUEUED", "AWAITING_PUBLICATION", "CANCELLING", "RELEASING", "FAILED"],
+    "AWAITING_PUBLICATION": ["PUBLISHING", "CANCELLED", "RELEASED", "FAILED"],
+    "PUBLISHING": ["SUCCEEDED", "PARTIAL", "FAILED"],
+    "CANCELLING": ["CANCELLED"],
+    "RELEASING": ["RELEASED"],
+    "SUCCEEDED": [], "PARTIAL": [], "FAILED": [], "REJECTED": [], "CANCELLED": [], "RELEASED": []
+  },
+  "traces": [
+    {"name": "video-published", "states": ["QUEUED", "ASSIGNED", "RUNNING", "AWAITING_PUBLICATION", "PUBLISHING", "SUCCEEDED"], "valid": true},
+    {"name": "partial-subtitles", "states": ["QUEUED", "ASSIGNED", "RUNNING", "AWAITING_PUBLICATION", "PUBLISHING", "PARTIAL"], "valid": true},
+    {"name": "lost-offer", "states": ["QUEUED", "ASSIGNED", "QUEUED", "ASSIGNED", "RUNNING"], "valid": true},
+    {"name": "expired-executor", "states": ["QUEUED", "ASSIGNED", "RUNNING", "QUEUED", "ASSIGNED", "RUNNING"], "valid": true},
+    {"name": "cancel-running", "states": ["RUNNING", "CANCELLING", "CANCELLED"], "valid": true},
+    {"name": "release-to-site", "states": ["RUNNING", "RELEASING", "RELEASED"], "valid": true},
+    {"name": "cannot-release-during-publish", "states": ["PUBLISHING", "RELEASED"], "valid": false},
+    {"name": "cannot-publish-without-claim", "states": ["AWAITING_PUBLICATION", "SUCCEEDED"], "valid": false},
+    {"name": "cannot-restart-terminal", "states": ["SUCCEEDED", "QUEUED"], "valid": false},
+    {"name": "cancel-is-not-success", "states": ["CANCELLING", "SUCCEEDED"], "valid": false},
+    {"name": "offer-is-not-result", "states": ["ASSIGNED", "AWAITING_PUBLICATION"], "valid": false}
+  ],
+  "leaseCases": [
+    {"name": "current-before-expiry", "currentGeneration": 2, "messageGeneration": 2, "currentEpoch": "new", "messageEpoch": "new", "expiresAt": 120, "now": 119, "accepted": true},
+    {"name": "at-expiry-not-valid", "currentGeneration": 2, "messageGeneration": 2, "currentEpoch": "new", "messageEpoch": "new", "expiresAt": 120, "now": 120, "accepted": false},
+    {"name": "late-old-generation", "currentGeneration": 2, "messageGeneration": 1, "currentEpoch": "new", "messageEpoch": "new", "expiresAt": 120, "now": 30, "accepted": false},
+    {"name": "restored-epoch", "currentGeneration": 2, "messageGeneration": 2, "currentEpoch": "new", "messageEpoch": "old", "expiresAt": 120, "now": 30, "accepted": false}
+  ],
+  "monotonicDeadlineCases": [
+    {"name": "normal-response", "sentAt": 0, "receivedGrantAt": 3, "leaseSeconds": 120, "safety": 5, "expectedLocalDeadline": 115, "mayStart": true},
+    {"name": "delayed-grant-cannot-resurrect", "sentAt": 0, "receivedGrantAt": 116, "leaseSeconds": 120, "safety": 5, "expectedLocalDeadline": 115, "mayStart": false}
+  ]
+}

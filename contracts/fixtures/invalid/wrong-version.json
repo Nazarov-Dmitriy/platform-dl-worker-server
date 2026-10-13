@@ -1,0 +1,17 @@
+{
+  "schema": "DeviceMessage",
+  "value": {
+    "protocolVersion": "3.0",
+    "messageId": "33333333-3333-4333-8333-333333333333",
+    "type": "protocol.error",
+    "direction": "DOWN",
+    "body": {
+      "replyTo": "33333333-3333-4333-8333-333333333333",
+      "error": {
+        "code": "TRANSLATION_UNAVAILABLE",
+        "message": "Russian subtitle translation failed",
+        "permanent": false
+      }
+    }
+  }
+}

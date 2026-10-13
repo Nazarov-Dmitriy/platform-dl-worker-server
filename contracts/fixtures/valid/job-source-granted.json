@@ -1,0 +1,38 @@
+{
+  "schema": "DeviceMessage",
+  "value": {
+    "protocolVersion": "2.0",
+    "messageId": "33333333-3333-4333-8333-333333333333",
+    "type": "job.source.granted",
+    "direction": "DOWN",
+    "body": {
+      "jobId": "11111111-1111-4111-8111-111111111111",
+      "fence": {
+        "assignmentId": "22222222-2222-4222-8222-222222222222",
+        "generation": 1,
+        "dispatcherEpoch": "55555555-5555-4555-8555-555555555555"
+      },
+      "grant": {
+        "protocolVersion": "2.0",
+        "requestId": "33333333-3333-4333-8333-333333333333",
+        "fence": {
+          "assignmentId": "22222222-2222-4222-8222-222222222222",
+          "generation": 1,
+          "dispatcherEpoch": "55555555-5555-4555-8555-555555555555"
+        },
+        "links": [
+          {
+            "path": "source",
+            "objectName": "uploads/video.mp4",
+            "url": "https://storage.example.invalid/source?signature=TEST_ONLY",
+            "expiresAt": "2026-10-13T09:20:00Z",
+            "method": "GET",
+            "headers": {}
+          }
+        ],
+        "page": 0,
+        "lastPage": true
+      }
+    }
+  }
+}

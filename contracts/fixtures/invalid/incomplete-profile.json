@@ -1,0 +1,56 @@
+{
+  "schema": "JobRequest",
+  "value": {
+    "protocolVersion": "2.0",
+    "id": "11111111-1111-4111-8111-111111111111",
+    "type": "media.transcode",
+    "source": {
+      "objectName": "uploads/video.mp4",
+      "revision": "33333333-3333-4333-8333-333333333333",
+      "bytes": 281919974,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "contentType": "video/mp4",
+      "role": "UPLOAD",
+      "kind": "FILE"
+    },
+    "params": {
+      "profile": {
+        "policyVersion": "site-hls-2026-10-01",
+        "qualities": [
+          "P720",
+          "P1080"
+        ],
+        "segmentDurationSeconds": 6,
+        "codec": "h264",
+        "encoderPolicy": "X264_EXACT",
+        "preset": "slow",
+        "crf": 25,
+        "audioBitrateKbps": 96,
+        "targetVideoBitrateKbps": {
+          "P480": 700,
+          "P720": 1200,
+          "P1080": 2500
+        },
+        "passthroughTolerancePercent": 20,
+        "allowUpscale": false
+      },
+      "subtitles": {
+        "speech": {
+          "sourceLanguage": "auto",
+          "mode": "AUTO"
+        },
+        "includeOriginal": true,
+        "targetLanguages": [
+          "ru",
+          "en"
+        ],
+        "formats": [
+          "vtt"
+        ]
+      }
+    },
+    "maxOutputBytes": 1073741824,
+    "maxDurationSeconds": 7200,
+    "clientReference": "lesson-video-revision-1"
+  }
+}

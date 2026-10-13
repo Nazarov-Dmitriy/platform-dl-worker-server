@@ -1,0 +1,48 @@
+{
+  "schema": "DeviceMessage",
+  "value": {
+    "protocolVersion": "2.0",
+    "messageId": "33333333-3333-4333-8333-333333333333",
+    "type": "device.heartbeat",
+    "direction": "UP",
+    "body": {
+      "usage": {
+        "cpuPercent": 20,
+        "memoryUsedPercent": 40,
+        "memoryPressure": "NORMAL",
+        "diskUsedPercent": 20,
+        "freeMemoryBytes": 8589934592,
+        "freeDiskBytes": 107374182400,
+        "freeVramBytes": null,
+        "encoderBusyPercent": null,
+        "availableSlots": 1,
+        "paused": false,
+        "workDiskAvailable": true
+      },
+      "capabilities": [
+        {
+          "code": "media.transcode",
+          "recognitionLanguages": [
+            "en",
+            "ru"
+          ],
+          "translationDirections": [
+            {
+              "source": "en",
+              "target": "ru"
+            }
+          ],
+          "autoDetect": true,
+          "formats": [
+            "hls",
+            "vtt"
+          ],
+          "availability": "ONLINE",
+          "profilePolicies": [
+            "X264_EXACT"
+          ]
+        }
+      ]
+    }
+  }
+}

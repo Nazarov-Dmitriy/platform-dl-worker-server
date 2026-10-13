@@ -1,0 +1,16 @@
+{
+  "schema": "PublicationDecision",
+  "value": {
+    "protocolVersion": "2.0",
+    "artifactId": "33333333-3333-4333-8333-333333333333",
+    "fence": {
+      "assignmentId": "22222222-2222-4222-8222-222222222222",
+      "generation": 1,
+      "dispatcherEpoch": "55555555-5555-4555-8555-555555555555"
+    },
+    "manifestSha256": "a47757e40facf635dc8c3963a6a96d8a9921827da1436a2cd898bae2e0fff19c",
+    "decision": "PUBLISHED",
+    "publicationId": "44444444-4444-4444-8444-444444444444",
+    "claimId": "22222222-2222-4222-8222-222222222222"
+  }
+}

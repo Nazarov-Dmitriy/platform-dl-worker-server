@@ -1,0 +1,14 @@
+{
+  "schema": "DeviceMessage",
+  "value": {
+    "protocolVersion": "2.0",
+    "messageId": "33333333-3333-4333-8333-333333333333",
+    "type": "device.command.result",
+    "direction": "UP",
+    "body": {
+      "requestId": "33333333-3333-4333-8333-333333333333",
+      "status": "RUNNING",
+      "progress": 0.5
+    }
+  }
+}
