@@ -178,6 +178,12 @@ func (s *Store) EnqueueCommand(ctx context.Context, device string, raw []byte) (
 				return problem(409, "MODEL_IN_USE", "Cannot delete a model while the device has an active assignment")
 			}
 		}
+		if cmd.Type == "CONFIGURE" && len(cmd.Settings) > 0 {
+			if _, e = tx.Exec(`INSERT INTO device_identity(device_id,desired_settings) VALUES(?,?)
+ ON CONFLICT(device_id) DO UPDATE SET desired_settings=excluded.desired_settings`, device, string(cmd.Settings)); e != nil {
+				return e
+			}
+		}
 		if _, e = tx.Exec("INSERT INTO device_commands(request_id,device_id,fingerprint,body,status,created_at) VALUES(?,?,?,?,'PENDING',?)", cmd.RequestID, device, fp, canonical, s.now().UnixMilli()); e != nil {
 			return e
 		}
@@ -302,6 +308,11 @@ func (s *Store) CommandResult(ctx context.Context, p Principal, session, request
 			_, e = tx.Exec("INSERT OR REPLACE INTO device_models(device_id,model_id,revision,state) VALUES(?,?,?,'ACTIVE')", p.ID, cmd.ModelID, cmd.ModelRevision)
 		case "MODEL_DELETE":
 			_, e = tx.Exec("DELETE FROM device_models WHERE device_id=? AND model_id=? AND revision=?", p.ID, cmd.ModelID, cmd.ModelRevision)
+		case "CONFIGURE":
+			if len(cmd.Settings) > 0 {
+				_, e = tx.Exec(`INSERT INTO device_identity(device_id,reported_settings) VALUES(?,?)
+ ON CONFLICT(device_id) DO UPDATE SET reported_settings=excluded.reported_settings`, p.ID, string(cmd.Settings))
+			}
 		}
 		return e
 	})

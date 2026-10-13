@@ -46,6 +46,10 @@ type deviceBody struct {
 	Outcome          string   `json:"outcome"`
 	RequestID        string   `json:"requestId"`
 	Status           string   `json:"status"`
+	AgentVersion     string   `json:"agentVersion"`
+	OS               string   `json:"os"`
+	Architecture     string   `json:"architecture"`
+	Accelerators     []string `json:"accelerators"`
 }
 type deviceHub struct {
 	sync.Mutex
@@ -112,7 +116,7 @@ func (h *HTTP) deviceConnect(w http.ResponseWriter, r *http.Request) {
 		h.hub.Unlock()
 		return
 	}
-	session, e := h.store.Connect(ctx, p, body.Capabilities, body.Usage, active, activeJobs)
+	session, e := h.store.Connect(ctx, p, body.Capabilities, body.Usage, active, activeJobs, DeviceIdentity{body.OS, body.Architecture, body.Accelerators})
 	if e != nil {
 		h.hub.Unlock()
 		return

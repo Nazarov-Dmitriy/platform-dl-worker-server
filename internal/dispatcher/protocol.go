@@ -257,10 +257,24 @@ type CommandView struct {
 	Error     *APIError `json:"error,omitempty"`
 }
 type AdminCommand struct {
-	RequestID     string `json:"requestId"`
-	Type          string `json:"type"`
-	ModelID       string `json:"modelId,omitempty"`
-	ModelRevision string `json:"modelRevision,omitempty"`
+	RequestID     string          `json:"requestId"`
+	Type          string          `json:"type"`
+	ModelID       string          `json:"modelId,omitempty"`
+	ModelRevision string          `json:"modelRevision,omitempty"`
+	Settings      json.RawMessage `json:"settings,omitempty"`
+}
+type AdminActor struct {
+	ID, Login, Role string
+	ManageSites     bool
+}
+type DeviceSettings struct {
+	WorkDirectory          string `json:"workDirectory"`
+	Paused                 bool   `json:"paused"`
+	Autostart              bool   `json:"autostart"`
+	MaxParallel            int    `json:"maxParallel"`
+	CPUThresholdPercent    int    `json:"cpuThresholdPercent"`
+	MemoryThresholdPercent int    `json:"memoryThresholdPercent"`
+	DiskThresholdPercent   int    `json:"diskThresholdPercent"`
 }
 
 func UUID() string {
@@ -324,7 +338,7 @@ func NewValidator() (*Validator, error) {
 		return nil, e
 	}
 	v := &Validator{schemas: map[string]*jsonschema.Schema{}}
-	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck", "ModelEntry", "AdminCommand", "CommandView"} {
+	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck", "ModelEntry", "AdminCommand", "CommandView", "Login", "Session", "AdminSite", "AdminDevice", "AdminAccount", "AdminAccountUpdate", "AdminSiteView", "AdminDeviceView", "AdminAccountView", "TokenCreate", "IssuedToken", "TokenPage", "ModelPage"} {
 		s, e := c.Compile("schema.json#/$defs/" + name)
 		if e != nil {
 			return nil, e

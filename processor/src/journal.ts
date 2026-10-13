@@ -40,6 +40,8 @@ export type State = {
   workVolume?: { path: string; dev: number; ino: number };
   models: InstalledModel[];
   catalog: ModelEntry[];
+  appliedSettings?: Record<string, unknown>;
+  autostart?: boolean;
 };
 export class Journal {
   state: State = { version: 1, attempts: [], outbox: [], models: [], catalog: [] };

@@ -41,6 +41,8 @@ func run(args []string) error {
 	capsPath := flags.String("capabilities", "", "JSON file with verified offline device capabilities")
 	catalog := flags.String("catalog", "", "JSON array of ModelEntry records")
 	commandFile := flags.String("command", "", "JSON AdminCommand for a device")
+	login := flags.String("login", "", "Owner login")
+	password := flags.String("password", "", "Owner password (12+ characters)")
 	enabled := flags.Bool("enabled", true, "Enable site/device")
 	history := flags.Int("history-days", 30, "Terminal job history retention")
 	audit := flags.Int("audit-days", 30, "Audit retention")
@@ -186,6 +188,16 @@ func run(args []string) error {
 			return e
 		}
 		return output(v)
+	case "owner-bootstrap":
+		if e := store.BootstrapOwner(ctx, *login, *password); e != nil {
+			return e
+		}
+		return output(map[string]string{"status": "owner-created"})
+	case "owner-reset-password":
+		if e := store.ResetOwnerPassword(ctx, *login, *password); e != nil {
+			return e
+		}
+		return output(map[string]string{"status": "password-reset"})
 	case "serve":
 	default:
 		return fmt.Errorf("unknown command %q", command)
@@ -207,7 +219,7 @@ func run(args []string) error {
 	}
 	done := make(chan error, 1)
 	go func() { done <- server.ListenAndServe() }()
-	log.Printf("dispatcher listening on %s (stage 5, catalog and speech)", *listen)
+	log.Printf("dispatcher listening on %s (stage 6, admin panel at /panel/)", *listen)
 	for {
 		select {
 		case e := <-done:

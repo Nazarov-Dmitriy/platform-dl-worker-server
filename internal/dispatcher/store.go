@@ -111,10 +111,10 @@ func Open(path string, config Config) (*Store, error) {
 			return fail(e)
 		}
 	}
-	if version > 4 {
+	if version > 5 {
 		return fail(errors.New("unsupported database schema version"))
 	}
-	for i, name := range []string{"001_core.sql", "002_device_messages.sql", "003_transfers.sql", "004_models.sql"} {
+	for i, name := range []string{"001_core.sql", "002_device_messages.sql", "003_transfers.sql", "004_models.sql", "005_admin.sql"} {
 		if version >= i+1 {
 			continue
 		}
@@ -208,7 +208,7 @@ func audit(tx *sql.Tx, at int64, kind, principal, job string) error {
 }
 func (s *Store) CreateSite(ctx context.Context, name string, weight int, ops []string) (Site, error) {
 	v := Site{UUID(), name, true, weight, ops, 1}
-	if strings.TrimSpace(name) == "" || weight < 1 || weight > 100 || len(ops) == 0 {
+	if strings.TrimSpace(name) == "" || weight < 1 || weight > 100 {
 		return v, problem(400, "INVALID_SITE", "Invalid site settings")
 	}
 	seen := map[string]bool{}
@@ -604,6 +604,12 @@ func (s *Store) Prune(ctx context.Context) error {
 			return e
 		}
 		if _, e := tx.Exec("DELETE FROM device_commands WHERE status IN ('SUCCEEDED','FAILED') AND created_at<?", cut); e != nil {
+			return e
+		}
+		if _, e := tx.Exec("DELETE FROM admin_sessions WHERE expires_at<?", s.now().UnixMilli()); e != nil {
+			return e
+		}
+		if _, e := tx.Exec("DELETE FROM login_attempts WHERE at<?", cut); e != nil {
 			return e
 		}
 		_, e := tx.Exec("DELETE FROM audit WHERE at<?", s.now().Add(-time.Duration(s.config.AuditDays)*24*time.Hour).UnixMilli())

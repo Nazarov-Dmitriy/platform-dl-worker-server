@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Диспетчер</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <strong>Диспетчер</strong>
+    <nav id="nav" hidden>
+      <button data-tab="queue">Очередь</button>
+      <button data-tab="sites">Сайты</button>
+      <button data-tab="devices">Устройства</button>
+      <button data-tab="models">Модели</button>
+      <button data-tab="accounts" id="accountsTab" hidden>Аккаунты</button>
+      <button data-tab="audit" id="auditTab" hidden>Журнал</button>
+      <button id="logout">Выйти</button>
+    </nav>
+  </header>
+  <main id="login">
+    <h1>Вход</h1>
+    <form id="loginForm">
+      <label>Логин <input name="login" required autocomplete="username"></label>
+      <label>Пароль <input name="password" type="password" required autocomplete="current-password"></label>
+      <button type="submit">Войти</button>
+    </form>
+    <p id="loginError" class="error"></p>
+  </main>
+  <main id="app" hidden>
+    <section data-panel="queue">
+      <h2>Очередь</h2>
+      <select id="jobSite"></select>
+      <button id="reloadJobs">Обновить</button>
+      <button id="cancelAll">Отменить все задания сайта</button>
+      <pre id="jobs"></pre>
+    </section>
+    <section data-panel="sites" hidden>
+      <h2>Сайты</h2>
+      <form id="siteForm">
+        <input name="name" placeholder="Имя" required>
+        <input name="weight" type="number" min="1" max="100" value="1">
+        <label><input type="checkbox" name="transcode" checked> transcode</label>
+        <label><input type="checkbox" name="transcribe"> transcribe</label>
+        <label><input type="checkbox" name="subtitles"> subtitles</label>
+        <button>Создать</button>
+      </form>
+      <pre id="sites"></pre>
+    </section>
+    <section data-panel="devices" hidden>
+      <h2>Устройства</h2>
+      <form id="deviceForm">
+        <input name="name" placeholder="Имя" required>
+        <button>Создать</button>
+      </form>
+      <select id="deviceSelect"></select>
+      <pre id="deviceDetail"></pre>
+      <p>Токен устройства показывается один раз.</p>
+      <button id="issueDeviceToken">Выдать токен устройства</button>
+      <pre id="issued"></pre>
+      <h3>Совместимые модели</h3>
+      <pre id="compat"></pre>
+      <input id="modelId" placeholder="modelId">
+      <input id="modelRev" placeholder="revision">
+      <button id="installModel">Установить</button>
+      <button id="activateModel">Активировать</button>
+      <button id="deleteModel">Удалить</button>
+      <pre id="commandOut"></pre>
+      <h3>Настройки (желаемые / подтверждённые устройством)</h3>
+      <pre id="settings"></pre>
+      <form id="configureForm">
+        <input name="workDirectory" placeholder="workDirectory" required>
+        <label><input type="checkbox" name="paused"> пауза</label>
+        <label><input type="checkbox" name="autostart" checked> автозапуск (флаг)</label>
+        <input name="maxParallel" type="number" min="1" max="64" value="2">
+        <input name="cpuThresholdPercent" type="number" min="1" max="80" value="80">
+        <input name="memoryThresholdPercent" type="number" min="1" max="80" value="80">
+        <input name="diskThresholdPercent" type="number" min="1" max="80" value="80">
+        <button>Отправить CONFIGURE</button>
+      </form>
+    </section>
+    <section data-panel="models" hidden>
+      <h2>Каталог</h2>
+      <pre id="catalog"></pre>
+    </section>
+    <section data-panel="accounts" hidden>
+      <h2>Аккаунты</h2>
+      <form id="accountForm">
+        <input name="login" placeholder="логин" required>
+        <input name="password" type="password" placeholder="пароль 12+" required>
+        <select name="role"><option>OPERATOR</option><option>OWNER</option></select>
+        <label><input type="checkbox" name="manageSites"> manageSites</label>
+        <button>Создать</button>
+      </form>
+      <pre id="accounts"></pre>
+    </section>
+    <section data-panel="audit" hidden>
+      <h2>Журнал</h2>
+      <pre id="audit"></pre>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

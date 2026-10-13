@@ -2,8 +2,8 @@ import os from "node:os";
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import type { Config } from "./config.js";
 import { Journal, type Attempt } from "./journal.js";
 import { frame, parseFrame, sameFence, type Frame } from "./protocol.js";
@@ -508,6 +508,8 @@ export class Agent {
           cmd.modelRevision!,
           this.running.size > 0,
         );
+      } else if (cmd.type === "CONFIGURE") {
+        applyConfigure(this, (cmd as any).settings);
       } else throw new Error("UNKNOWN_COMMAND");
       report("SUCCEEDED", 1);
     } catch (e) {
@@ -979,6 +981,39 @@ export class Agent {
     })();
     return this.closePromise;
   }
+}
+function applyConfigure(agent: Agent, settings: any) {
+  if (!settings || typeof settings.workDirectory !== "string")
+    throw new Error("INVALID_SETTINGS");
+  const th = Math.min(
+    settings.cpuThresholdPercent,
+    settings.memoryThresholdPercent,
+    settings.diskThresholdPercent,
+  );
+  if (
+    !Number.isInteger(settings.maxParallel) ||
+    settings.maxParallel < 1 ||
+    settings.maxParallel > 64 ||
+    th < 1 ||
+    th > 80
+  )
+    throw new Error("INVALID_SETTINGS");
+  const nextDir = resolve(settings.workDirectory);
+  if (nextDir !== agent.config.workDir) {
+    if (agent.running.size || agent.journal.state.attempts.length)
+      throw new Error("DEVICE_BUSY");
+    const path = realpathSync(nextDir);
+    const s = statSync(path);
+    if (!s.isDirectory()) throw new Error("WORK_DIRECTORY_REQUIRED");
+    agent.journal.state.workVolume = { path, dev: s.dev, ino: s.ino };
+    agent.config.workDir = nextDir;
+  }
+  agent.config.paused = Boolean(settings.paused);
+  agent.config.maxParallel = settings.maxParallel;
+  agent.config.threshold = th;
+  agent.journal.state.autostart = Boolean(settings.autostart);
+  agent.journal.state.appliedSettings = settings;
+  agent.journal.save();
 }
 function hasBin(bin: string) {
   try {

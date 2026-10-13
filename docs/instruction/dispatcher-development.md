@@ -1,10 +1,10 @@
-> Этап 5: каталог моделей и команды устройств. Миграция 004 добавляет catalog/commands
-> к БД этапов 2–4. Admin API по-прежнему CLI. [Обработчик](processor-development.md).
+> Этап 6: панель `/panel/` и `/api/v2/admin/*`. Миграция 005 — аккаунты/сессии.
+> CLI bootstrap/reset пароля владельца при остановленном диспетчере. [Обработчик](processor-development.md).
 
 # Диспетчер: локальная разработка и запуск
 
-Обновлено: 2026-10-13. Реализованы ядро Go/SQLite, WSS, transfer/publication и каталог моделей.
-Панель — этап 6. Production-веса whisper/NLLB ставятся командами на устройство, не диспетчером.
+Обновлено: 2026-10-13. Реализованы ядро, WSS, transfer, каталог и общая панель.
+Production-веса whisper/NLLB ставятся командами на устройство. HTTPS/proxy — этап 7.
 
 ## Требования и проверки
 
@@ -37,6 +37,7 @@ docker build --target test -t titunki-dispatcher-tests:stage2 .
 ```powershell
 go build -trimpath -ldflags="-s -w" -o ./bin/dispatcher.exe ./cmd/dispatcher
 ./bin/dispatcher.exe init -db ./data/dispatcher.db
+./bin/dispatcher.exe owner-bootstrap -db ./data/dispatcher.db -login owner -password "choose-a-long-password"
 ./bin/dispatcher.exe site-create -db ./data/dispatcher.db -name courses -weight 4 -operations media.transcode,media.transcribe,media.subtitles
 ./bin/dispatcher.exe site-list -db ./data/dispatcher.db
 ```
@@ -76,9 +77,15 @@ go build -trimpath -ldflags="-s -w" -o ./bin/dispatcher.exe ./cmd/dispatcher
 Отключение сайта запрещает новые заявки, принятые завершаются; revoke токена устройства
 закрывает сессию, но не даёт права немедленного резерва до stop/expiry.
 
-В этапе 2 административные изменения делаются CLI **при остановленном диспетчере**.
-Эксклюзивная OS-блокировка БД не позволяет второму CLI/сервису работать с тем же файлом.
-Живое управление через admin API/панель появится на этапе 6. Ctrl+C/SIGTERM останавливают сервер.
+Сайты/устройства/токены по-прежнему можно менять CLI **при остановленном диспетчере**.
+После `owner-bootstrap` живое управление — панель `http://127.0.0.1:8090/panel/`
+и `/api/v2/admin/*` (cookie + CSRF). Сброс пароля владельца без почты:
+
+```powershell
+./bin/dispatcher.exe owner-reset-password -db ./data/dispatcher.db -login owner -password "new-long-password"
+```
+
+Команда требует остановленный процесс и инвалидирует сессии. Ctrl+C/SIGTERM останавливают сервер.
 Зависшее/аварийно завершённое приложение освобождает OS-блокировку; файл .lock удалять не нужно.
 
 У нового устройства нет установленных возможностей. Поэтому заявки получают REJECTED,
@@ -105,7 +112,8 @@ device-create `-capabilities <file.json>`: файл содержит масси�
 Опрос доступен только своему сайту, cursor также относится к сайту.
 Неподдержанный основной исполнитель сохраняет REJECTED; offline известного исполнителя — QUEUED.
 
-Admin endpoints отвечают 501 до этапа 6. Сайт выдаёт GET/PUT хранилища сам;
+Admin API: session/sites/devices/accounts/tokens/commands/models, плюс очередь
+`GET /api/v2/admin/jobs?siteId=` и отмена. Сайт выдаёт GET/PUT хранилища сам;
 диспетчер хранит только метаданные и краткоживущие страницы grant.
 
 Результаты видео создаёт обработчик с FFmpeg; аудио/субтитры — активные модели на устройстве.

@@ -1,0 +1,10 @@
+body { font-family: sans-serif; margin: 0; color: #111; background: #f4f4f1; }
+header { display: flex; gap: 1rem; align-items: center; padding: .75rem 1rem; background: #1f2a24; color: #fff; }
+nav button { margin-right: .25rem; }
+main { padding: 1rem; max-width: 960px; }
+label, form { display: grid; gap: .35rem; margin: .5rem 0; }
+form { grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); align-items: end; }
+pre { background: #fff; padding: .75rem; overflow: auto; border: 1px solid #ddd; }
+.error { color: #a40000; }
+button { cursor: pointer; }
+section[hidden], main[hidden], nav[hidden], #accountsTab[hidden], #auditTab[hidden] { display: none; }

@@ -42,8 +42,9 @@ func Handler(s *Store) http.Handler {
 		h.failure(w, problem(404, "NOT_FOUND", "Unknown site endpoint"))
 	}))
 	h.mux.HandleFunc("GET /api/v2/device/connect", h.deviceConnect)
+	h.addAdminRoutes()
 	h.mux.HandleFunc("/api/v2/admin/", func(w http.ResponseWriter, r *http.Request) {
-		h.failure(w, problem(501, "STAGE_NOT_IMPLEMENTED", "Use the server CLI; admin sessions/panel arrive at stage 6"))
+		h.failure(w, problem(404, "NOT_FOUND", "Unknown admin endpoint"))
 	})
 	h.mux.HandleFunc("GET /api/site/operations", h.site(func(w http.ResponseWriter, r *http.Request, p Principal) {
 		h.failure(w, problem(403, "PROTOCOL_UPGRADE_REQUIRED", "Update the site client to protocol 2.0"))

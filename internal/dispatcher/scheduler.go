@@ -124,7 +124,12 @@ func checkDevice(tx *sql.Tx, p Principal, session string) error {
 
 // Connect is the transport-independent registration boundary. Stage 3 wires it to WSS.
 // Reconnect preserves unexpired rights only when the agent explicitly reconciles them.
-func (s *Store) Connect(ctx context.Context, p Principal, caps []Capability, usage Usage, active []Fence, activeJobs ...map[string]string) (string, error) {
+type DeviceIdentity struct {
+	OS, Architecture string
+	Accelerators     []string
+}
+
+func (s *Store) Connect(ctx context.Context, p Principal, caps []Capability, usage Usage, active []Fence, activeJobs ...any) (string, error) {
 	if e := s.checkCaps(caps); e != nil {
 		return "", e
 	}
@@ -147,10 +152,30 @@ func (s *Store) Connect(ctx context.Context, p Principal, caps []Capability, usa
 		if _, e := tx.Exec("UPDATE device_commands SET notified=0 WHERE device_id=? AND status='PENDING'", p.ID); e != nil {
 			return e
 		}
+		jobs := map[string]string{}
+		var ident DeviceIdentity
+		for _, extra := range activeJobs {
+			switch v := extra.(type) {
+			case map[string]string:
+				jobs = v
+			case DeviceIdentity:
+				ident = v
+			}
+		}
+		if ident.OS != "" {
+			acc := encode(ident.Accelerators)
+			if ident.Accelerators == nil {
+				acc = encode([]string{})
+			}
+			if _, e := tx.Exec(`INSERT INTO device_identity(device_id,os,architecture,accelerators) VALUES(?,?,?,?)
+ ON CONFLICT(device_id) DO UPDATE SET os=excluded.os,architecture=excluded.architecture,accelerators=excluded.accelerators`, p.ID, ident.OS, ident.Architecture, string(acc)); e != nil {
+				return e
+			}
+		}
 		for _, f := range active {
-			if len(activeJobs) > 0 {
+			if len(jobs) > 0 {
 				var matched int
-				if e := tx.QueryRow("SELECT count(*) FROM assignments a JOIN jobs j ON j.seq=a.job_seq WHERE a.id=? AND j.id=?", f.AssignmentID, activeJobs[0][f.AssignmentID]).Scan(&matched); e != nil {
+				if e := tx.QueryRow("SELECT count(*) FROM assignments a JOIN jobs j ON j.seq=a.job_seq WHERE a.id=? AND j.id=?", f.AssignmentID, jobs[f.AssignmentID]).Scan(&matched); e != nil {
 					return e
 				}
 				if matched == 0 {
