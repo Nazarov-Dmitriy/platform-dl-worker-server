@@ -12,7 +12,8 @@
 - [Настройки планировщика/сроков](v2/defaults.json).
 - [Сценарии переходов](fixtures/scenarios.json), положительные и отрицательные примеры
   в fixtures/valid и fixtures/invalid.
-- [Задачи агента бэкенда/фронтенда](../docs/plan/site-integration-stage1.md).
+- [Универсальная интеграция любого сервиса](../docs/instruction/service-integration.md).
+- [Задачи агента текущего бэкенда/фронтенда](../docs/plan/site-integration-stage1.md).
 
 Проверка контрактных артефактов (Python 3, jsonschema):
 

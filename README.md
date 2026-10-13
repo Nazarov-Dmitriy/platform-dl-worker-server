@@ -33,7 +33,8 @@
 - [Результат этапа 3](docs/audits/processor-stage3-2026-10-13.md).
 - [Проверки и замеры этапа 2](docs/audits/dispatcher-stage2-2026-10-13.md).
 - [Контракт v2 и проверка схем](contracts/README.md).
-- [Задание агенту бэкенда/фронтенда](docs/plan/site-integration-stage1.md).
+- [Универсальная инструкция подключения сайтов и сервисов](docs/instruction/service-integration.md).
+- [Задание агенту текущего бэкенда/фронтенда](docs/plan/site-integration-stage1.md).
 - [Решения, оставшиеся вопросы и точка продолжения](docs/plan/site-connections-discussion.md).
 - [Задачи](docs/future-tasks.md).
 - [Текущий контракт клиента](../serverBreasts/docs/instruction/worker-jobs-api.md).
