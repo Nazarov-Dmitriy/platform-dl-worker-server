@@ -86,8 +86,84 @@ type JobView struct {
 	Steps              []Step          `json:"steps"`
 	Stage              string          `json:"stage,omitempty"`
 	LastProgressAt     string          `json:"lastProgressAt,omitempty"`
-	Error              *APIError       `json:"error,omitempty"`
-	ReleaseReceipt     *ReleaseReceipt `json:"releaseReceipt,omitempty"`
+	Error              *APIError          `json:"error,omitempty"`
+	Artifact           *Artifact          `json:"artifact,omitempty"`
+	ReleaseReceipt     *ReleaseReceipt    `json:"releaseReceipt,omitempty"`
+	PublicationClaim   *PublicationClaim  `json:"publicationClaim,omitempty"`
+	Actionable         bool               `json:"actionable,omitempty"`
+}
+type ArtifactFile struct {
+	Path        string `json:"path"`
+	Bytes       int64  `json:"bytes"`
+	SHA256      string `json:"sha256"`
+	ContentType string `json:"contentType"`
+	Kind        string `json:"kind"`
+	Language    string `json:"language,omitempty"`
+}
+type Rendition struct {
+	Quality   string `json:"quality"`
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
+	Bandwidth int    `json:"bandwidth"`
+	Mode      string `json:"mode"`
+	Playlist  string `json:"playlist"`
+}
+type Manifest struct {
+	Files             []ArtifactFile `json:"files"`
+	Steps             []Step         `json:"steps"`
+	DetectedLanguage  string         `json:"detectedLanguage,omitempty"`
+	MasterPath        string         `json:"masterPath,omitempty"`
+	Renditions        []Rendition    `json:"renditions,omitempty"`
+}
+type Artifact struct {
+	ID             string   `json:"id"`
+	ManifestSHA256 string   `json:"manifestSha256"`
+	Fence          Fence    `json:"fence"`
+	Manifest       Manifest `json:"manifest"`
+}
+type Link struct {
+	Path       string            `json:"path"`
+	ObjectName string            `json:"objectName"`
+	URL        string            `json:"url"`
+	ExpiresAt  string            `json:"expiresAt"`
+	Method     string            `json:"method"`
+	Headers    map[string]string `json:"headers"`
+}
+type TransferGrant struct {
+	ProtocolVersion string `json:"protocolVersion"`
+	RequestID       string `json:"requestId"`
+	Fence           Fence  `json:"fence"`
+	Links           []Link `json:"links"`
+	Page            int    `json:"page"`
+	LastPage        bool   `json:"lastPage"`
+}
+type TransferRequest struct {
+	ID             string    `json:"id"`
+	Kind           string    `json:"kind"`
+	Fence          Fence     `json:"fence"`
+	SourceRevision string    `json:"sourceRevision,omitempty"`
+	Artifact       *Artifact `json:"artifact,omitempty"`
+}
+type PublicationClaim struct {
+	ProtocolVersion string `json:"protocolVersion"`
+	ClaimID         string `json:"claimId"`
+	ArtifactID      string `json:"artifactId"`
+	Fence           Fence  `json:"fence"`
+	ClaimedAt       string `json:"claimedAt"`
+}
+type GrantDelivery struct {
+	DeviceID string
+	Kind     string
+	JobID    string
+	Fence    Fence
+	Grant    TransferGrant
+}
+type PublicationDelivery struct {
+	DeviceID   string
+	JobID      string
+	Fence      Fence
+	ArtifactID string
+	Outcome    string
 }
 type Pair struct {
 	Source string `json:"source"`
@@ -218,7 +294,7 @@ func NewValidator() (*Validator, error) {
 		return nil, e
 	}
 	v := &Validator{schemas: map[string]*jsonschema.Schema{}}
-	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage"} {
+	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck"} {
 		s, e := c.Compile("schema.json#/$defs/" + name)
 		if e != nil {
 			return nil, e

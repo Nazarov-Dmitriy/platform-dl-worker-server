@@ -111,10 +111,10 @@ func Open(path string, config Config) (*Store, error) {
 			return fail(e)
 		}
 	}
-	if version > 2 {
+	if version > 3 {
 		return fail(errors.New("unsupported database schema version"))
 	}
-	for i, name := range []string{"001_core.sql", "002_device_messages.sql"} {
+	for i, name := range []string{"001_core.sql", "002_device_messages.sql", "003_transfers.sql"} {
 		if version >= i+1 {
 			continue
 		}
@@ -583,6 +583,15 @@ func (s *Store) Prune(ctx context.Context) error {
 			return e
 		}
 		if _, e := tx.Exec("DELETE FROM controls WHERE EXISTS (SELECT 1 FROM jobs WHERE jobs.site_id=controls.site_id AND jobs.id=controls.job_id AND "+pred+")", cut); e != nil {
+			return e
+		}
+		if _, e := tx.Exec("DELETE FROM transfer_pages WHERE request_id IN (SELECT id FROM transfers WHERE job_seq IN (SELECT seq FROM jobs WHERE "+pred+"))", cut); e != nil {
+			return e
+		}
+		if _, e := tx.Exec("DELETE FROM publications WHERE job_seq IN (SELECT seq FROM jobs WHERE "+pred+")", cut); e != nil {
+			return e
+		}
+		if _, e := tx.Exec("DELETE FROM transfers WHERE job_seq IN (SELECT seq FROM jobs WHERE "+pred+")", cut); e != nil {
 			return e
 		}
 		if _, e := tx.Exec("DELETE FROM jobs WHERE "+pred, cut); e != nil {

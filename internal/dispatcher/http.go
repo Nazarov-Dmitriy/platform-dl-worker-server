@@ -34,8 +34,12 @@ func Handler(s *Store) http.Handler {
 	h.mux.HandleFunc("GET /api/v2/site/jobs/{id}", h.site(h.get))
 	h.mux.HandleFunc("POST /api/v2/site/jobs/{id}/cancel", h.site(h.control))
 	h.mux.HandleFunc("POST /api/v2/site/jobs/{id}/release", h.site(h.control))
+	h.mux.HandleFunc("GET /api/v2/site/jobs/{id}/transfers", h.site(h.transfers))
+	h.mux.HandleFunc("POST /api/v2/site/jobs/{id}/transfer-grants", h.site(h.grant))
+	h.mux.HandleFunc("POST /api/v2/site/jobs/{id}/publication-claim", h.site(h.claim))
+	h.mux.HandleFunc("POST /api/v2/site/jobs/{id}/publication-decision", h.site(h.decide))
 	h.mux.HandleFunc("/api/v2/site/", h.site(func(w http.ResponseWriter, r *http.Request, p Principal) {
-		h.failure(w, problem(501, "STAGE_NOT_IMPLEMENTED", "Storage transfer and publication endpoints arrive at stage 4"))
+		h.failure(w, problem(404, "NOT_FOUND", "Unknown site endpoint"))
 	}))
 	h.mux.HandleFunc("GET /api/v2/device/connect", h.deviceConnect)
 	h.mux.HandleFunc("/api/v2/admin/", func(w http.ResponseWriter, r *http.Request) {
@@ -220,4 +224,85 @@ func (h *HTTP) control(w http.ResponseWriter, r *http.Request, p Principal) {
 		status = 202
 	}
 	h.reply(w, status, v)
+}
+func (h *HTTP) transfers(w http.ResponseWriter, r *http.Request, p Principal) {
+	v, e := h.store.ListTransfers(r.Context(), p.ID, r.PathValue("id"))
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	h.reply(w, 200, v)
+}
+func (h *HTTP) grant(w http.ResponseWriter, r *http.Request, p Principal) {
+	raw, e := h.body(w, r)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	d, e := h.store.GrantTransfer(r.Context(), p.ID, r.PathValue("id"), raw)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	h.reply(w, 200, map[string]any{"protocolVersion": "2.0", "requestId": d.Grant.RequestID, "applied": true})
+	h.pushGrant(r.Context(), d)
+}
+func (h *HTTP) claim(w http.ResponseWriter, r *http.Request, p Principal) {
+	raw, e := h.body(w, r)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	v, e := h.store.ClaimPublication(r.Context(), p.ID, r.PathValue("id"), raw)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	h.reply(w, 200, v)
+}
+func (h *HTTP) decide(w http.ResponseWriter, r *http.Request, p Principal) {
+	raw, e := h.body(w, r)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	ack, d, e := h.store.DecidePublication(r.Context(), p.ID, r.PathValue("id"), raw)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	h.reply(w, 200, ack)
+	h.pushPublication(r.Context(), d)
+}
+func (h *HTTP) pushGrant(ctx context.Context, d GrantDelivery) {
+	if d.DeviceID == "" {
+		return
+	}
+	h.hub.Lock()
+	c := h.hub.connections[d.DeviceID]
+	h.hub.Unlock()
+	if c == nil {
+		return
+	}
+	kind := "job.source.granted"
+	if d.Kind == "UPLOAD" {
+		kind = "job.upload.granted"
+	}
+	if h.deviceWrite(ctx, c, kind, map[string]any{"jobId": d.JobID, "fence": d.Fence, "grant": d.Grant}) == nil {
+		_ = h.store.MarkGrantDelivered(ctx, d.Grant.RequestID, d.Grant.Page)
+	}
+}
+func (h *HTTP) pushPublication(ctx context.Context, d PublicationDelivery) {
+	if d.DeviceID == "" {
+		return
+	}
+	h.hub.Lock()
+	c := h.hub.connections[d.DeviceID]
+	h.hub.Unlock()
+	if c == nil {
+		return
+	}
+	if h.deviceWrite(ctx, c, "job.publication.done", map[string]any{"jobId": d.JobID, "fence": d.Fence, "artifactId": d.ArtifactID, "outcome": d.Outcome}) == nil {
+		_ = h.store.MarkPublicationDelivered(ctx, d.JobID, d.DeviceID)
+	}
 }

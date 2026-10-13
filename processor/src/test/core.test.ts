@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   renameSync,
@@ -12,12 +13,16 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { LeaseClock } from "../lease.js";
 import { Journal } from "../journal.js";
 import { Resources, slotBudget } from "../resources.js";
 import { frame, parseFrame } from "../protocol.js";
 import { Executor } from "../executor.js";
 import { lockInstance } from "../instance.js";
+import { decidePlan, type Probe, type Profile } from "../packaging.js";
+import { cleanupWork, createAttemptDir, utcDate } from "../files.js";
+import { downloadLink, TransferError, uploadLink } from "../transfer.js";
 import type { Config } from "../config.js";
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 test("lost and delayed grants never start or revive expired rights", () => {
@@ -199,4 +204,126 @@ test("executor stops after its owner crashes and IPC disconnects", async () => {
     await delay(50);
   }
   assert.equal(alive, false, "Executor survived owner crash");
+});
+const profile: Profile = {
+  policyVersion: "site-hls-2026-10-01",
+  qualities: ["P720", "P1080"],
+  segmentDurationSeconds: 6,
+  codec: "h264",
+  encoderPolicy: "X264_EXACT",
+  preset: "slow",
+  crf: 25,
+  audioBitrateKbps: 96,
+  audioChannels: 1,
+  targetVideoBitrateKbps: { P480: 700, P720: 1200, P1080: 2500 },
+  passthroughTolerancePercent: 20,
+  allowUpscale: false,
+};
+test("low-resolution source keeps one actual rendition and never upscales", () => {
+  const probe: Probe = {
+    duration: 2,
+    width: 320,
+    height: 240,
+    videoCodec: "h264",
+    pixFmt: "yuv420p",
+    profile: "High",
+    fps: 30,
+    cfr: true,
+    rotate: 0,
+    videoBitrate: 400000,
+    audioCodec: "aac",
+    audioChannels: 1,
+    audioBitrate: 96000,
+  };
+  const plan = decidePlan(probe, profile);
+  assert.equal(plan.length, 1);
+  assert.ok(plan[0].height <= 240);
+  assert.equal(plan[0].mode, "COPY");
+});
+test("compatible 720p source copies without re-encoding", () => {
+  const probe: Probe = {
+    duration: 2,
+    width: 1280,
+    height: 720,
+    videoCodec: "h264",
+    pixFmt: "yuv420p",
+    profile: "High",
+    fps: 30,
+    cfr: true,
+    rotate: 0,
+    videoBitrate: 1000000,
+    audioCodec: "aac",
+    audioChannels: 1,
+    audioBitrate: 96000,
+  };
+  const plan = decidePlan(probe, profile);
+  const copy = plan.find((p) => p.quality === "P720");
+  assert.equal(copy?.mode, "COPY");
+  assert.equal(
+    plan.find((p) => p.quality === "P1080"),
+    undefined,
+  );
+});
+test("work cleanup keeps active and unpublished attempts across date folders", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "processor-files-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const journal = new Journal(join(root, "state"));
+  const work = join(root, "work");
+  mkdirSync(work);
+  new Resources(
+    {
+      workDir: work,
+      reserveDiskBytes: 0,
+      reserveMemoryBytes: 0,
+      taskMemoryBytes: 1,
+      maxParallel: 1,
+      threshold: 80,
+      paused: false,
+    } as Config,
+    journal,
+  );
+  const keepDir = createAttemptDir(work, "keep-me", journal);
+  const gone = join(work, "files", "1999-01-01", "old");
+  mkdirSync(gone, { recursive: true });
+  cleanupWork(work, new Set([keepDir]));
+  assert.equal(existsSync(keepDir), true);
+  assert.equal(existsSync(gone), false);
+  assert.ok(utcDate().length === 10);
+});
+test("expired storage URLs refresh instead of rewriting the package", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "processor-http-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  let hits = 0;
+  const server = createServer((req, res) => {
+    hits++;
+    if (hits === 1) {
+      res.writeHead(403);
+      res.end();
+      return;
+    }
+    res.writeHead(200);
+    res.end("ok");
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => server.close());
+  const port = (server.address() as any).port;
+  const dest = join(dir, "out.bin");
+  await assert.rejects(
+    () =>
+      downloadLink(
+        {
+          path: "source",
+          objectName: "x",
+          url: `http://127.0.0.1:${port}/a`,
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
+          method: "GET",
+          headers: {},
+        },
+        dest,
+        undefined,
+        undefined,
+        [0],
+      ),
+    (e: unknown) => e instanceof TransferError && e.refresh,
+  );
 });

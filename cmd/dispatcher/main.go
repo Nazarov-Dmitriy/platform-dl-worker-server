@@ -165,7 +165,7 @@ func run(args []string) error {
 	}
 	done := make(chan error, 1)
 	go func() { done <- server.ListenAndServe() }()
-	log.Printf("dispatcher listening on %s (stage 3, device transport)", *listen)
+	log.Printf("dispatcher listening on %s (stage 4, transfers and publication)", *listen)
 	for {
 		select {
 		case e := <-done:

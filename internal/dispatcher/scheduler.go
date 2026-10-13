@@ -500,6 +500,7 @@ func (s *Store) closeAssignment(tx *sql.Tx, r *jobRow, a assignment, status stri
 	r.view.Progress = nil
 	r.view.Stage = ""
 	r.view.Error = nil
+	r.view.Actionable = false
 	if status == "QUEUED" {
 		r.view.Steps = []Step{}
 	} else if status == "FAILED" {
@@ -514,6 +515,9 @@ func (s *Store) closeAssignment(tx *sql.Tx, r *jobRow, a assignment, status stri
 		r.view.ReleaseReceipt = &ReleaseReceipt{id, r.request.ID, stamp(now), s.epoch, "ALL_EXTERNAL_ATTEMPTS", true}
 	}
 	if e := saveJob(tx, r, now); e != nil {
+		return e
+	}
+	if e := cancelTransfers(tx, r.seq); e != nil {
 		return e
 	}
 	return audit(tx, now.UnixMilli(), "JOB_"+status, r.site, r.request.ID)
@@ -619,6 +623,9 @@ func (s *Store) Control(ctx context.Context, site, id, kind string, raw []byte) 
 		}
 		if r.view.Status == "PUBLISHING" {
 			return problem(409, "PUBLICATION_IN_PROGRESS", "Publication is already being committed")
+		}
+		if kind == "release" && r.view.Status == "AWAITING_PUBLICATION" {
+			r.view.Actionable = false
 		}
 		if terminal(r.view.Status) {
 			if kind == "cancel" && r.view.Status == "CANCELLED" || kind == "release" && r.view.Status == "RELEASED" {

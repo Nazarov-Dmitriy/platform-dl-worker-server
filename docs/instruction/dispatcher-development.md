@@ -1,8 +1,5 @@
-> Этап 3 реализован: `/api/v2/device/connect` принимает WSS через HTTPS-прокси.
-> [Обработчик и запуск](processor-development.md). Миграция 002 применяется при открытии БД,
-> сохраняет прежние задания и добавляет подтверждения terminal сообщений.
-> Сроки serve: `-heartbeat 15s -lease 120s -stop-safety 5s -admission-stable 15s`.
-> Файлы/публикация и admin API пока не реализованы.
+> Этап 4: transfer/publication HTTP и WSS grants. Миграция 003 добавляет transfers
+> к БД этапов 2–3. Admin API по-прежнему CLI. [Обработчик](processor-development.md).
 
 # Диспетчер: локальная разработка и запуск
 
@@ -89,6 +86,8 @@ device-create `-capabilities <file.json>`: файл содержит масси�
 - `GET /api/v2/site/capabilities`;
 - `POST /api/v2/site/jobs`, `GET /api/v2/site/jobs`, `GET /api/v2/site/jobs/{id}`;
 - `POST /api/v2/site/jobs/{id}/cancel` и `/release`;
+- `GET /api/v2/site/jobs/{id}/transfers`, `POST .../transfer-grants`;
+- `POST .../publication-claim` и `.../publication-decision`;
 - отказ legacy operations/jobs с PROTOCOL_UPGRADE_REQUIRED.
 
 Сайт использует `Authorization: Bearer <site-token>` и JSON v2, см. [контракт](../../contracts/README.md).
@@ -97,12 +96,12 @@ device-create `-capabilities <file.json>`: файл содержит масси�
 Опрос доступен только своему сайту, cursor также относится к сайту.
 Неподдержанный основной исполнитель сохраняет REJECTED; offline известного исполнителя — QUEUED.
 
-Не реализованные WSS, transfer/publication и admin endpoints отвечают 501 STAGE_NOT_IMPLEMENTED;
-ответ не означает готовности функций. Назначение/accept/renew/reconcile реализованы как
-внутренний API ядра и проверены тестами; production-устройство ими ещё не пользуется.
+Admin endpoints отвечают 501 до этапа 6. Сайт выдаёт GET/PUT хранилища сам;
+диспетчер хранит только метаданные и краткоживущие страницы grant.
 
-Результаты video/audio/subtitles пока не создаются. Сайты остаются в прежнем SERVER-режиме
-до доработки клиента и полной приёмки. Не включать EXTERNAL на рабочем сайте по одному healthz.
+Результаты видео создаёт обработчик с FFmpeg; аудио/субтитры — этап 5.
+Сайты остаются в SERVER-режиме до клиента v2. Не включать EXTERNAL на рабочем
+сайте до приёмки интеграции.
 
 ## Долговечность, планировщик и хранение
 

@@ -9,9 +9,11 @@ export class Executor {
     durationMs: number,
     lease: LeaseClock,
     onMessage: (m: any) => void,
+    script?: URL,
+    payload?: object,
   ) {
     this.child = fork(
-      fileURLToPath(new URL("./executor-child.js", import.meta.url)),
+      fileURLToPath(script ?? new URL("./executor-child.js", import.meta.url)),
       [],
       {
         detached: process.platform !== "win32",
@@ -25,6 +27,8 @@ export class Executor {
     });
     this.child.on("message", onMessage);
     this.child.on("error", () => onMessage({ type: "executor-error" }));
+    if (payload && this.child.connected)
+      this.child.send({ type: "start", ...payload }, () => {});
     this.renew(durationMs, lease);
   }
   renew(durationMs: number, lease: LeaseClock) {

@@ -40,6 +40,10 @@ type deviceBody struct {
 	ActivitySequence int64    `json:"activitySequence"`
 	Steps            []Step   `json:"steps"`
 	Error            APIError `json:"error"`
+	Artifact         Artifact `json:"artifact"`
+	ArtifactID       string   `json:"artifactId"`
+	ManifestSHA256   string   `json:"manifestSha256"`
+	Outcome          string   `json:"outcome"`
 }
 type deviceHub struct {
 	sync.Mutex
@@ -129,13 +133,18 @@ func (h *HTTP) deviceConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, item := range body.Active {
-		valid := false
-		_ = h.store.transaction(ctx, func(tx *sql.Tx) error {
-			a, _, err := lookupAssignment(tx, p, session, item.Fence, item.JobID)
-			valid = err == nil && a.state == "RUNNING" && a.leaseUntil > h.store.now().UnixMilli()
-			return nil
-		})
-		if !valid {
+		keep, outcome, artifactID, e := h.store.ReconcileActive(ctx, p, session, item.Fence, item.JobID)
+		if e != nil {
+			return
+		}
+		if outcome != "" {
+			if h.deviceWrite(ctx, c, "job.publication.done", map[string]any{"jobId": item.JobID, "fence": item.Fence, "artifactId": artifactID, "outcome": outcome}) != nil {
+				return
+			}
+			_ = h.store.MarkPublicationDelivered(ctx, item.JobID, p.ID)
+			continue
+		}
+		if !keep {
 			if h.deviceWrite(ctx, c, "job.stop", map[string]any{"jobId": item.JobID, "fence": item.Fence, "reason": "RECONCILE_STOP"}) != nil {
 				return
 			}
@@ -207,7 +216,7 @@ func (h *HTTP) deviceDispatch(ctx context.Context, p Principal, session string, 
 			return e
 		}
 		return h.deviceWrite(ctx, c, "lease.granted", lease)
-	case "job.decline", "job.failed", "job.stopped":
+	case "job.decline", "job.failed", "job.stopped", "job.source.request", "job.artifact.propose", "job.upload.complete":
 		canonical, e := canonicalTransform(encode(f))
 		if e != nil {
 			return e
@@ -220,13 +229,19 @@ func (h *HTTP) deviceDispatch(ctx context.Context, p Principal, session string, 
 			e = h.store.Fail(ctx, p, session, b.Fence, b.Error, b.JobID)
 		case "job.stopped":
 			e = h.store.Stopped(ctx, p, session, b.Fence, b.JobID)
+		case "job.source.request":
+			e = h.store.RequestSource(ctx, p, session, b.Fence, b.JobID)
+		case "job.artifact.propose":
+			e = h.store.ProposeArtifact(ctx, p, session, b.Fence, b.JobID, b.Artifact)
+		case "job.upload.complete":
+			e = h.store.CompleteUpload(ctx, p, session, b.Fence, b.JobID, b.ArtifactID, b.ManifestSHA256)
 		}
 		if e != nil {
 			return e
 		}
 		return h.deviceWrite(ctx, c, "protocol.ack", map[string]string{"replyTo": f.MessageID})
 	default:
-		return problem(501, "STAGE_NOT_IMPLEMENTED", "This device operation is not implemented yet")
+		return problem(400, "INVALID_REQUEST", "Unknown device message type")
 	}
 }
 func (h *HTTP) deviceTick(ctx context.Context, p Principal, session string, c *websocket.Conn) error {
@@ -262,6 +277,34 @@ func (h *HTTP) deviceTick(ctx context.Context, p Principal, session string, c *w
 	}
 	for _, stop := range stops {
 		if e = h.deviceWrite(ctx, c, "job.stop", stop); e != nil {
+			return e
+		}
+	}
+	grants, e := h.store.PendingGrants(ctx, p, session)
+	if e != nil {
+		return e
+	}
+	for _, g := range grants {
+		kind := "job.source.granted"
+		if g.Kind == "UPLOAD" {
+			kind = "job.upload.granted"
+		}
+		if e = h.deviceWrite(ctx, c, kind, map[string]any{"jobId": g.JobID, "fence": g.Fence, "grant": g.Grant}); e != nil {
+			return e
+		}
+		if e = h.store.MarkGrantDelivered(ctx, g.Grant.RequestID, g.Grant.Page); e != nil {
+			return e
+		}
+	}
+	pubs, e := h.store.PendingPublication(ctx, p, session)
+	if e != nil {
+		return e
+	}
+	for _, pub := range pubs {
+		if e = h.deviceWrite(ctx, c, "job.publication.done", map[string]any{"jobId": pub.JobID, "fence": pub.Fence, "artifactId": pub.ArtifactID, "outcome": pub.Outcome}); e != nil {
+			return e
+		}
+		if e = h.store.MarkPublicationDelivered(ctx, pub.JobID, p.ID); e != nil {
 			return e
 		}
 	}

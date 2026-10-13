@@ -15,11 +15,16 @@ export type Attempt = {
   fence: Fence;
   accept: Frame;
   started: boolean;
+  job?: any;
+  dir?: string;
+  awaitingPublication?: boolean;
+  diskBytes?: number;
 };
 export type State = {
   version: 1;
   attempts: Attempt[];
   outbox: Frame[];
+  lastCleanupDate?: string;
   workVolume?: { path: string; dev: number; ino: number };
 };
 export class Journal {

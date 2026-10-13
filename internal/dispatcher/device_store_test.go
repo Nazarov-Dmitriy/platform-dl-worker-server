@@ -86,7 +86,7 @@ func TestUpgradeStage2DatabasePreservesJobs(t *testing.T) {
 	}
 	var version int
 	s.db.QueryRow("SELECT max(version) FROM schema_migrations").Scan(&version)
-	if version != 2 {
-		t.Fatal("migration 002 not applied")
+	if version != 3 {
+		t.Fatal("migrations 002-003 not applied")
 	}
 }
