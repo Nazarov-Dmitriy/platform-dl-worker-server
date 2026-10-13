@@ -23,6 +23,8 @@ import (
 var migrations embed.FS
 
 type Config struct {
+	HeartbeatInterval time.Duration
+	StopSafety        time.Duration
 	OfferTTL          time.Duration
 	LeaseTTL          time.Duration
 	OnlineTTL         time.Duration
@@ -38,10 +40,10 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{10 * time.Second, 120 * time.Second, 45 * time.Second, 15 * time.Second, 600 * time.Second, 30, 30, 80, 80, 80, 64 << 20, 3}
+	return Config{HeartbeatInterval: 15 * time.Second, StopSafety: 5 * time.Second, OfferTTL: 10 * time.Second, LeaseTTL: 120 * time.Second, OnlineTTL: 45 * time.Second, AdmissionStable: 15 * time.Second, QueueDelay: 600 * time.Second, HistoryDays: 30, AuditDays: 30, CPUThreshold: 80, MemoryThreshold: 80, DiskThreshold: 80, MinimumFreeMemory: 64 << 20, ExecutorAttempts: 3}
 }
 func (c Config) validate() error {
-	if c.OfferTTL <= 0 || c.LeaseTTL < 10*time.Second || c.OnlineTTL <= 0 || c.AdmissionStable < 0 || c.QueueDelay <= 0 || c.HistoryDays < 1 || c.AuditDays < 1 || c.ExecutorAttempts < 1 || c.CPUThreshold <= 0 || c.CPUThreshold > 100 || c.MemoryThreshold <= 0 || c.MemoryThreshold > 100 || c.DiskThreshold <= 0 || c.DiskThreshold > 100 || c.MinimumFreeMemory < 0 {
+	if c.HeartbeatInterval < time.Second || c.HeartbeatInterval > 300*time.Second || c.StopSafety < time.Second || c.StopSafety > 60*time.Second || c.LeaseTTL > 3600*time.Second || c.LeaseTTL <= c.HeartbeatInterval+c.StopSafety || c.HeartbeatInterval%time.Second != 0 || c.LeaseTTL%time.Second != 0 || c.StopSafety%time.Second != 0 || c.OfferTTL <= 0 || c.LeaseTTL < 10*time.Second || c.OnlineTTL <= 0 || c.AdmissionStable < 0 || c.QueueDelay <= 0 || c.HistoryDays < 1 || c.AuditDays < 1 || c.ExecutorAttempts < 1 || c.CPUThreshold <= 0 || c.CPUThreshold > 100 || c.MemoryThreshold <= 0 || c.MemoryThreshold > 100 || c.DiskThreshold <= 0 || c.DiskThreshold > 100 || c.MinimumFreeMemory < 0 {
 		return errors.New("invalid dispatcher configuration")
 	}
 	return nil
@@ -103,29 +105,33 @@ func Open(path string, config Config) (*Store, error) {
 	if e = db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&exists); e != nil {
 		return fail(e)
 	}
-	if exists == 0 {
-		raw, e := migrations.ReadFile("migrations/001_core.sql")
-		if e != nil {
-			return fail(e)
-		}
-		tx, e := db.Begin()
-		if e != nil {
-			return fail(e)
-		}
-		if _, e = tx.Exec(string(raw)); e != nil {
-			_ = tx.Rollback()
-			return fail(e)
-		}
-		if e = tx.Commit(); e != nil {
-			return fail(e)
-		}
-	} else {
-		var version int
+	version := 0
+	if exists != 0 {
 		if e = db.QueryRow("SELECT max(version) FROM schema_migrations").Scan(&version); e != nil {
 			return fail(e)
 		}
-		if version != 1 {
-			return fail(errors.New("unsupported database schema version"))
+	}
+	if version > 2 {
+		return fail(errors.New("unsupported database schema version"))
+	}
+	for i, name := range []string{"001_core.sql", "002_device_messages.sql"} {
+		if version >= i+1 {
+			continue
+		}
+		raw, err := migrations.ReadFile("migrations/" + name)
+		if err != nil {
+			return fail(err)
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			return fail(err)
+		}
+		if _, err = tx.Exec(string(raw)); err != nil {
+			_ = tx.Rollback()
+			return fail(err)
+		}
+		if err = tx.Commit(); err != nil {
+			return fail(err)
 		}
 	}
 	if _, e = db.Exec("INSERT OR IGNORE INTO metadata(key,value) VALUES('epoch',?)", UUID()); e != nil {
@@ -166,8 +172,30 @@ func (s *Store) transaction(ctx context.Context, run func(*sql.Tx) error) error 
 			return problem(401, "UNAUTHORIZED", "Token revoked")
 		}
 	}
+	record, replay := ctx.Value(deviceRecordKey{}).(deviceRecord)
+	if replay {
+		if e = checkDevice(tx, record.Principal, record.Session); e != nil {
+			return e
+		}
+		var previous string
+		e = tx.QueryRow("SELECT fingerprint FROM device_messages WHERE principal_id=? AND message_id=?", record.Principal.ID, record.ID).Scan(&previous)
+		if e == nil {
+			if previous != record.Fingerprint {
+				return problem(409, "IDEMPOTENCY_CONFLICT", "Device message ID content changed")
+			}
+			return tx.Commit()
+		}
+		if !errors.Is(e, sql.ErrNoRows) {
+			return e
+		}
+	}
 	if e = run(tx); e != nil {
 		return e
+	}
+	if replay {
+		if _, e = tx.Exec("INSERT INTO device_messages(principal_id,message_id,fingerprint,created_at) VALUES(?,?,?,?)", record.Principal.ID, record.ID, record.Fingerprint, s.now().UnixMilli()); e != nil {
+			return e
+		}
 	}
 	return tx.Commit()
 }
@@ -558,6 +586,9 @@ func (s *Store) Prune(ctx context.Context) error {
 			return e
 		}
 		if _, e := tx.Exec("DELETE FROM jobs WHERE "+pred, cut); e != nil {
+			return e
+		}
+		if _, e := tx.Exec("DELETE FROM device_messages WHERE created_at<?", cut); e != nil {
 			return e
 		}
 		_, e := tx.Exec("DELETE FROM audit WHERE at<?", s.now().Add(-time.Duration(s.config.AuditDays)*24*time.Hour).UnixMilli())

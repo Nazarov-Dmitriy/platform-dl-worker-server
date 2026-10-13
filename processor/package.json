@@ -1,0 +1,25 @@
+{
+  "name": "titunki-processor",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "tsc && node scripts/copy-schema.mjs",
+    "start": "node dist/main.js",
+    "test": "npm run build && node --test dist/test/*.test.js"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "@types/ws": "8.18.1",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3"
+  }
+}

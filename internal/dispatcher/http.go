@@ -16,10 +16,11 @@ const MaxMetadataBytes int64 = 8 << 20
 type HTTP struct {
 	store *Store
 	mux   *http.ServeMux
+	hub   *deviceHub
 }
 
 func Handler(s *Store) http.Handler {
-	h := &HTTP{s, http.NewServeMux()}
+	h := &HTTP{store: s, mux: http.NewServeMux(), hub: newDeviceHub()}
 	h.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if e := s.health(r.Context()); e != nil {
 			h.failure(w, e)
@@ -36,13 +37,7 @@ func Handler(s *Store) http.Handler {
 	h.mux.HandleFunc("/api/v2/site/", h.site(func(w http.ResponseWriter, r *http.Request, p Principal) {
 		h.failure(w, problem(501, "STAGE_NOT_IMPLEMENTED", "Storage transfer and publication endpoints arrive at stage 4"))
 	}))
-	h.mux.HandleFunc("/api/v2/device/connect", func(w http.ResponseWriter, r *http.Request) {
-		if _, e := s.Authenticate(r.Context(), bearer(r), "DEVICE"); e != nil {
-			h.failure(w, e)
-			return
-		}
-		h.failure(w, problem(501, "STAGE_NOT_IMPLEMENTED", "Device WSS transport arrives at stage 3"))
-	})
+	h.mux.HandleFunc("GET /api/v2/device/connect", h.deviceConnect)
 	h.mux.HandleFunc("/api/v2/admin/", func(w http.ResponseWriter, r *http.Request) {
 		h.failure(w, problem(501, "STAGE_NOT_IMPLEMENTED", "Use the server CLI; admin sessions/panel arrive at stage 6"))
 	})

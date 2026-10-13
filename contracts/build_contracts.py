@@ -266,6 +266,7 @@ def build():
         "device.command.result": (obj({"requestId": UUID, "status": {"enum": ["RUNNING", "SUCCEEDED", "FAILED"]},
                                        "progress": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
                                        "error": ref("Error")}, ["requestId", "status", "progress"]), "UP"),
+        "protocol.ack": (obj({"replyTo": UUID}), "DOWN"),
         "protocol.error": (obj({"replyTo": UUID, "error": ref("Error")}), "DOWN"),
     }
     d["DeviceMessage"] = {"oneOf": []}
@@ -478,6 +479,7 @@ def build():
         "job.publication.done": {"jobId": jid, "fence": fence, "artifactId": rid, "outcome": "PARTIAL"},
         "device.command": {"requestId": rid, "type": "MODEL_INSTALL", "modelId": "recognition-example", "modelRevision": "test-only"},
         "device.command.result": {"requestId": rid, "status": "RUNNING", "progress": 0.5},
+        "protocol.ack": {"replyTo": rid},
         "protocol.error": {"replyTo": rid, "error": err},
     }
     for kind, body in bodies.items():

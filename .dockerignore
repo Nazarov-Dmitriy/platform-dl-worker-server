@@ -6,3 +6,5 @@ docs
 **/*.db*
 config.json
 **/*.log
+**/node_modules
+**/dist

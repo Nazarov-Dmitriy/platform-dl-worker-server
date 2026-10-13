@@ -3,6 +3,7 @@ module titunki/worker-server
 go 1.27.0
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/dlclark/regexp2 v1.12.0
 	github.com/gofrs/flock v0.13.1
 	github.com/google/uuid v1.6.0

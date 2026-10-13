@@ -124,7 +124,7 @@ func checkDevice(tx *sql.Tx, p Principal, session string) error {
 
 // Connect is the transport-independent registration boundary. Stage 3 wires it to WSS.
 // Reconnect preserves unexpired rights only when the agent explicitly reconciles them.
-func (s *Store) Connect(ctx context.Context, p Principal, caps []Capability, usage Usage, active []Fence) (string, error) {
+func (s *Store) Connect(ctx context.Context, p Principal, caps []Capability, usage Usage, active []Fence, activeJobs ...map[string]string) (string, error) {
 	if e := s.checkCaps(caps); e != nil {
 		return "", e
 	}
@@ -145,6 +145,15 @@ func (s *Store) Connect(ctx context.Context, p Principal, caps []Capability, usa
 			return e
 		}
 		for _, f := range active {
+			if len(activeJobs) > 0 {
+				var matched int
+				if e := tx.QueryRow("SELECT count(*) FROM assignments a JOIN jobs j ON j.seq=a.job_seq WHERE a.id=? AND j.id=?", f.AssignmentID, activeJobs[0][f.AssignmentID]).Scan(&matched); e != nil {
+					return e
+				}
+				if matched == 0 {
+					continue
+				}
+			}
 			if f.DispatcherEpoch != s.epoch {
 				continue
 			}
@@ -336,7 +345,7 @@ type assignment struct {
 	generation, offerUntil, leaseUntil, activity int64
 }
 
-func lookupAssignment(tx *sql.Tx, p Principal, session string, f Fence) (assignment, jobRow, error) {
+func lookupAssignment(tx *sql.Tx, p Principal, session string, f Fence, expected ...string) (assignment, jobRow, error) {
 	var a assignment
 	var r jobRow
 	if e := checkDevice(tx, p, session); e != nil {
@@ -356,16 +365,19 @@ func lookupAssignment(tx *sql.Tx, p Principal, session string, f Fence) (assignm
 	if e = tx.QueryRow("SELECT site_id,id FROM jobs WHERE seq=?", a.seq).Scan(&site, &id); e != nil {
 		return a, r, e
 	}
+	if len(expected) > 0 && id != expected[0] {
+		return a, r, problem(409, "STALE_ASSIGNMENT", "Job does not match assignment")
+	}
 	r, e = loadJob(tx, site, id)
 	if e == nil && (!r.assignment.Valid || r.assignment.String != a.id) {
 		e = problem(409, "STALE_ASSIGNMENT", "Assignment replaced")
 	}
 	return a, r, e
 }
-func (s *Store) Accept(ctx context.Context, p Principal, session string, f Fence, renewalID string) (Lease, error) {
-	return s.renew(ctx, p, session, f, renewalID, nil)
+func (s *Store) Accept(ctx context.Context, p Principal, session string, f Fence, renewalID string, expected ...string) (Lease, error) {
+	return s.renew(ctx, p, session, f, renewalID, nil, expected...)
 }
-func (s *Store) Renew(ctx context.Context, p Principal, session string, f Fence, renewalID string, update StatusUpdate) (Lease, error) {
+func (s *Store) Renew(ctx context.Context, p Principal, session string, f Fence, renewalID string, update StatusUpdate, expected ...string) (Lease, error) {
 	if update.Progress != nil && (*update.Progress < 0 || *update.Progress > 1) || update.ActivitySequence < 0 {
 		return Lease{}, problem(400, "INVALID_STATUS", "Invalid progress")
 	}
@@ -377,9 +389,9 @@ func (s *Store) Renew(ctx context.Context, p Principal, session string, f Fence,
 			return Lease{}, e
 		}
 	}
-	return s.renew(ctx, p, session, f, renewalID, &update)
+	return s.renew(ctx, p, session, f, renewalID, &update, expected...)
 }
-func (s *Store) renew(ctx context.Context, p Principal, session string, f Fence, renewalID string, update *StatusUpdate) (Lease, error) {
+func (s *Store) renew(ctx context.Context, p Principal, session string, f Fence, renewalID string, update *StatusUpdate, expected ...string) (Lease, error) {
 	var result Lease
 	if len(renewalID) != 36 || uuid.Validate(renewalID) != nil {
 		return result, problem(400, "INVALID_RENEWAL_ID", "Renewal ID must be a UUID")
@@ -389,7 +401,7 @@ func (s *Store) renew(ctx context.Context, p Principal, session string, f Fence,
 	}
 	fp := digest(encode(update))
 	e := s.transaction(ctx, func(tx *sql.Tx) error {
-		a, r, e := lookupAssignment(tx, p, session, f)
+		a, r, e := lookupAssignment(tx, p, session, f, expected...)
 		if e != nil {
 			return e
 		}
@@ -447,9 +459,9 @@ func (s *Store) renew(ctx context.Context, p Principal, session string, f Fence,
 	})
 	return result, e
 }
-func (s *Store) Decline(ctx context.Context, p Principal, session string, f Fence) error {
+func (s *Store) Decline(ctx context.Context, p Principal, session string, f Fence, expected ...string) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		a, r, e := lookupAssignment(tx, p, session, f)
+		a, r, e := lookupAssignment(tx, p, session, f, expected...)
 		if e != nil {
 			return e
 		}
@@ -459,12 +471,12 @@ func (s *Store) Decline(ctx context.Context, p Principal, session string, f Fenc
 		return s.closeAssignment(tx, &r, a, "QUEUED", nil, s.now())
 	})
 }
-func (s *Store) Fail(ctx context.Context, p Principal, session string, f Fence, cause APIError) error {
+func (s *Store) Fail(ctx context.Context, p Principal, session string, f Fence, cause APIError, expected ...string) error {
 	if e := s.validator.Check("Error", encode(cause)); e != nil {
 		return e
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		a, r, e := lookupAssignment(tx, p, session, f)
+		a, r, e := lookupAssignment(tx, p, session, f, expected...)
 		if e != nil {
 			return e
 		}
@@ -506,9 +518,9 @@ func (s *Store) closeAssignment(tx *sql.Tx, r *jobRow, a assignment, status stri
 	}
 	return audit(tx, now.UnixMilli(), "JOB_"+status, r.site, r.request.ID)
 }
-func (s *Store) Stopped(ctx context.Context, p Principal, session string, f Fence) error {
+func (s *Store) Stopped(ctx context.Context, p Principal, session string, f Fence, expected ...string) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		a, r, e := lookupAssignment(tx, p, session, f)
+		a, r, e := lookupAssignment(tx, p, session, f, expected...)
 		if e != nil {
 			return e
 		}

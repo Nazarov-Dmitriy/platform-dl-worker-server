@@ -1,0 +1,14 @@
+{
+  "url": "ws://127.0.0.1:8090/api/v2/device/connect",
+  "deviceId": "00000000-0000-4000-8000-000000000001",
+  "stateDir": "./data/processor",
+  "workDir": "./data/work",
+  "maxParallel": 2,
+  "reserveMemoryBytes": 2147483648,
+  "taskMemoryBytes": 1073741824,
+  "reserveDiskBytes": 2147483648,
+  "threshold": 80,
+  "paused": false,
+  "testExecutor": false,
+  "testDurationMs": 3000
+}

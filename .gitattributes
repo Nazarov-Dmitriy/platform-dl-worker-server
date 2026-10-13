@@ -1,0 +1,2 @@
+# Generated contract JSON already uses CRLF in the repository.
+contracts/**/*.json whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

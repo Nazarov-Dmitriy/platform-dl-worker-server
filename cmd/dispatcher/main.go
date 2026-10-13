@@ -42,6 +42,10 @@ func run(args []string) error {
 	enabled := flags.Bool("enabled", true, "Enable site/device")
 	history := flags.Int("history-days", 30, "Terminal job history retention")
 	audit := flags.Int("audit-days", 30, "Audit retention")
+	heartbeat := flags.Duration("heartbeat", 15*time.Second, "Device heartbeat interval")
+	lease := flags.Duration("lease", 120*time.Second, "Execution lease duration")
+	safety := flags.Duration("stop-safety", 5*time.Second, "Local stop safety margin")
+	stable := flags.Duration("admission-stable", 15*time.Second, "Admission stability period")
 	if e := flags.Parse(args); e != nil {
 		return e
 	}
@@ -51,6 +55,10 @@ func run(args []string) error {
 	config := dispatcher.DefaultConfig()
 	config.HistoryDays = *history
 	config.AuditDays = *audit
+	config.HeartbeatInterval = *heartbeat
+	config.LeaseTTL = *lease
+	config.StopSafety = *safety
+	config.AdmissionStable = *stable
 	store, e := dispatcher.Open(*dbPath, config)
 	if e != nil {
 		return e
@@ -142,7 +150,9 @@ func run(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	server := &http.Server{Addr: *listen, Handler: dispatcher.Handler(store), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	handler := dispatcher.Handler(store)
+	defer handler.(*dispatcher.HTTP).CloseDevices()
+	server := &http.Server{Addr: *listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	prune := time.NewTicker(time.Hour)
@@ -155,7 +165,7 @@ func run(args []string) error {
 	}
 	done := make(chan error, 1)
 	go func() { done <- server.ListenAndServe() }()
-	log.Printf("dispatcher listening on %s (stage 2, metadata only)", *listen)
+	log.Printf("dispatcher listening on %s (stage 3, device transport)", *listen)
 	for {
 		select {
 		case e := <-done:
@@ -166,6 +176,7 @@ func run(args []string) error {
 		case <-ctx.Done():
 			shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
+			handler.(*dispatcher.HTTP).CloseDevices()
 			return server.Shutdown(shutdown)
 		case <-ticker.C:
 			if e := store.Expire(ctx); e != nil {

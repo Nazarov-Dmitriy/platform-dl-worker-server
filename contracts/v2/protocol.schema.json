@@ -1953,6 +1953,9 @@
           "$ref": "#/$defs/Message_device_command_result"
         },
         {
+          "$ref": "#/$defs/Message_protocol_ack"
+        },
+        {
           "$ref": "#/$defs/Message_protocol_error"
         }
       ]
@@ -2979,6 +2982,45 @@
             "requestId",
             "status",
             "progress"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "messageId",
+        "type",
+        "direction",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "Message_protocol_ack": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "2.0"
+        },
+        "messageId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "const": "protocol.ack"
+        },
+        "direction": {
+          "const": "DOWN"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "replyTo": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "replyTo"
           ],
           "additionalProperties": false
         }
