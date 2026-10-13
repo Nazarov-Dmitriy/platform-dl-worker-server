@@ -1,0 +1,17 @@
+CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY);
+CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE sites(id TEXT PRIMARY KEY, name TEXT NOT NULL, enabled INTEGER NOT NULL, weight INTEGER NOT NULL CHECK(weight BETWEEN 1 AND 100), operations TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE devices(id TEXT PRIMARY KEY, name TEXT NOT NULL, enabled INTEGER NOT NULL, revision INTEGER NOT NULL DEFAULT 1, capabilities TEXT NOT NULL DEFAULT '[]', session_id TEXT NOT NULL DEFAULT '', session_token TEXT NOT NULL DEFAULT '', last_seen INTEGER NOT NULL DEFAULT 0, ready_since INTEGER NOT NULL DEFAULT 0, usage TEXT NOT NULL DEFAULT '{}');
+CREATE TABLE tokens(id TEXT PRIMARY KEY, purpose TEXT NOT NULL CHECK(purpose IN ('SITE','DEVICE')), principal_id TEXT NOT NULL, hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE jobs(seq INTEGER PRIMARY KEY AUTOINCREMENT, site_id TEXT NOT NULL REFERENCES sites(id), id TEXT NOT NULL, fingerprint TEXT NOT NULL, request BLOB NOT NULL, view BLOB NOT NULL, status TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 0, assignment_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, UNIQUE(site_id,id));
+CREATE INDEX jobs_queue ON jobs(status,site_id,seq);
+CREATE INDEX jobs_history ON jobs(status,updated_at);
+CREATE TABLE assignments(id TEXT PRIMARY KEY, job_seq INTEGER NOT NULL REFERENCES jobs(seq), device_id TEXT NOT NULL REFERENCES devices(id), session_id TEXT NOT NULL, generation INTEGER NOT NULL, epoch TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('OFFERED','RUNNING','CANCELLING','RELEASING','CLOSED')), offer_until INTEGER NOT NULL, lease_until INTEGER NOT NULL DEFAULT 0, activity_sequence INTEGER NOT NULL DEFAULT 0);
+CREATE UNIQUE INDEX one_active_assignment ON assignments(job_seq) WHERE state!='CLOSED';
+CREATE INDEX device_active_assignments ON assignments(device_id,state);
+CREATE TABLE renewals(assignment_id TEXT NOT NULL REFERENCES assignments(id), id TEXT NOT NULL, fingerprint TEXT NOT NULL, response BLOB NOT NULL, PRIMARY KEY(assignment_id,id));
+CREATE TABLE controls(site_id TEXT NOT NULL, job_id TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL, kind TEXT NOT NULL, PRIMARY KEY(site_id,job_id,id));
+CREATE TABLE scheduler_credits(device_id TEXT NOT NULL REFERENCES devices(id), site_id TEXT NOT NULL REFERENCES sites(id), credit INTEGER NOT NULL, PRIMARY KEY(device_id,site_id));
+CREATE TABLE tombstones(site_id TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL, status TEXT NOT NULL, PRIMARY KEY(site_id,id));
+CREATE TABLE audit(seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, kind TEXT NOT NULL, principal_id TEXT NOT NULL, job_id TEXT NOT NULL DEFAULT '');
+INSERT INTO schema_migrations VALUES(1);

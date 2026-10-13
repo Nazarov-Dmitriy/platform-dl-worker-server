@@ -6,3 +6,10 @@ tmp/
 
 # Локальная конфигурация с токеном и базовым URL — только пример хранится в репозитории.
 config.json
+
+# Local dispatcher state, build outputs, and development tool caches.
+data/
+bin/
+*.db
+*.db-wal
+*.db-shm

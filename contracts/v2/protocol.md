@@ -18,6 +18,8 @@ WSS: `/api/v2/device/connect`, HTTP Upgrade с `Authorization: Bearer <device-to
 задачи — аутентифицированный сайт + id из JobRequest. Этот id — UUID внешней попытки
 сайта, не ID видео/урока. clientReference помогает сайту связать работу со своей записью,
 но не даёт права доступа и не содержит пользовательский текст.
+UUID задания и source.revision канонизируются в нижний регистр до fingerprint/сохранения;
+разный регистр написания UUID не создаёт новую работу.
 
 Внутри задачи каждое назначение имеет новый assignmentId и возрастающую generation;
 dispatcherEpoch меняется при восстановлении старого бэкапа, но не обычном restart.

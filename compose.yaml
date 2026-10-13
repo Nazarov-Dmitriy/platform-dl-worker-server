@@ -1,0 +1,24 @@
+services:
+  dispatcher:
+    build: .
+    image: titunki-dispatcher:stage2
+    command: ["serve", "-db", "/data/dispatcher.db", "-listen", "0.0.0.0:8090"]
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - dispatcher-data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+volumes:
+  dispatcher-data:

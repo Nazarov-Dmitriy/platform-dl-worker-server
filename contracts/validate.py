@@ -157,7 +157,7 @@ def main():
     print(f"OK: schemas, {len(operations)} HTTP operations/references, {counts}, "
           f"{len(scenarios['traces'])} state traces, {len(scenarios['leaseCases'])} lease cases, "
           f"{len(scenarios['monotonicDeadlineCases'])} delayed-grant cases")
-    print("Contract artifacts validated; runtime/concurrency/storage tests are still pending implementation.")
+    print("These checks validate contract artifacts only; use Go tests for implemented runtime invariants.")
 
 
 if __name__ == "__main__":
