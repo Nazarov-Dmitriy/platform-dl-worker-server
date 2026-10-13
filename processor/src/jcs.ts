@@ -18,9 +18,7 @@ function write(value: unknown): string {
     return "[" + value.map((item) => write(item)).join(",") + "]";
   if (typeof value === "object") {
     const keys = Object.keys(value as object)
-      .filter(
-        (key) => (value as Record<string, unknown>)[key] !== undefined,
-      )
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
       .sort();
     return (
       "{" +

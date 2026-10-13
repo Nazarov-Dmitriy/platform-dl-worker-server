@@ -239,3 +239,25 @@ func TestAdminResetOwnerPasswordInvalidatesSession(t *testing.T) {
 	u, _ := url.Parse(srv.URL)
 	_ = u
 }
+
+func TestAdminCookieSecureBehindConfiguredProxy(t *testing.T) {
+	s, _, _ := openTest(t)
+	if err := s.BootstrapOwner(testContext, "owner", "owner-password-1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, secure := range []bool{false, true} {
+		h := HandlerWithSecureCookies(s, secure)
+		req := httptest.NewRequest("POST", "/api/v2/admin/session", bytes.NewBufferString(`{"login":"owner","password":"owner-password-1"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-Proto", "https")
+		res := httptest.NewRecorder()
+		h.ServeHTTP(res, req)
+		if res.Code != 200 {
+			t.Fatal(res.Code, res.Body.String())
+		}
+		cookies := res.Result().Cookies()
+		if len(cookies) != 1 || cookies[0].Secure != secure || !cookies[0].HttpOnly {
+			t.Fatal(cookies)
+		}
+	}
+}

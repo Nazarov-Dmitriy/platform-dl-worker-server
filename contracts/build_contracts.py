@@ -208,6 +208,8 @@ def build():
                       "encoderBusyPercent": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
                       "availableSlots": {"type": "integer", "minimum": 0, "maximum": 64},
                       "paused": {"type": "boolean"}, "workDiskAvailable": {"type": "boolean"}})
+    d["ModelFile"] = obj({"path": PATH, "bytes": BYTES, "sha256": HASH,
+                          "url": {"type": "string", "format": "uri"}})
     d["ModelEntry"] = obj({"id": TEXT, "revision": TEXT, "executor": TEXT,
                            "purpose": {"enum": ["RECOGNITION", "TRANSLATION"]},
                            "os": arr({"enum": ["windows", "darwin", "linux"]}, 1, 3, True),
@@ -218,6 +220,7 @@ def build():
                            "downloadBytes": BYTES, "minimumRamBytes": BYTES, "minimumVramBytes": BYTES,
                            "sha256": HASH, "downloadUrl": {"type": "string", "format": "uri"},
                            "license": TEXT, "descriptionSource": {"type": "string", "format": "uri"}})
+    d["ModelEntry"]["properties"]["files"] = arr(ref("ModelFile"), 1, 32)
     d["AdminCommand"] = {"oneOf": [
         obj({"requestId": UUID, "type": const(kind), "modelId": TEXT, "modelRevision": TEXT})
         for kind in ["MODEL_INSTALL", "MODEL_ACTIVATE", "MODEL_DELETE"]

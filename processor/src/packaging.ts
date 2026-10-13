@@ -47,8 +47,7 @@ export function crfValue(crf: number) {
   return crf <= 0 ? 1 : crf;
 }
 export function decidePlan(probe: Probe, profile: Profile): PlanItem[] {
-  if (profile.allowUpscale)
-    throw new Error("PROFILE_SUBSTITUTION_FORBIDDEN");
+  if (profile.allowUpscale) throw new Error("PROFILE_SUBSTITUTION_FORBIDDEN");
   if (profile.encoderPolicy !== "X264_EXACT" || profile.codec !== "h264")
     throw new Error("UNSUPPORTED_PROFILE");
   const requested = profile.qualities.filter(
@@ -113,8 +112,19 @@ export function canCopy(
     probe.height !== height
   )
     return false;
-  const allowed = ["Constrained Baseline", "Baseline", "Main", "High", "high", "main", "baseline"];
-  if (probe.profile && !allowed.some((p) => probe.profile.toLowerCase().includes(p.toLowerCase())))
+  const allowed = [
+    "Constrained Baseline",
+    "Baseline",
+    "Main",
+    "High",
+    "high",
+    "main",
+    "baseline",
+  ];
+  if (
+    probe.profile &&
+    !allowed.some((p) => probe.profile.toLowerCase().includes(p.toLowerCase()))
+  )
     return false;
   const tolerance = profile.passthroughTolerancePercent / 100;
   if (targetKbps > 0 && probe.videoBitrate > 0) {
@@ -167,7 +177,15 @@ function displayRotate(video: any) {
   );
   return side ? Math.abs(Number(side.rotation)) : 0;
 }
-export function masterPlaylist(items: { quality: string; bandwidth: number; playlist: string; width: number; height: number }[]) {
+export function masterPlaylist(
+  items: {
+    quality: string;
+    bandwidth: number;
+    playlist: string;
+    width: number;
+    height: number;
+  }[],
+) {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
   for (const item of items) {
     lines.push(

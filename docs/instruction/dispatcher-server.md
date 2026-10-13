@@ -30,7 +30,10 @@ docker compose exec dispatcher wget -q -O - http://127.0.0.1:8090/healthz
 docker compose exec dispatcher wget -q -O - http://127.0.0.1:8090/readyz
 ```
 
-Панель: `https://<домен>/panel/` за proxy или `http://127.0.0.1:8090/panel/` на хосте.
+Панель Compose: `https://<домен>/panel/` за proxy. Compose включает `-secure-cookies`:
+HTTPS публичного адреса задаётся явно, X-Forwarded-Proto не принимается на доверие.
+Для отдельного localhost-стенда запускать CLI без этого флага.
+Nginx принимает metadata до 8 MiB, как диспетчер.
 Сброс пароля владельца при остановленном контейнере:
 
 ```sh

@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import { open, readFile, stat } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { open, stat } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
+import { Transform } from "node:stream";
+import { setTimeout as delay } from "node:timers/promises";
 const DEFAULT_BACKOFF = [0, 5_000, 15_000, 45_000];
 export type Link = {
   path: string;
@@ -28,50 +30,117 @@ export async function downloadLink(
   expectedSha?: string,
   backoff = DEFAULT_BACKOFF,
   now = () => Date.now(),
+  signal?: AbortSignal,
 ) {
-  if (link.method !== "GET") throw new TransferError("INVALID_GRANT", "GET required", false, true);
-  await withRetries(link, "GET", backoff, now, async (current) => {
-    const res = await fetch(current.url, {
-      method: "GET",
-      headers: safeHeaders(current.headers),
-      redirect: "error",
-    });
-    if (res.status === 401 || res.status === 403)
-      throw new TransferError("SOURCE_URL_EXPIRED", "Grant URL was rejected", true);
-    if (!res.ok || !res.body)
-      throw new TransferError("SOURCE_DOWNLOAD_FAILED", "Source download failed: " + res.status);
-    const out = createWriteStream(dest);
-    await pipeline(res.body as any, out);
-  });
+  if (link.method !== "GET")
+    throw new TransferError("INVALID_GRANT", "GET required", false, true);
+  await withRetries(
+    link,
+    "GET",
+    backoff,
+    now,
+    async (current) => {
+      const res = await fetch(current.url, {
+        method: "GET",
+        headers: safeHeaders(current.headers),
+        redirect: "error",
+        signal,
+      });
+      if (res.status === 401 || res.status === 403)
+        throw new TransferError(
+          "SOURCE_URL_EXPIRED",
+          "Grant URL was rejected",
+          true,
+        );
+      if (!res.ok || !res.body)
+        throw new TransferError(
+          "SOURCE_DOWNLOAD_FAILED",
+          "Source download failed: " + res.status,
+        );
+      const out = createWriteStream(dest);
+      let received = 0;
+      const limit = new Transform({
+        transform(chunk, _encoding, callback) {
+          received += chunk.length;
+          if (expectedBytes !== undefined && received > expectedBytes)
+            return callback(
+              new TransferError(
+                "SOURCE_SIZE_MISMATCH",
+                "Source exceeds declared size",
+                false,
+                true,
+              ),
+            );
+          callback(null, chunk);
+        },
+      });
+      await pipeline(res.body as any, limit, out, { signal });
+    },
+    signal,
+  );
   const file = await stat(dest);
   if (expectedBytes != null && file.size !== expectedBytes)
-    throw new TransferError("SOURCE_SIZE_MISMATCH", "Downloaded size does not match", false, true);
+    throw new TransferError(
+      "SOURCE_SIZE_MISMATCH",
+      "Downloaded size does not match",
+      false,
+      true,
+    );
   if (expectedSha && (await sha256File(dest)) !== expectedSha)
-    throw new TransferError("SOURCE_HASH_MISMATCH", "Downloaded hash does not match", false, true);
+    throw new TransferError(
+      "SOURCE_HASH_MISMATCH",
+      "Downloaded hash does not match",
+      false,
+      true,
+    );
 }
 export async function uploadLink(
   link: Link,
   file: string,
   backoff = DEFAULT_BACKOFF,
   now = () => Date.now(),
+  signal?: AbortSignal,
 ) {
-  if (link.method !== "PUT") throw new TransferError("INVALID_GRANT", "PUT required", false, true);
-  const bytes = await readFile(file);
-  await withRetries(link, "PUT", backoff, now, async (current) => {
-    const res = await fetch(current.url, {
-      method: "PUT",
-      headers: {
-        ...safeHeaders(current.headers),
-        "Content-Length": String(bytes.length),
-      },
-      body: bytes,
-      redirect: "error",
-    });
-    if (res.status === 401 || res.status === 403)
-      throw new TransferError("UPLOAD_URL_EXPIRED", "Grant URL was rejected", true);
-    if (!res.ok)
-      throw new TransferError("UPLOAD_FAILED", "Upload failed: " + res.status);
-  });
+  if (link.method !== "PUT")
+    throw new TransferError("INVALID_GRANT", "PUT required", false, true);
+  const size = (await stat(file)).size;
+  await withRetries(
+    link,
+    "PUT",
+    backoff,
+    now,
+    async (current) => {
+      const stream = createReadStream(file);
+      try {
+        const res = await fetch(current.url, {
+          method: "PUT",
+          headers: {
+            ...safeHeaders(current.headers),
+            "Content-Length": String(size),
+          },
+          body: stream,
+          duplex: "half",
+          redirect: "error",
+          signal,
+        } as any);
+        await res.body?.cancel();
+        if (res.status === 401 || res.status === 403)
+          throw new TransferError(
+            "UPLOAD_URL_EXPIRED",
+            "Grant URL was rejected",
+            true,
+          );
+        if (!res.ok)
+          throw new TransferError(
+            "UPLOAD_FAILED",
+            "Upload failed: " + res.status,
+          );
+      } finally {
+        stream.destroy();
+      }
+    },
+    signal,
+  );
 }
 async function withRetries(
   link: Link,
@@ -79,16 +148,19 @@ async function withRetries(
   backoff: number[],
   now: () => number,
   run: (link: Link) => Promise<void>,
+  signal?: AbortSignal,
 ) {
   let last: unknown;
   for (let i = 0; i < backoff.length; i++) {
-    if (backoff[i]) await delay(backoff[i]);
+    signal?.throwIfAborted();
+    if (backoff[i]) await delay(backoff[i], undefined, { signal });
     if (Date.parse(link.expiresAt) <= now())
       throw new TransferError("SOURCE_URL_EXPIRED", "Grant URL expired", true);
     try {
       await run(link);
       return;
     } catch (e) {
+      signal?.throwIfAborted();
       last = e;
       if (e instanceof TransferError && (e.refresh || e.permanent)) throw e;
     }
@@ -97,14 +169,15 @@ async function withRetries(
     ? last
     : new TransferError("TRANSFER_FAILED", String(last));
 }
-function delay(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
 function safeHeaders(headers: Record<string, string>) {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(headers || {})) {
     const n = k.toLowerCase();
-    if (["authorization", "cookie", "set-cookie", "proxy-authorization"].includes(n))
+    if (
+      ["authorization", "cookie", "set-cookie", "proxy-authorization"].includes(
+        n,
+      )
+    )
       continue;
     out[k] = v;
   }

@@ -10,5 +10,7 @@
   "threshold": 80,
   "paused": false,
   "testExecutor": false,
-  "testDurationMs": 3000
+  "testDurationMs": 3000,
+  "allowTestModels": false,
+  "tokenFile": "./data/processor.token"
 }

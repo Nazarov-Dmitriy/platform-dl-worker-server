@@ -1,0 +1,142 @@
+[
+  {
+    "id": "opus-mt-en-ru-q8",
+    "revision": "e050376e960175e8ddc5cff85025dc8436cddd68",
+    "executor": "transformers-js",
+    "purpose": "TRANSLATION",
+    "os": [
+      "windows",
+      "darwin",
+      "linux"
+    ],
+    "architectures": [
+      "amd64",
+      "arm64"
+    ],
+    "accelerators": [
+      "cpu"
+    ],
+    "recognitionLanguages": [],
+    "translationDirections": [
+      {
+        "source": "en",
+        "target": "ru"
+      }
+    ],
+    "downloadBytes": 117767359,
+    "minimumRamBytes": 1073741824,
+    "minimumVramBytes": 0,
+    "sha256": "b6bd676b81cd4df92a9a8b5c3492323edc18733706f0eee22743f890c662fb2a",
+    "downloadUrl": "https://huggingface.co/Xenova/opus-mt-en-ru",
+    "license": "Apache-2.0",
+    "descriptionSource": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ru",
+    "files": [
+      {
+        "path": "config.json",
+        "bytes": 1376,
+        "sha256": "db16bf0ea7bac239273214c3b9ab44577884227371a9a25e0191b7baf8d6f167",
+        "url": "https://huggingface.co/Xenova/opus-mt-en-ru/resolve/e050376e960175e8ddc5cff85025dc8436cddd68/config.json"
+      },
+      {
+        "path": "generation_config.json",
+        "bytes": 293,
+        "sha256": "885345001ac4f978b5e295a04eb6bd6c346ebc7381e30d5b3dd927b178d8a5ef",
+        "url": "https://huggingface.co/Xenova/opus-mt-en-ru/resolve/e050376e960175e8ddc5cff85025dc8436cddd68/generation_config.json"
+      },
+      {
+        "path": "onnx/decoder_model_merged_quantized.onnx",
+        "bytes": 58931576,
+        "sha256": "7efefcd793a5663bc204224a92a123524f3dfe2ffad59e5f73d6734d1b11ad04",
+        "url": "https://huggingface.co/Xenova/opus-mt-en-ru/resolve/e050376e960175e8ddc5cff85025dc8436cddd68/onnx/decoder_model_merged_quantized.onnx"
+      },
+      {
+        "path": "onnx/encoder_model_quantized.onnx",
+        "bytes": 51628446,
+        "sha256": "97f28d8295d231b7da721ded06fa8c034787df2122cd8f85b904abdc4d15bd53",
+        "url": "https://huggingface.co/Xenova/opus-mt-en-ru/resolve/e050376e960175e8ddc5cff85025dc8436cddd68/onnx/encoder_model_quantized.onnx"
+      },
+      {
+        "path": "tokenizer.json",
+        "bytes": 7205388,
+        "sha256": "981cd3d9fef6bb4dda8082afda716b65deb6717cb3ef35ac0b57002c09dec2bb",
+        "url": "https://huggingface.co/Xenova/opus-mt-en-ru/resolve/e050376e960175e8ddc5cff85025dc8436cddd68/tokenizer.json"
+      },
+      {
+        "path": "tokenizer_config.json",
+        "bytes": 280,
+        "sha256": "cafb5494f14bc8d395cc02ddaeeb0f8d85b0d9e20fd48371b5edc104cc2020ba",
+        "url": "https://huggingface.co/Xenova/opus-mt-en-ru/resolve/e050376e960175e8ddc5cff85025dc8436cddd68/tokenizer_config.json"
+      }
+    ]
+  },
+  {
+    "id": "opus-mt-ru-en-q8",
+    "revision": "afe8c6c738ec81b6d033fd8f44f9678a639a7c67",
+    "executor": "transformers-js",
+    "purpose": "TRANSLATION",
+    "os": [
+      "windows",
+      "darwin",
+      "linux"
+    ],
+    "architectures": [
+      "amd64",
+      "arm64"
+    ],
+    "accelerators": [
+      "cpu"
+    ],
+    "recognitionLanguages": [],
+    "translationDirections": [
+      {
+        "source": "ru",
+        "target": "en"
+      }
+    ],
+    "downloadBytes": 117767359,
+    "minimumRamBytes": 1073741824,
+    "minimumVramBytes": 0,
+    "sha256": "6c73d964fc6222d0eb50d006673daa3bbcc85e6bbfdd859e08146b8c50f5fba0",
+    "downloadUrl": "https://huggingface.co/Xenova/opus-mt-ru-en",
+    "license": "Apache-2.0",
+    "descriptionSource": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en",
+    "files": [
+      {
+        "path": "config.json",
+        "bytes": 1376,
+        "sha256": "60dc7d0906dbe42a1d740cdd7e84ce1534685b81fbe16005a0301adac69086ce",
+        "url": "https://huggingface.co/Xenova/opus-mt-ru-en/resolve/afe8c6c738ec81b6d033fd8f44f9678a639a7c67/config.json"
+      },
+      {
+        "path": "generation_config.json",
+        "bytes": 293,
+        "sha256": "9bcb507fa6117b07870df6627294b878b0710a55bc3abc9cf0db980e0c48fe2c",
+        "url": "https://huggingface.co/Xenova/opus-mt-ru-en/resolve/afe8c6c738ec81b6d033fd8f44f9678a639a7c67/generation_config.json"
+      },
+      {
+        "path": "onnx/decoder_model_merged_quantized.onnx",
+        "bytes": 58931576,
+        "sha256": "25e7ff97b201bce64ab9c39749761d657b70b8602bcbc1ce01c67f713e90ffdf",
+        "url": "https://huggingface.co/Xenova/opus-mt-ru-en/resolve/afe8c6c738ec81b6d033fd8f44f9678a639a7c67/onnx/decoder_model_merged_quantized.onnx"
+      },
+      {
+        "path": "onnx/encoder_model_quantized.onnx",
+        "bytes": 51628446,
+        "sha256": "c10df0466540534bb70c4402d539c349b8bfa9968184cad89f51408cf13e7eb7",
+        "url": "https://huggingface.co/Xenova/opus-mt-ru-en/resolve/afe8c6c738ec81b6d033fd8f44f9678a639a7c67/onnx/encoder_model_quantized.onnx"
+      },
+      {
+        "path": "tokenizer.json",
+        "bytes": 7205388,
+        "sha256": "981cd3d9fef6bb4dda8082afda716b65deb6717cb3ef35ac0b57002c09dec2bb",
+        "url": "https://huggingface.co/Xenova/opus-mt-ru-en/resolve/afe8c6c738ec81b6d033fd8f44f9678a639a7c67/tokenizer.json"
+      },
+      {
+        "path": "tokenizer_config.json",
+        "bytes": 280,
+        "sha256": "c0710ba5ee70ccb2d0e6b0092139d00f370b9c4783c4b077584cb3cc8f7ac4e0",
+        "url": "https://huggingface.co/Xenova/opus-mt-ru-en/resolve/afe8c6c738ec81b6d033fd8f44f9678a639a7c67/tokenizer_config.json"
+      }
+    ]
+  }
+]

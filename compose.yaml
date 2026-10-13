@@ -2,7 +2,7 @@ services:
   dispatcher:
     build: .
     image: titunki-dispatcher:stage7
-    command: ["serve", "-db", "/data/dispatcher.db", "-listen", "0.0.0.0:8090"]
+    command: ["serve", "-db", "/data/dispatcher.db", "-listen", "0.0.0.0:8090", "-secure-cookies"]
     ports:
       - "127.0.0.1:8090:8090"
     volumes:

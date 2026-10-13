@@ -17,12 +17,15 @@ export function selectRecognition(
   if (!active.length) throw new Error("MODEL_NOT_INSTALLED");
   const tests = active.filter((m) => m.executor === "catalog-test");
   if (tests.length) return tests[0];
-  const ranked = [...active].sort(
-    (a, b) => a.minimumRamBytes - b.minimumRamBytes,
-  );
+  const ranked = active
+    .filter((m) => freeMemory >= m.minimumRamBytes)
+    .sort((a, b) => a.minimumRamBytes - b.minimumRamBytes);
+  if (!ranked.length) throw new Error("INSUFFICIENT_MEMORY");
   if (mode === "FAST") return ranked[0];
   if (mode === "QUALITY") return ranked[ranked.length - 1];
-  const fit = [...ranked].reverse().find((m) => freeMemory >= m.minimumRamBytes);
+  const fit = [...ranked]
+    .reverse()
+    .find((m) => freeMemory >= m.minimumRamBytes);
   return fit || ranked[0];
 }
 
@@ -60,6 +63,12 @@ function catalogTestSpeech(
   requested: string,
 ): Transcript {
   const pack = JSON.parse(readFileSync(packPath, "utf8"));
+  if (
+    Number.isFinite(pack.delayMs) &&
+    pack.delayMs > 0 &&
+    pack.delayMs <= 60000
+  )
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, pack.delayMs);
   let body: any = {};
   try {
     body = JSON.parse(readFileSync(source, "utf8"));
@@ -88,22 +97,52 @@ function whisperCppSpeech(
   bin?: string,
 ): Transcript {
   const exe = bin || "whisper-cli";
-  const args = ["-m", modelPath, "-f", source, "-otxt", "-ovtt", "-np"];
+  const args = ["-m", modelPath, "-f", source, "-oj", "-np"];
   if (requested && requested !== "auto") args.push("-l", requested);
   else args.push("-l", "auto");
-  execFileSync(exe, args, { timeout: 3600000, windowsHide: true, stdio: "ignore" });
-  const txt = source + ".txt";
-  if (!existsSync(txt)) throw new Error("EMPTY_TRANSCRIPT");
-  const text = readFileSync(txt, "utf8").trim();
-  const vtt = existsSync(source + ".vtt")
-    ? parseVtt(readFileSync(source + ".vtt", "utf8"))
-    : [{ start: 0, end: 1, text }];
-  return { language: requested === "auto" ? "en" : requested, text, cues: vtt };
+  execFileSync(exe, args, {
+    timeout: 3600000,
+    windowsHide: true,
+    stdio: "ignore",
+  });
+  const output = source + ".json";
+  if (!existsSync(output)) throw new Error("EMPTY_TRANSCRIPT");
+  return parseWhisperJson(JSON.parse(readFileSync(output, "utf8")), requested);
+}
+
+export function parseWhisperJson(raw: any, requested = "auto"): Transcript {
+  const language =
+    raw?.result?.language || (requested !== "auto" ? requested : "");
+  if (!/^[a-z]{2,3}(-[A-Za-z0-9]+)*$/.test(language))
+    throw new Error("LANGUAGE_DETECTION_FAILED");
+  if (!Array.isArray(raw.transcription)) throw new Error("EMPTY_TRANSCRIPT");
+  const cues: Cue[] = raw.transcription
+    .map((s: any) => ({
+      start: Number(s.offsets?.from) / 1000,
+      end: Number(s.offsets?.to) / 1000,
+      text: String(s.text || "").trim(),
+    }))
+    .filter((c: Cue) => c.text);
+  if (!cues.length) throw new Error("EMPTY_TRANSCRIPT");
+  if (
+    cues.some(
+      (c) =>
+        !Number.isFinite(c.start) ||
+        !Number.isFinite(c.end) ||
+        c.start < 0 ||
+        c.end < c.start,
+    )
+  )
+    throw new Error("INVALID_TRANSCRIPT_TIMESTAMPS");
+  return { language, cues, text: cues.map((c) => c.text).join(" ") };
 }
 
 export function parseVtt(raw: string): Cue[] {
   const cues: Cue[] = [];
-  const blocks = raw.replace(/^\uFEFF/, "").split(/\n\n+/);
+  const blocks = raw
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .split(/\n\n+/);
   for (const block of blocks) {
     const lines = block.trim().split(/\n/);
     const time = lines.find((l) => l.includes("-->"));
@@ -177,14 +216,24 @@ export function writeUtf8(path: string, text: string) {
   writeFileSync(path, text, { encoding: "utf8" });
 }
 
-export function extractAudio(
-  ffmpeg: string,
-  source: string,
-  dest: string,
-) {
+export function extractAudio(ffmpeg: string, source: string, dest: string) {
   execFileSync(
     ffmpeg,
-    ["-y", "-i", source, "-vn", "-ac", "1", "-ar", "16000", dest],
+    [
+      "-y",
+      "-protocol_whitelist",
+      "file,pipe",
+      "-i",
+      source,
+      "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      "16000",
+      "-c:a",
+      "pcm_s16le",
+      dest,
+    ],
     { timeout: 3600000, windowsHide: true, stdio: "ignore" },
   );
   if (!existsSync(dest)) throw new Error("AUDIO_EXTRACT_FAILED");

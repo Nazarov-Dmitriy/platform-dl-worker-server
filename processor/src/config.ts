@@ -10,13 +10,19 @@ export type Config = {
   taskMemoryBytes: number;
   reserveDiskBytes: number;
   threshold: number;
+  cpuThresholdPercent?: number;
+  memoryThresholdPercent?: number;
+  diskThresholdPercent?: number;
   paused: boolean;
   testExecutor: boolean;
   testDurationMs: number;
   ffmpeg: string;
   ffprobe: string;
   catalogExtra?: string;
+  allowTestModels?: boolean;
   whisperCpp?: string;
+  tokenFile?: string;
+  configFile?: string;
 };
 export function loadConfig(path: string): Config {
   const v = JSON.parse(readFileSync(path, "utf8"));
@@ -30,13 +36,18 @@ export function loadConfig(path: string): Config {
     "taskMemoryBytes",
     "reserveDiskBytes",
     "threshold",
+    "cpuThresholdPercent",
+    "memoryThresholdPercent",
+    "diskThresholdPercent",
     "paused",
     "testExecutor",
     "testDurationMs",
     "ffmpeg",
     "ffprobe",
     "catalogExtra",
+    "allowTestModels",
     "whisperCpp",
+    "tokenFile",
   ];
   if (Object.keys(v).some((k) => !allowed.includes(k)))
     throw new Error("UNKNOWN_CONFIG_FIELD");
@@ -75,13 +86,20 @@ export function loadConfig(path: string): Config {
     taskMemoryBytes: v.taskMemoryBytes ?? 1024 ** 3,
     reserveDiskBytes: v.reserveDiskBytes ?? 2 * 1024 ** 3,
     threshold: v.threshold ?? 80,
+    cpuThresholdPercent: v.cpuThresholdPercent ?? v.threshold ?? 80,
+    memoryThresholdPercent: v.memoryThresholdPercent ?? v.threshold ?? 80,
+    diskThresholdPercent: v.diskThresholdPercent ?? v.threshold ?? 80,
     paused: v.paused ?? false,
+    allowTestModels: v.allowTestModels ?? false,
     testExecutor: v.testExecutor ?? false,
     testDurationMs: v.testDurationMs ?? 3000,
     ffmpeg: typeof v.ffmpeg === "string" ? v.ffmpeg : "ffmpeg",
     ffprobe: typeof v.ffprobe === "string" ? v.ffprobe : "ffprobe",
     catalogExtra:
       typeof v.catalogExtra === "string" ? resolve(v.catalogExtra) : undefined,
+    tokenFile:
+      typeof v.tokenFile === "string" ? resolve(v.tokenFile) : undefined,
+    configFile: resolve(path),
     whisperCpp: typeof v.whisperCpp === "string" ? v.whisperCpp : undefined,
   };
   for (const k of [
@@ -104,8 +122,16 @@ export function loadConfig(path: string): Config {
     c.testDurationMs < 100 ||
     c.testDurationMs > 3600000 ||
     typeof c.paused !== "boolean" ||
-    typeof c.testExecutor !== "boolean"
+    typeof c.testExecutor !== "boolean" ||
+    typeof c.allowTestModels !== "boolean"
   )
     throw new Error("INVALID_RESOURCE_CONFIG");
+  for (const threshold of [
+    c.cpuThresholdPercent,
+    c.memoryThresholdPercent,
+    c.diskThresholdPercent,
+  ])
+    if (!Number.isInteger(threshold) || threshold! < 1 || threshold! > 80)
+      throw new Error("INVALID_RESOURCE_CONFIG");
   return c;
 }

@@ -32,6 +32,7 @@ func run(args []string) error {
 	}
 	flags := flag.NewFlagSet("dispatcher "+command, flag.ContinueOnError)
 	dbPath := flags.String("db", "data/dispatcher.db", "SQLite path (persistent directory)")
+	secureCookies := flags.Bool("secure-cookies", false, "Set Secure on admin cookies when served behind an HTTPS proxy")
 	listen := flags.String("listen", "127.0.0.1:8090", "HTTP listen address behind HTTPS proxy")
 	name := flags.String("name", "", "Site/device name")
 	id := flags.String("id", "", "Site/device/token UUID")
@@ -236,7 +237,7 @@ func run(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	handler := dispatcher.Handler(store)
+	handler := dispatcher.HandlerWithSecureCookies(store, *secureCookies)
 	defer handler.(*dispatcher.HTTP).CloseDevices()
 	server := &http.Server{Addr: *listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	ticker := time.NewTicker(time.Second)

@@ -26,7 +26,11 @@ export function assertWorkVolume(workDir: string, journal: Journal) {
   if (!expected) throw new Error("WORK_VOLUME_UNBOUND");
   const path = realpathSync(workDir);
   const s = statSync(path);
-  if (path !== expected.path || s.dev !== expected.dev || s.ino !== expected.ino)
+  if (
+    path !== expected.path ||
+    s.dev !== expected.dev ||
+    s.ino !== expected.ino
+  )
     throw new Error("VOLUME_CHANGED");
   if (!s.isDirectory()) throw new Error("WORK_DIRECTORY_REQUIRED");
 }
@@ -52,6 +56,7 @@ export function cleanupWork(workDir: string, keep: Set<string>) {
       if (keep.has(dir)) continue;
       rmSync(dir, { recursive: true, force: true });
     }
-    if (readdirSync(day).length === 0) rmSync(day, { recursive: true, force: true });
+    if (readdirSync(day).length === 0)
+      rmSync(day, { recursive: true, force: true });
   }
 }

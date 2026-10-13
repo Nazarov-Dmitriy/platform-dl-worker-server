@@ -26,10 +26,13 @@ func TestPinnedCatalogUsesWhisperTokenizerLanguages(t *testing.T) {
 	if len(rec.RecognitionLanguages) < 90 {
 		t.Fatalf("whisper languages were truncated: %d", len(rec.RecognitionLanguages))
 	}
-	for _, lang := range []string{"yue", "uk", "th", "he", "sw"} {
+	for _, lang := range []string{"uk", "th", "he", "sw"} {
 		if !contains(rec.RecognitionLanguages, lang) {
 			t.Fatalf("missing tokenizer language %s", lang)
 		}
+	}
+	if contains(rec.RecognitionLanguages, "yue") {
+		t.Fatal("base model has no Cantonese token")
 	}
 	if rec.DescriptionSource != "https://github.com/openai/whisper/blob/main/whisper/tokenizer.py" {
 		t.Fatal(rec.DescriptionSource)
@@ -77,7 +80,7 @@ func TestCatalogImportAndDeviceCommandQueue(t *testing.T) {
 		Architectures: []string{"amd64", "arm64"}, Accelerators: []string{"cpu"},
 		RecognitionLanguages: []string{"en", "uk"}, TranslationDirections: []Pair{},
 		DownloadBytes: 12, MinimumRAMBytes: 1, MinimumVRAMBytes: 0,
-		SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SHA256:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		DownloadURL: "http://127.0.0.1:9/speech.json", License: "MIT",
 		DescriptionSource: "http://127.0.0.1:9/speech.json",
 	}

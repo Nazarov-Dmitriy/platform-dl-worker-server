@@ -27,9 +27,9 @@ export class Executor {
     });
     this.child.on("message", onMessage);
     this.child.on("error", () => onMessage({ type: "executor-error" }));
+    this.renew(durationMs, lease);
     if (payload && this.child.connected)
       this.child.send({ type: "start", ...payload }, () => {});
-    this.renew(durationMs, lease);
   }
   renew(durationMs: number, lease: LeaseClock) {
     if (!this.stopped && this.child.connected)

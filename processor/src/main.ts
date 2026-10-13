@@ -6,13 +6,16 @@ import { Resources } from "./resources.js";
 import { doctor } from "./doctor.js";
 async function main() {
   const path = process.argv[2];
-  if (path === "--doctor" || process.argv.includes("--doctor") && !path) {
+  if (path === "--doctor" || (process.argv.includes("--doctor") && !path)) {
     const report = doctor(process.argv[3]);
     console.log(JSON.stringify(report));
     if (!report.ok) process.exitCode = 1;
     return;
   }
-  if (!path) throw new Error("Usage: npm start -- <config.json> | npm start -- --doctor [config.json]");
+  if (!path)
+    throw new Error(
+      "Usage: npm start -- <config.json> | npm start -- --doctor [config.json]",
+    );
   if (process.argv[3] === "--doctor") {
     const report = doctor(path);
     console.log(JSON.stringify(report));

@@ -74,23 +74,23 @@ type ReleaseReceipt struct {
 	SafeToRunLocally bool   `json:"safeToRunLocally"`
 }
 type JobView struct {
-	ProtocolVersion    string          `json:"protocolVersion"`
-	ID                 string          `json:"id"`
-	Type               string          `json:"type"`
-	Status             string          `json:"status"`
-	Revision           int64           `json:"revision"`
-	UpdatedAt          string          `json:"updatedAt"`
-	Progress           *float64        `json:"progress"`
-	QueueDelayed       bool            `json:"queueDelayed"`
-	ManualEntryOffered bool            `json:"manualEntryOffered"`
-	Steps              []Step          `json:"steps"`
-	Stage              string          `json:"stage,omitempty"`
-	LastProgressAt     string          `json:"lastProgressAt,omitempty"`
-	Error              *APIError          `json:"error,omitempty"`
-	Artifact           *Artifact          `json:"artifact,omitempty"`
-	ReleaseReceipt     *ReleaseReceipt    `json:"releaseReceipt,omitempty"`
-	PublicationClaim   *PublicationClaim  `json:"publicationClaim,omitempty"`
-	Actionable         bool               `json:"actionable,omitempty"`
+	ProtocolVersion    string            `json:"protocolVersion"`
+	ID                 string            `json:"id"`
+	Type               string            `json:"type"`
+	Status             string            `json:"status"`
+	Revision           int64             `json:"revision"`
+	UpdatedAt          string            `json:"updatedAt"`
+	Progress           *float64          `json:"progress"`
+	QueueDelayed       bool              `json:"queueDelayed"`
+	ManualEntryOffered bool              `json:"manualEntryOffered"`
+	Steps              []Step            `json:"steps"`
+	Stage              string            `json:"stage,omitempty"`
+	LastProgressAt     string            `json:"lastProgressAt,omitempty"`
+	Error              *APIError         `json:"error,omitempty"`
+	Artifact           *Artifact         `json:"artifact,omitempty"`
+	ReleaseReceipt     *ReleaseReceipt   `json:"releaseReceipt,omitempty"`
+	PublicationClaim   *PublicationClaim `json:"publicationClaim,omitempty"`
+	Actionable         bool              `json:"actionable,omitempty"`
 }
 type ArtifactFile struct {
 	Path        string `json:"path"`
@@ -109,11 +109,11 @@ type Rendition struct {
 	Playlist  string `json:"playlist"`
 }
 type Manifest struct {
-	Files             []ArtifactFile `json:"files"`
-	Steps             []Step         `json:"steps"`
-	DetectedLanguage  string         `json:"detectedLanguage,omitempty"`
-	MasterPath        string         `json:"masterPath,omitempty"`
-	Renditions        []Rendition    `json:"renditions,omitempty"`
+	Files            []ArtifactFile `json:"files"`
+	Steps            []Step         `json:"steps"`
+	DetectedLanguage string         `json:"detectedLanguage,omitempty"`
+	MasterPath       string         `json:"masterPath,omitempty"`
+	Renditions       []Rendition    `json:"renditions,omitempty"`
 }
 type Artifact struct {
 	ID             string   `json:"id"`
@@ -232,23 +232,30 @@ type TokenView struct {
 	CreatedAt   string `json:"createdAt"`
 	Revoked     bool   `json:"revoked"`
 }
+type ModelFile struct {
+	Path   string `json:"path"`
+	Bytes  int64  `json:"bytes"`
+	SHA256 string `json:"sha256"`
+	URL    string `json:"url"`
+}
 type ModelEntry struct {
-	ID                     string   `json:"id"`
-	Revision               string   `json:"revision"`
-	Executor               string   `json:"executor"`
-	Purpose                string   `json:"purpose"`
-	OS                     []string `json:"os"`
-	Architectures          []string `json:"architectures"`
-	Accelerators           []string `json:"accelerators"`
-	RecognitionLanguages   []string `json:"recognitionLanguages"`
-	TranslationDirections  []Pair   `json:"translationDirections"`
-	DownloadBytes          int64    `json:"downloadBytes"`
-	MinimumRAMBytes        int64    `json:"minimumRamBytes"`
-	MinimumVRAMBytes       int64    `json:"minimumVramBytes"`
-	SHA256                 string   `json:"sha256"`
-	DownloadURL            string   `json:"downloadUrl"`
-	License                string   `json:"license"`
-	DescriptionSource      string   `json:"descriptionSource"`
+	Files                 []ModelFile `json:"files,omitempty"`
+	ID                    string      `json:"id"`
+	Revision              string      `json:"revision"`
+	Executor              string      `json:"executor"`
+	Purpose               string      `json:"purpose"`
+	OS                    []string    `json:"os"`
+	Architectures         []string    `json:"architectures"`
+	Accelerators          []string    `json:"accelerators"`
+	RecognitionLanguages  []string    `json:"recognitionLanguages"`
+	TranslationDirections []Pair      `json:"translationDirections"`
+	DownloadBytes         int64       `json:"downloadBytes"`
+	MinimumRAMBytes       int64       `json:"minimumRamBytes"`
+	MinimumVRAMBytes      int64       `json:"minimumVramBytes"`
+	SHA256                string      `json:"sha256"`
+	DownloadURL           string      `json:"downloadUrl"`
+	License               string      `json:"license"`
+	DescriptionSource     string      `json:"descriptionSource"`
 }
 type CommandView struct {
 	RequestID string    `json:"requestId"`

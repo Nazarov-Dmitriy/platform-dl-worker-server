@@ -64,12 +64,19 @@ process.on("message", (m: any) => {
   if (m.type === "start") {
     work = m;
     void run().catch((e) => {
-      process.send?.({
-        type: "failed",
-        code: e instanceof Error && e.message.length < 80 ? e.message : "VIDEO_PACKAGING_FAILED",
-        message: e instanceof Error ? e.message : String(e),
-      });
-      exit(1);
+      process.send?.(
+        {
+          type: "failed",
+          code:
+            e instanceof Error && e.message.length < 80
+              ? e.message
+              : "VIDEO_PACKAGING_FAILED",
+          message: e instanceof Error ? e.message : String(e),
+        },
+        undefined,
+        undefined,
+        () => exit(1),
+      );
     });
   }
 });
@@ -90,6 +97,8 @@ async function run() {
     await execText(work.ffprobe, [
       "-v",
       "error",
+      "-protocol_whitelist",
+      "file,pipe",
       "-show_format",
       "-show_streams",
       "-print_format",
@@ -120,17 +129,21 @@ async function run() {
       quality: item.quality,
       width: item.width,
       height: item.height,
-      bandwidth: Math.max(1, Math.round((bytes * 8) / Math.max(probe.duration, 1))),
+      bandwidth: Math.max(
+        1,
+        Math.round((bytes * 8) / Math.max(probe.duration, 1)),
+      ),
       mode: item.mode,
       playlist,
     });
   }
-  writeFileSync(
-    join(work.outDir, "index.m3u8"),
-    masterPlaylist(renditions),
+  writeFileSync(join(work.outDir, "index.m3u8"), masterPlaylist(renditions));
+  process.send?.(
+    { type: "packaged", renditions, duration: probe.duration },
+    undefined,
+    undefined,
+    () => exit(0),
   );
-  process.send?.({ type: "packaged", renditions, duration: probe.duration });
-  exit(0);
 }
 function folder(q: string) {
   return q.replace("P", "").toLowerCase() + "p";
@@ -148,8 +161,20 @@ function runFfmpeg(
   dir: string,
   onProgress: () => void,
 ) {
-  const gop = Math.max(1, Math.round((probe.fps || 30) * profile.segmentDurationSeconds));
-  const args = ["-hide_banner", "-y", "-i", source, "-map", "0:v:0"];
+  const gop = Math.max(
+    1,
+    Math.round((probe.fps || 30) * profile.segmentDurationSeconds),
+  );
+  const args = [
+    "-hide_banner",
+    "-y",
+    "-protocol_whitelist",
+    "file,pipe",
+    "-i",
+    source,
+    "-map",
+    "0:v:0",
+  ];
   if (probe.audioCodec) args.push("-map", "0:a:0");
   if (item.mode === "COPY") {
     args.push("-c:v", "copy");
@@ -222,9 +247,38 @@ function runFfmpeg(
 }
 function execText(bin: string, args: string[]) {
   return new Promise<string>((resolve, reject) => {
-    execFile(bin, args, { windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (e, stdout) => {
-      if (e) reject(e);
-      else resolve(stdout);
-    });
+    execFile(
+      bin,
+      args,
+      { windowsHide: true, maxBuffer: 8 * 1024 * 1024 },
+      (e, stdout) => {
+        if (e) reject(e);
+        else resolve(stdout);
+      },
+    );
   });
+}
+
+setInterval(() => {
+  if (stopping || !work?.maxOutputBytes) return;
+  try {
+    if (treeSize(work.outDir) > work.maxOutputBytes)
+      process.send?.(
+        { type: "failed", code: "OUTPUT_LIMIT" },
+        undefined,
+        undefined,
+        () => exit(1),
+      );
+  } catch {
+    /* The output directory may not exist yet. */
+  }
+}, 500);
+function treeSize(dir: string): number {
+  let bytes = 0;
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name),
+      stat = statSync(path);
+    bytes += stat.isDirectory() ? treeSize(path) : stat.size;
+  }
+  return bytes;
 }

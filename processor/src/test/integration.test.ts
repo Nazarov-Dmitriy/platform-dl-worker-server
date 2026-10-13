@@ -239,7 +239,10 @@ test(
 );
 function hasFfmpeg() {
   try {
-    execFileSync("ffmpeg", ["-version"], { stdio: "ignore", windowsHide: true });
+    execFileSync("ffmpeg", ["-version"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
     execFileSync("ffprobe", ["-version"], {
       stdio: "ignore",
       windowsHide: true,
@@ -266,11 +269,21 @@ test(
         }),
       );
     const site = cli("site-create", "-name", "video");
-    const siteToken = cli("token-issue", "-purpose", "SITE", "-id", site.id)
-      .token;
+    const siteToken = cli(
+      "token-issue",
+      "-purpose",
+      "SITE",
+      "-id",
+      site.id,
+    ).token;
     const device = cli("device-create", "-name", "ffmpeg");
-    const deviceToken = cli("token-issue", "-purpose", "DEVICE", "-id", device.id)
-      .token;
+    const deviceToken = cli(
+      "token-issue",
+      "-purpose",
+      "DEVICE",
+      "-id",
+      device.id,
+    ).token;
     const source = join(root, "source.mp4");
     execFileSync(
       "ffmpeg",
@@ -390,7 +403,12 @@ test(
       ffmpeg: "ffmpeg",
       ffprobe: "ffprobe",
     };
-    agent = new Agent(config, deviceToken, new Journal(config.stateDir), () => {});
+    agent = new Agent(
+      config,
+      deviceToken,
+      new Journal(config.stateDir),
+      () => {},
+    );
     agent.resources.sample = () => ({
       cpuPercent: 10,
       memoryUsedPercent: 20,
@@ -444,27 +462,30 @@ test(
       ).json();
       for (const req of transfers.requests || []) {
         if (req.kind === "SOURCE") {
-          await fetch(base + "/api/v2/site/jobs/" + fixture.id + "/transfer-grants", {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              protocolVersion: "2.0",
-              requestId: req.id,
-              fence: req.fence,
-              links: [
-                {
-                  path: "source",
-                  objectName: "uploads/video.mp4",
-                  url: objectUrl("uploads/video.mp4"),
-                  expiresAt: new Date(Date.now() + 3600000).toISOString(),
-                  method: "GET",
-                  headers: {},
-                },
-              ],
-              page: 0,
-              lastPage: true,
-            }),
-          });
+          await fetch(
+            base + "/api/v2/site/jobs/" + fixture.id + "/transfer-grants",
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                protocolVersion: "2.0",
+                requestId: req.id,
+                fence: req.fence,
+                links: [
+                  {
+                    path: "source",
+                    objectName: "uploads/video.mp4",
+                    url: objectUrl("uploads/video.mp4"),
+                    expiresAt: new Date(Date.now() + 3600000).toISOString(),
+                    method: "GET",
+                    headers: {},
+                  },
+                ],
+                page: 0,
+                lastPage: true,
+              }),
+            },
+          );
         }
         if (req.kind === "UPLOAD") {
           const prefix =
@@ -479,25 +500,28 @@ test(
             "/" +
             req.fence.assignmentId +
             "/";
-          await fetch(base + "/api/v2/site/jobs/" + fixture.id + "/transfer-grants", {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              protocolVersion: "2.0",
-              requestId: req.id,
-              fence: req.fence,
-              links: req.artifact.manifest.files.map((file: any) => ({
-                path: file.path,
-                objectName: prefix + file.path,
-                url: objectUrl(prefix + file.path),
-                expiresAt: new Date(Date.now() + 3600000).toISOString(),
-                method: "PUT",
-                headers: { "Content-Type": file.contentType },
-              })),
-              page: 0,
-              lastPage: true,
-            }),
-          });
+          await fetch(
+            base + "/api/v2/site/jobs/" + fixture.id + "/transfer-grants",
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                protocolVersion: "2.0",
+                requestId: req.id,
+                fence: req.fence,
+                links: req.artifact.manifest.files.map((file: any) => ({
+                  path: file.path,
+                  objectName: prefix + file.path,
+                  url: objectUrl(prefix + file.path),
+                  expiresAt: new Date(Date.now() + 3600000).toISOString(),
+                  method: "PUT",
+                  headers: { "Content-Type": file.contentType },
+                })),
+                page: 0,
+                lastPage: true,
+              }),
+            },
+          );
         }
       }
       if (view.status === "AWAITING_PUBLICATION") {
@@ -641,8 +665,13 @@ test(
       "-operations",
       "media.transcode,media.transcribe,media.subtitles",
     );
-    const siteToken = cli("token-issue", "-purpose", "SITE", "-id", site.id)
-      .token;
+    const siteToken = cli(
+      "token-issue",
+      "-purpose",
+      "SITE",
+      "-id",
+      site.id,
+    ).token;
     const device = cli("device-create", "-name", "speech-device");
     const deviceToken = cli(
       "token-issue",
@@ -672,8 +701,20 @@ test(
         modelRevision: entry.revision,
       }),
     );
-    cli("command-enqueue", "-id", device.id, "-command", join(root, "install.json"));
-    cli("command-enqueue", "-id", device.id, "-command", join(root, "activate.json"));
+    cli(
+      "command-enqueue",
+      "-id",
+      device.id,
+      "-command",
+      join(root, "install.json"),
+    );
+    cli(
+      "command-enqueue",
+      "-id",
+      device.id,
+      "-command",
+      join(root, "activate.json"),
+    );
     const port = await freePort();
     const base = `http://127.0.0.1:${port}`;
     let agent: Agent | undefined;
@@ -728,8 +769,14 @@ test(
       ffmpeg: "ffmpeg",
       ffprobe: "ffprobe",
       catalogExtra: join(root, "catalog.json"),
+      allowTestModels: true,
     };
-    agent = new Agent(config, deviceToken, new Journal(config.stateDir), () => {});
+    agent = new Agent(
+      config,
+      deviceToken,
+      new Journal(config.stateDir),
+      () => {},
+    );
     agent.resources.sample = () => ({
       cpuPercent: 10,
       memoryUsedPercent: 20,
@@ -986,7 +1033,9 @@ test(
     const translatePack = Buffer.from(
       JSON.stringify({
         failTargets: ["uk"],
-        map: { ru: { "Hello from catalog test.": "Привет из проверки каталога." } },
+        map: {
+          ru: { "Hello from catalog test.": "Привет из проверки каталога." },
+        },
       }),
       "utf8",
     );
@@ -1073,8 +1122,13 @@ test(
       "-operations",
       "media.transcode,media.transcribe,media.subtitles",
     );
-    const siteToken = cli("token-issue", "-purpose", "SITE", "-id", site.id)
-      .token;
+    const siteToken = cli(
+      "token-issue",
+      "-purpose",
+      "SITE",
+      "-id",
+      site.id,
+    ).token;
     const device = cli("device-create", "-name", "partial-device");
     const deviceToken = cli(
       "token-issue",
@@ -1174,8 +1228,14 @@ test(
       ffmpeg: "ffmpeg",
       ffprobe: "ffprobe",
       catalogExtra: join(root, "catalog.json"),
+      allowTestModels: true,
     };
-    agent = new Agent(config, deviceToken, new Journal(config.stateDir), () => {});
+    agent = new Agent(
+      config,
+      deviceToken,
+      new Journal(config.stateDir),
+      () => {},
+    );
     agent.resources.sample = () => ({
       cpuPercent: 10,
       memoryUsedPercent: 20,
@@ -1193,8 +1253,8 @@ test(
     await until(() => !!agent?.session);
     await until(
       () =>
-        agent!.journal.state.models.filter((m) => m.state === "ACTIVE").length ===
-        2,
+        agent!.journal.state.models.filter((m) => m.state === "ACTIVE")
+          .length === 2,
       20000,
     );
     await delay(1500);
@@ -1352,17 +1412,23 @@ test(
     assert.ok(
       done.artifact.manifest.steps.some(
         (s: any) =>
-          s.name === "subtitles" && s.language === "ru" && s.status === "SUCCEEDED",
+          s.name === "subtitles" &&
+          s.language === "ru" &&
+          s.status === "SUCCEEDED",
       ),
     );
     assert.ok(
       done.artifact.manifest.steps.some(
         (s: any) =>
-          s.name === "subtitles" && s.language === "uk" && s.status === "FAILED",
+          s.name === "subtitles" &&
+          s.language === "uk" &&
+          s.status === "FAILED",
       ),
     );
     assert.ok([...objects.keys()].some((k) => k.endsWith("index.m3u8")));
     assert.ok([...objects.keys()].some((k) => k.endsWith("subtitles/ru.vtt")));
-    assert.ok([...objects.keys()].every((k) => !k.endsWith("subtitles/uk.vtt")));
+    assert.ok(
+      [...objects.keys()].every((k) => !k.endsWith("subtitles/uk.vtt")),
+    );
   },
 );

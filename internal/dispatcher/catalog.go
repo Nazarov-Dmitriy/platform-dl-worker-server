@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"titunki/worker-server/contracts"
 )
 
 // Languages are taken from the OpenAI Whisper multilingual tokenizer, not a site locale list.
@@ -19,14 +20,12 @@ var whisperLanguages = []string{
 	"mg", "as", "tt", "haw", "ln", "ha", "ba", "jw", "su", "yue",
 }
 
-func nllbPairs() []Pair {
-	langs := []string{"en", "ru", "de", "es", "fr", "uk", "zh"}
-	out := []Pair{}
-	for _, a := range langs {
-		for _, b := range langs {
-			if a != b {
-				out = append(out, Pair{a, b})
-			}
+// Base and small precede large-v3 and support 99 languages (no Cantonese token).
+func baseWhisperLanguages() []string {
+	out := []string{}
+	for _, language := range whisperLanguages {
+		if language != "yue" {
+			out = append(out, language)
 		}
 	}
 	return out
@@ -36,38 +35,50 @@ func pinnedCatalog() []ModelEntry {
 	osAll := []string{"windows", "darwin", "linux"}
 	arch := []string{"amd64", "arm64"}
 	acc := []string{"cpu", "cuda", "metal"}
-	return []ModelEntry{
+	models := []ModelEntry{
 		{
-			ID: "whisper-cpp-base", Revision: "ggml-base-v1.7.6", Executor: "whisper.cpp",
+			ID: "whisper-cpp-base", Revision: "ggml-base-hf-5359861", Executor: "whisper.cpp",
 			Purpose: "RECOGNITION", OS: osAll, Architectures: arch, Accelerators: acc,
-			RecognitionLanguages: append([]string{}, whisperLanguages...), TranslationDirections: []Pair{},
-			DownloadBytes: 147964211, MinimumRAMBytes: 1 << 30, MinimumVRAMBytes: 0,
-			SHA256: "60ed5e3d76e1a12f3e9afd536d6518c733dc74fa9284c3a77df5adc76cc47e27",
-			DownloadURL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-			License: "MIT", DescriptionSource: "https://github.com/openai/whisper/blob/main/whisper/tokenizer.py",
+			RecognitionLanguages: baseWhisperLanguages(), TranslationDirections: []Pair{},
+			DownloadBytes: 147951465, MinimumRAMBytes: 1 << 30, MinimumVRAMBytes: 0,
+			SHA256:      "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+			DownloadURL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.bin",
+			License:     "MIT", DescriptionSource: "https://github.com/openai/whisper/blob/main/whisper/tokenizer.py",
 		},
 		{
-			ID: "whisper-cpp-small", Revision: "ggml-small-v1.7.6", Executor: "whisper.cpp",
+			ID: "whisper-cpp-small", Revision: "ggml-small-hf-5359861", Executor: "whisper.cpp",
 			Purpose: "RECOGNITION", OS: osAll, Architectures: arch, Accelerators: acc,
-			RecognitionLanguages: append([]string{}, whisperLanguages...), TranslationDirections: []Pair{},
+			RecognitionLanguages: baseWhisperLanguages(), TranslationDirections: []Pair{},
 			DownloadBytes: 487601967, MinimumRAMBytes: 2 << 30, MinimumVRAMBytes: 0,
-			SHA256: "1be3a9b2063867b937e64e2ec7483364a152123cbd738e99835de1eb5394d21a",
-			DownloadURL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
-			License: "MIT", DescriptionSource: "https://github.com/openai/whisper/blob/main/whisper/tokenizer.py",
-		},
-		{
-			ID: "nllb-200-distilled-600m-int8", Revision: "ct2-2024-01", Executor: "nllb-ct2",
-			Purpose: "TRANSLATION", OS: osAll, Architectures: arch, Accelerators: []string{"cpu", "cuda"},
-			RecognitionLanguages: []string{}, TranslationDirections: nllbPairs(),
-			DownloadBytes: 600000000, MinimumRAMBytes: 3 << 30, MinimumVRAMBytes: 0,
-			SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			DownloadURL: "https://huggingface.co/facebook/nllb-200-distilled-600M",
-			License: "CC-BY-NC-4.0", DescriptionSource: "https://huggingface.co/facebook/nllb-200-distilled-600M",
+			SHA256:      "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+			DownloadURL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin",
+			License:     "MIT", DescriptionSource: "https://github.com/openai/whisper/blob/main/whisper/tokenizer.py",
 		},
 	}
+	raw, err := contracts.Files.ReadFile("translation-catalog.json")
+	if err != nil {
+		panic(err)
+	}
+	var translations []ModelEntry
+	if err = json.Unmarshal(raw, &translations); err != nil {
+		panic(err)
+	}
+	return append(models, translations...)
 }
 
 func (s *Store) seedCatalog() error {
+	for _, old := range []struct{ id, revision, hash string }{
+		{"whisper-cpp-base", "ggml-base-v1.7.6", "60ed5e3d76e1a12f3e9afd536d6518c733dc74fa9284c3a77df5adc76cc47e27"},
+		{"whisper-cpp-small", "ggml-small-v1.7.6", "1be3a9b2063867b937e64e2ec7483364a152123cbd738e99835de1eb5394d21a"},
+	} {
+		if _, e := s.db.Exec("DELETE FROM model_catalog WHERE id=? AND revision=? AND json_extract(entry, '$.sha256')=?", old.id, old.revision, old.hash); e != nil {
+			return e
+		}
+	}
+
+	if _, e := s.db.Exec("DELETE FROM model_catalog WHERE id=? AND revision=? AND json_extract(entry, '$.sha256')=?", "nllb-200-distilled-600m-int8", "ct2-2024-01", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); e != nil {
+		return e
+	}
 	for _, m := range pinnedCatalog() {
 		if e := s.validator.Check("ModelEntry", encode(m)); e != nil {
 			return e

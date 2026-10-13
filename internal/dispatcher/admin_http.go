@@ -82,7 +82,7 @@ func (h *HTTP) adminLogin(w http.ResponseWriter, r *http.Request) {
 		h.failure(w, e)
 		return
 	}
-	secure := r.TLS != nil
+	secure := h.secureCookies || r.TLS != nil
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: rec.Secret, Path: "/", HttpOnly: true,
 		SameSite: http.SameSiteStrictMode, Secure: secure, Expires: time.Now().Add(sessionTTL),
@@ -95,7 +95,7 @@ func (h *HTTP) adminSession(w http.ResponseWriter, r *http.Request, a AdminActor
 }
 func (h *HTTP) adminLogout(w http.ResponseWriter, r *http.Request, a AdminActor) {
 	_ = h.store.Logout(r.Context(), cookieSecret(r))
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, HttpOnly: true})
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, HttpOnly: true, Secure: h.secureCookies || r.TLS != nil, SameSite: http.SameSiteStrictMode})
 	w.WriteHeader(204)
 }
 func cookieSecret(r *http.Request) string {

@@ -44,7 +44,13 @@ export type State = {
   autostart?: boolean;
 };
 export class Journal {
-  state: State = { version: 1, attempts: [], outbox: [], models: [], catalog: [] };
+  state: State = {
+    version: 1,
+    attempts: [],
+    outbox: [],
+    models: [],
+    catalog: [],
+  };
   readonly path: string;
   constructor(readonly dir: string) {
     mkdirSync(dir, { recursive: true, mode: 0o700 });

@@ -26,18 +26,22 @@ export function doctor(configPath?: string) {
     nodeOk: major >= minMajor,
     platform: process.platform,
     arch: process.arch,
-    platformOk: ["win32", "darwin", "linux"].includes(process.platform) &&
+    platformOk:
+      ["win32", "darwin", "linux"].includes(process.platform) &&
       ["x64", "arm64"].includes(process.arch),
   };
   if (configPath) {
     const config: Config = loadConfig(configPath);
     report.config = configPath;
     report.workDir = config.workDir;
-    report.workDirOk = existsSync(config.workDir) && statSync(config.workDir).isDirectory();
+    report.workDirOk =
+      existsSync(config.workDir) && statSync(config.workDir).isDirectory();
     report.stateDir = config.stateDir;
     report.ffmpeg = has(config.ffmpeg);
     report.ffprobe = has(config.ffprobe);
-    report.tokenPresent = Boolean(process.env.PROCESSOR_TOKEN && !/\s/.test(process.env.PROCESSOR_TOKEN));
+    report.tokenPresent = Boolean(
+      process.env.PROCESSOR_TOKEN && !/\s/.test(process.env.PROCESSOR_TOKEN),
+    );
   } else {
     report.ffmpeg = has("ffmpeg");
     report.ffprobe = has("ffprobe");
@@ -53,7 +57,11 @@ export function doctor(configPath?: string) {
     report.nodeOk === true &&
     report.platformOk === true &&
     report.dependencies === true &&
-    (configPath ? report.workDirOk === true && report.ffmpeg === true && report.ffprobe === true : true);
+    (configPath
+      ? report.workDirOk === true &&
+        report.ffmpeg === true &&
+        report.ffprobe === true
+      : true);
   report.ok = ok;
   return report;
 }

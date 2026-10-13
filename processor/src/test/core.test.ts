@@ -27,6 +27,7 @@ import { downloadLink, TransferError, uploadLink } from "../transfer.js";
 import type { Config } from "../config.js";
 import { whisperLanguages } from "../catalog.js";
 import {
+  parseWhisperJson,
   cuesToVtt,
   selectRecognition,
   transcribeSource,
@@ -353,7 +354,9 @@ test("catalog-test speech returns original text without translation", (t) => {
       text: "Hello from catalog test.",
       cues: [{ start: 0, end: 1, text: "Hello from catalog test." }],
       failTargets: ["uk"],
-      map: { ru: { "Hello from catalog test.": "Привет из проверки каталога." } },
+      map: {
+        ru: { "Hello from catalog test.": "Привет из проверки каталога." },
+      },
     }),
   );
   writeFileSync(
@@ -399,7 +402,336 @@ test("catalog-test speech returns original text without translation", (t) => {
 });
 test("doctor reports node and platform without requiring a token", async () => {
   const { doctor } = await import("../doctor.js");
-  const report = doctor() as { ok: boolean; nodeOk: boolean; platformOk: boolean };
+  const report = doctor() as {
+    ok: boolean;
+    nodeOk: boolean;
+    platformOk: boolean;
+  };
   assert.equal(report.nodeOk, true);
   assert.equal(report.platformOk, true);
+});
+
+test("Whisper JSON preserves detected language and real timestamps", () => {
+  const output = parseWhisperJson({
+    result: { language: "ru" },
+    transcription: [{ text: " Привет ", offsets: { from: 1250, to: 3750 } }],
+  });
+  assert.equal(output.language, "ru");
+  assert.deepEqual(output.cues, [{ start: 1.25, end: 3.75, text: "Привет" }]);
+  assert.throws(
+    () => parseWhisperJson({ transcription: [] }),
+    /LANGUAGE_DETECTION_FAILED/,
+  );
+  assert.throws(
+    () =>
+      parseWhisperJson({
+        result: { language: "ru" },
+        transcription: [{ text: "x", offsets: { from: -1, to: 1 } }],
+      }),
+    /INVALID_TRANSCRIPT_TIMESTAMPS/,
+  );
+});
+test("renewals during source download start the job exactly once", async () => {
+  const { Agent } = await import("../agent.js");
+  const fence = {
+    assignmentId: randomUUID(),
+    generation: 1,
+    dispatcherEpoch: randomUUID(),
+  };
+  const jobId = randomUUID(),
+    lease = new LeaseClock();
+  const running: any = {
+    attempt: { jobId, fence, started: false },
+    lease,
+    ending: false,
+  };
+  const agent = Object.create(Agent.prototype);
+  Object.assign(agent, {
+    session: true,
+    config: { testExecutor: false },
+    safety: 5,
+    running: new Map([[fence.assignmentId, running]]),
+    journal: { save() {} },
+  });
+  let starts = 0;
+  agent.startJob = () => {
+    starts++;
+  };
+  for (let i = 0; i < 3; i++) {
+    const renewalId = randomUUID();
+    lease.sent(renewalId);
+    await agent.receive({
+      protocolVersion: "2.0",
+      messageId: randomUUID(),
+      type: "lease.granted",
+      body: {
+        jobId,
+        fence,
+        renewalId,
+        leaseSeconds: 120,
+        expiresAt: new Date(Date.now() + 120000).toISOString(),
+      },
+    });
+  }
+  assert.equal(starts, 1);
+});
+test("model redirects work and failed reinstall preserves the installed payload", async (t) => {
+  const { installModel, deleteModel } = await import("../models.js");
+  const { createHash } = await import("node:crypto");
+  const dir = mkdtempSync(join(tmpdir(), "model-install-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  let bad = false;
+  const payload = Buffer.from("verified-model");
+  const server = createServer((req, res) => {
+    if (req.url === "/redirect") {
+      res.writeHead(302, { Location: "/payload" });
+      res.end();
+    } else {
+      res.end(bad ? Buffer.from("invalid-model!") : payload);
+    }
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => server.close());
+  const entry: any = {
+    id: "test-model",
+    revision: "1",
+    executor: "catalog-test",
+    purpose: "RECOGNITION",
+    recognitionLanguages: ["en"],
+    translationDirections: [],
+    minimumRamBytes: 1,
+    downloadBytes: payload.length,
+    sha256: createHash("sha256").update(payload).digest("hex"),
+    downloadUrl: `http://127.0.0.1:${(server.address() as any).port}/redirect`,
+  };
+  const journal = new Journal(join(dir, "state"));
+  const installed = await installModel(
+    dir,
+    journal,
+    [entry],
+    entry.id,
+    entry.revision,
+    100000000,
+    () => {},
+  );
+  bad = true;
+  await assert.rejects(
+    installModel(
+      dir,
+      journal,
+      [entry],
+      entry.id,
+      entry.revision,
+      100000000,
+      () => {},
+    ),
+    /MODEL_(HASH|SIZE)_MISMATCH/,
+  );
+  assert.equal(readFileSync(installed.path, "utf8"), payload.toString());
+  assert.equal(journal.state.models.length, 1);
+  assert.throws(
+    () => deleteModel(dir, journal, "..", "1", false),
+    /MODEL_ID_INVALID/,
+  );
+});
+
+test("HLS input accepts local declared parts and rejects network references", async (t) => {
+  const { validateHlsInput } = await import("../hls-input.js");
+  const dir = mkdtempSync(join(tmpdir(), "hls-input-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(
+    join(dir, "index.m3u8"),
+    "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nmedia.m3u8\n",
+  );
+  writeFileSync(
+    join(dir, "media.m3u8"),
+    "#EXTM3U\n#EXTINF:1,\nseg.ts\n#EXT-X-ENDLIST\n",
+  );
+  assert.equal(
+    validateHlsInput(dir, ["index.m3u8", "media.m3u8", "seg.ts"]),
+    join(dir, "index.m3u8"),
+  );
+  writeFileSync(
+    join(dir, "media.m3u8"),
+    "#EXTM3U\nhttps://example.org/seg.ts\n",
+  );
+  assert.throws(
+    () => validateHlsInput(dir, ["index.m3u8", "media.m3u8", "seg.ts"]),
+    /EXTERNAL_HLS_REFERENCE/,
+  );
+  writeFileSync(join(dir, "media.m3u8"), "#EXTM3U\n../outside.ts\n");
+  assert.throws(
+    () => validateHlsInput(dir, ["index.m3u8", "media.m3u8", "seg.ts"]),
+    /UNDECLARED_HLS_REFERENCE/,
+  );
+});
+
+test("source download stops at declared size and aborts promptly", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "transfer-limit-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const server = createServer((req, res) => {
+    if (req.url === "/large") {
+      res.end(Buffer.alloc(65536));
+      return;
+    }
+    res.writeHead(200);
+    res.write("x");
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const port = (server.address() as any).port;
+  const link: any = {
+    path: "source",
+    objectName: "source",
+    method: "GET",
+    headers: {},
+    expiresAt: new Date(Date.now() + 60000).toISOString(),
+    url: `http://127.0.0.1:${port}/large`,
+  };
+  await assert.rejects(
+    downloadLink(link, join(dir, "large.bin"), 100, undefined, [0]),
+    /declared size/,
+  );
+  const controller = new AbortController();
+  const pending = downloadLink(
+    { ...link, url: `http://127.0.0.1:${port}/slow` },
+    join(dir, "slow.bin"),
+    100,
+    undefined,
+    [0],
+    undefined,
+    controller.signal,
+  );
+  setTimeout(() => controller.abort(), 100);
+  await assert.rejects(pending, (e) => (e as Error).name === "AbortError");
+});
+
+test(
+  "speech watchdog stops blocked inference while agent timers keep running",
+  { timeout: 8000 },
+  async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "speech-watchdog-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const pack = join(dir, "pack.json");
+    writeFileSync(
+      pack,
+      JSON.stringify({ language: "en", text: "hello", delayMs: 5000 }),
+    );
+    const lease = new LeaseClock();
+    lease.sent("speech");
+    lease.grant("speech", 2, 1);
+    let results = 0,
+      ticks = 0;
+    const timer = setInterval(() => ticks++, 20);
+    t.after(() => clearInterval(timer));
+    const executor = new Executor(
+      0,
+      lease,
+      (m) => {
+        if (m.type === "speech-result") results++;
+      },
+      new URL("../speech-child.js", import.meta.url),
+      {
+        operation: "recognize",
+        model: { executor: "catalog-test", path: pack },
+        source: pack,
+        requested: "auto",
+      },
+    );
+    t.after(() => executor.stop());
+    await Promise.race([
+      executor.closed,
+      delay(4000).then(() => {
+        throw new Error("SPEECH_WATCHDOG_FAILED");
+      }),
+    ]);
+    assert.equal(results, 0);
+    assert.ok(ticks > 10);
+  },
+);
+
+test("resource thresholds remain independent", () => {
+  const c = {
+    maxParallel: 2,
+    reserveMemoryBytes: 0,
+    taskMemoryBytes: 1,
+    threshold: 80,
+    cpuThresholdPercent: 70,
+    memoryThresholdPercent: 50,
+    diskThresholdPercent: 80,
+    paused: false,
+  } as Config;
+  assert.equal(slotBudget(c, 100, 40, 60, 60, "NORMAL", true), 2);
+  assert.equal(slotBudget(c, 100, 50, 20, 20, "NORMAL", true), 0);
+  assert.equal(slotBudget(c, 100, 20, 70, 20, "NORMAL", true), 0);
+});
+test("confirmed device settings survive a processor restart", async (t) => {
+  const { Agent } = await import("../agent.js");
+  const dir = mkdtempSync(join(tmpdir(), "persisted-settings-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const work = join(dir, "work");
+  mkdirSync(work);
+  const journal = new Journal(join(dir, "state"));
+  journal.state.appliedSettings = {
+    workDirectory: work,
+    paused: true,
+    autostart: false,
+    maxParallel: 1,
+    cpuThresholdPercent: 70,
+    memoryThresholdPercent: 60,
+    diskThresholdPercent: 80,
+  };
+  journal.save();
+  const config = {
+    url: "ws://127.0.0.1:1/api/v2/device/connect",
+    deviceId: randomUUID(),
+    stateDir: join(dir, "state"),
+    workDir: dir,
+    maxParallel: 4,
+    reserveMemoryBytes: 0,
+    taskMemoryBytes: 1,
+    reserveDiskBytes: 0,
+    threshold: 80,
+    paused: false,
+    testExecutor: true,
+    testDurationMs: 1000,
+    ffmpeg: "not-a-binary",
+    ffprobe: "not-a-binary",
+  } as Config;
+  const agent = new Agent(
+    config,
+    "test",
+    new Journal(join(dir, "state")),
+    () => {},
+  );
+  assert.equal(agent.config.workDir, work);
+  assert.equal(agent.config.paused, true);
+  assert.equal(agent.config.maxParallel, 1);
+  assert.equal(agent.config.memoryThresholdPercent, 60);
+  await agent.close();
+});
+
+test("system failures always become valid public error codes", async () => {
+  const { errorCode } = await import("../errors.js");
+  assert.equal(
+    errorCode(
+      Object.assign(new Error("ENOENT: private/path"), { code: "ENOENT" }),
+      "JOB_FAILED",
+    ),
+    "FILE_NOT_FOUND",
+  );
+  assert.equal(
+    errorCode(
+      new Error("native executor failed with stack/path"),
+      "JOB_FAILED",
+    ),
+    "JOB_FAILED",
+  );
+  assert.equal(
+    errorCode(new Error("MODEL_NOT_INSTALLED"), "JOB_FAILED"),
+    "MODEL_NOT_INSTALLED",
+  );
 });

@@ -14,13 +14,17 @@ import (
 const MaxMetadataBytes int64 = 8 << 20
 
 type HTTP struct {
-	store *Store
-	mux   *http.ServeMux
-	hub   *deviceHub
+	store         *Store
+	mux           *http.ServeMux
+	hub           *deviceHub
+	secureCookies bool
 }
 
-func Handler(s *Store) http.Handler {
-	h := &HTTP{store: s, mux: http.NewServeMux(), hub: newDeviceHub()}
+func Handler(s *Store) http.Handler { return HandlerWithSecureCookies(s, false) }
+
+// HandlerWithSecureCookies configures the public HTTPS origin explicitly, without trusting proxy headers.
+func HandlerWithSecureCookies(s *Store, secure bool) http.Handler {
+	h := &HTTP{store: s, mux: http.NewServeMux(), hub: newDeviceHub(), secureCookies: secure}
 	h.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if e := s.health(r.Context()); e != nil {
 			h.failure(w, e)

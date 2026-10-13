@@ -25,7 +25,9 @@ export function slotBudget(
   return !c.paused &&
     available &&
     pressure === "NORMAL" &&
-    Math.max(usedMemory, cpu, disk) < c.threshold
+    usedMemory < (c.memoryThresholdPercent ?? c.threshold) &&
+    cpu < (c.cpuThresholdPercent ?? c.threshold) &&
+    disk < (c.diskThresholdPercent ?? c.threshold)
     ? Math.min(
         c.maxParallel,
         Math.max(
@@ -118,7 +120,15 @@ export class Resources {
       freeVramBytes: null,
       encoderBusyPercent: null,
       availableSlots: slotBudget(
-        c,
+        {
+          ...c,
+          taskMemoryBytes: Math.max(
+            c.taskMemoryBytes,
+            ...this.journal.state.models
+              .filter((m) => m.state === "ACTIVE")
+              .map((m) => m.minimumRamBytes),
+          ),
+        },
         free,
         memory,
         cpu,

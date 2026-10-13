@@ -1,8 +1,17 @@
+import { errorCode } from "./errors.js";
+import { setAutostart } from "./autostart.js";
+import { validateHlsInput } from "./hls-input.js";
 import os from "node:os";
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 import type { Config } from "./config.js";
 import { Journal, type Attempt } from "./journal.js";
@@ -10,19 +19,32 @@ import { frame, parseFrame, sameFence, type Frame } from "./protocol.js";
 import { LeaseClock } from "./lease.js";
 import { Resources, transcodeCapability } from "./resources.js";
 import { Executor } from "./executor.js";
-import { cleanupWork, createAttemptDir, utcDate } from "./files.js";
-import { downloadLink, sha256File, TransferError, uploadLink, type Link } from "./transfer.js";
+import {
+  assertWorkVolume,
+  cleanupWork,
+  createAttemptDir,
+  utcDate,
+} from "./files.js";
+import {
+  downloadLink,
+  sha256File,
+  TransferError,
+  uploadLink,
+  type Link,
+} from "./transfer.js";
 import { sha256Canonical } from "./jcs.js";
-import type { ModelEntry } from "./catalog.js";
-import { activateModel, deleteModel, installModel } from "./models.js";
+import { lookupCatalog, type ModelEntry } from "./catalog.js";
+import {
+  activateModel,
+  deleteModel,
+  installModel,
+  modelReady,
+  cleanupModelArtifacts,
+} from "./models.js";
 import {
   cuesToVtt,
-  extractAudio,
   selectRecognition,
   selectTranslation,
-  transcribeSource,
-  translateCues,
-  wavPath,
   writeUtf8,
   type Cue,
   type Transcript,
@@ -32,6 +54,7 @@ type Running = {
   job?: any;
   lease: LeaseClock;
   executor?: Executor;
+  transferAbort?: AbortController;
   progress: number | null;
   activity: number;
   ending: boolean;
@@ -66,26 +89,58 @@ export class Agent {
     readonly journal: Journal,
     readonly log: (event: string) => void = console.log,
   ) {
+    const applied = journal.state.appliedSettings as any;
+    if (applied) {
+      config.workDir = resolve(applied.workDirectory);
+      config.paused = Boolean(applied.paused);
+      config.maxParallel = applied.maxParallel;
+      config.cpuThresholdPercent = applied.cpuThresholdPercent;
+      config.memoryThresholdPercent = applied.memoryThresholdPercent;
+      config.diskThresholdPercent = applied.diskThresholdPercent;
+      config.threshold = Math.min(
+        applied.cpuThresholdPercent,
+        applied.memoryThresholdPercent,
+        applied.diskThresholdPercent,
+      );
+    }
     this.resources = new Resources(config, journal);
-    this.ffmpeg =
-      hasBin(config.ffmpeg) && hasBin(config.ffprobe);
+    this.ffmpeg = hasBin(config.ffmpeg) && hasBin(config.ffprobe);
     if (config.catalogExtra) {
       journal.state.catalog = JSON.parse(
         readFileSync(config.catalogExtra, "utf8"),
       ) as ModelEntry[];
       journal.save();
     }
+    if (this.resources.sample().workDiskAvailable)
+      cleanupModelArtifacts(config.workDir, journal);
     this.sweep();
+  }
+  readiness = new Map<string, { at: number; ready: boolean }>();
+  readyModel(model: import("./journal.js").InstalledModel) {
+    if (model.executor === "catalog-test" && !this.config.allowTestModels)
+      return false;
+    const key = model.path + ":" + model.executor;
+    const cached = this.readiness.get(key);
+    if (cached && Date.now() - cached.at < 30000) return cached.ready;
+    const ready = modelReady(model, this.config.whisperCpp, this.config.ffmpeg);
+    this.readiness.set(key, { at: Date.now(), ready });
+    return ready;
   }
   caps() {
     const out: any[] = [];
     if (this.config.testExecutor || this.ffmpeg)
       out.push({ ...transcodeCapability });
     const rec = this.journal.state.models.filter(
-      (m) => m.state === "ACTIVE" && m.purpose === "RECOGNITION",
+      (m) =>
+        m.state === "ACTIVE" &&
+        m.purpose === "RECOGNITION" &&
+        this.readyModel(m),
     );
     const tr = this.journal.state.models.filter(
-      (m) => m.state === "ACTIVE" && m.purpose === "TRANSLATION",
+      (m) =>
+        m.state === "ACTIVE" &&
+        m.purpose === "TRANSLATION" &&
+        this.readyModel(m),
     );
     if (rec.length) {
       const langs = [...new Set(rec.flatMap((m) => m.recognitionLanguages))];
@@ -120,7 +175,10 @@ export class Agent {
   }
   hasRecognition() {
     return this.journal.state.models.some(
-      (m) => m.state === "ACTIVE" && m.purpose === "RECOGNITION",
+      (m) =>
+        m.state === "ACTIVE" &&
+        m.purpose === "RECOGNITION" &&
+        this.readyModel(m),
     );
   }
   usage() {
@@ -248,7 +306,9 @@ export class Agent {
       this.commandChain = this.commandChain
         .then(() => this.runCommand(b))
         .catch((e) =>
-          this.log("COMMAND_FAILED_" + (e instanceof Error ? e.message : "ERR")),
+          this.log(
+            "COMMAND_FAILED_" + (e instanceof Error ? e.message : "ERR"),
+          ),
         );
       return;
     }
@@ -316,6 +376,7 @@ export class Agent {
         grants: [],
         acks: new Set(),
         stage: "WAITING_SOURCE",
+        transferAbort: new AbortController(),
       };
       this.running.set(id, r);
       r.lease.sent(accept.messageId);
@@ -327,9 +388,7 @@ export class Agent {
         (out) => out.messageId !== b.replyTo,
       );
       this.journal.save();
-      const r = [...this.running.values()].find((x) =>
-        x.acks.has(b.replyTo),
-      );
+      const r = [...this.running.values()].find((x) => x.acks.has(b.replyTo));
       r?.acks.delete(b.replyTo);
       return;
     }
@@ -397,7 +456,11 @@ export class Agent {
           sameFence(a.fence, b.fence) &&
           a.awaitingPublication,
       );
-      if (held) this.releaseHeld(held);
+      if (held) {
+        if (!failed)
+          this.queue(frame("job.stopped", { jobId: b.jobId, fence: b.fence }));
+        this.releaseHeld(held);
+      }
       return;
     }
     if (
@@ -419,12 +482,12 @@ export class Agent {
     if (f.type === "lease.granted") {
       if (r.ending || !r.lease.grant(b.renewalId, b.leaseSeconds, this.safety))
         return;
-      if (!r.executor) {
+      if (!r.attempt.started) {
         r.attempt.started = true;
         this.journal.save();
         if (this.config.testExecutor) this.startTest(r);
         else this.startJob(r);
-      } else r.executor.renew(this.config.testDurationMs, r.lease);
+      } else r.executor?.renew(this.config.testDurationMs, r.lease);
       return;
     }
   }
@@ -460,10 +523,10 @@ export class Agent {
       const err = e instanceof TransferError ? e : null;
       return this.finish(
         r,
-        err?.code || (e instanceof Error ? e.message : "JOB_FAILED"),
+        errorCode(e, "JOB_FAILED"),
         false,
         err?.permanent ?? true,
-      );
+      ).catch(() => this.close());
     });
   }
   async runCommand(cmd: {
@@ -472,11 +535,20 @@ export class Agent {
     modelId?: string;
     modelRevision?: string;
   }) {
+    let lastReport = 0;
     const report = (
       status: "RUNNING" | "SUCCEEDED" | "FAILED",
       progress: number | null,
       error?: { code: string; message: string; permanent: boolean },
     ) => {
+      if (
+        status === "RUNNING" &&
+        progress !== 0 &&
+        progress !== 1 &&
+        Date.now() - lastReport < 500
+      )
+        return;
+      lastReport = Date.now();
       this.queue(
         frame("device.command.result", {
           requestId: cmd.requestId,
@@ -488,7 +560,25 @@ export class Agent {
     };
     try {
       report("RUNNING", 0);
+      if (["MODEL_INSTALL", "MODEL_ACTIVATE"].includes(cmd.type)) {
+        const entry = lookupCatalog(
+          this.journal.state.catalog,
+          cmd.modelId!,
+          cmd.modelRevision!,
+        );
+        if (entry?.executor === "catalog-test" && !this.config.allowTestModels)
+          throw new Error("TEST_MODEL_FORBIDDEN");
+      }
       if (cmd.type === "MODEL_INSTALL") {
+        if (
+          this.running.size &&
+          this.journal.state.models.some(
+            (m) => m.id === cmd.modelId && m.revision === cmd.modelRevision,
+          )
+        )
+          throw new Error("MODEL_IN_USE");
+        if (!this.usage().workDiskAvailable)
+          throw new Error("WORK_DISK_UNAVAILABLE");
         await installModel(
           this.config.workDir,
           this.journal,
@@ -499,7 +589,14 @@ export class Agent {
           (n) => report("RUNNING", n),
         );
       } else if (cmd.type === "MODEL_ACTIVATE") {
-        activateModel(this.journal, cmd.modelId!, cmd.modelRevision!);
+        this.readiness.clear();
+        activateModel(
+          this.journal,
+          cmd.modelId!,
+          cmd.modelRevision!,
+          this.config.whisperCpp,
+          this.config.ffmpeg,
+        );
       } else if (cmd.type === "MODEL_DELETE") {
         deleteModel(
           this.config.workDir,
@@ -509,11 +606,11 @@ export class Agent {
           this.running.size > 0,
         );
       } else if (cmd.type === "CONFIGURE") {
-        applyConfigure(this, (cmd as any).settings);
+        await applyConfigure(this, (cmd as any).settings);
       } else throw new Error("UNKNOWN_COMMAND");
       report("SUCCEEDED", 1);
     } catch (e) {
-      const code = e instanceof Error ? e.message : "COMMAND_FAILED";
+      const code = errorCode(e, "COMMAND_FAILED");
       report("FAILED", null, {
         code,
         message: "Device command failed: " + code,
@@ -523,9 +620,15 @@ export class Agent {
   }
   async runJob(r: Running) {
     const job = r.job || r.attempt.job;
-    if (!job || job.source.kind !== "FILE")
-      throw new TransferError("UNSUPPORTED_SOURCE", "Only FILE sources are implemented", false, true);
-    if (!r.lease.valid()) throw new TransferError("LEASE_EXPIRED", "Lease expired", false, true);
+    if (!job || !["FILE", "HLS"].includes(job.source.kind))
+      throw new TransferError(
+        "UNSUPPORTED_SOURCE",
+        "Unsupported source kind",
+        false,
+        true,
+      );
+    if (!r.lease.valid())
+      throw new TransferError("LEASE_EXPIRED", "Lease expired", false, true);
     const dir = createAttemptDir(
       this.config.workDir,
       r.attempt.fence.assignmentId,
@@ -540,13 +643,47 @@ export class Agent {
         fence: r.attempt.fence,
       }),
     );
-    const dest = join(dir, "source.bin");
+    let dest = join(dir, "source.bin");
     r.progress = 0.05;
     r.stage = "DOWNLOADING";
-    await this.transfer("source", "GET", r, (link) =>
-      downloadLink(link, dest, job.source.bytes, job.source.sha256),
-    );
-    if (!r.lease.valid()) throw new TransferError("LEASE_EXPIRED", "Lease expired", false, true);
+    if (job.source.kind === "HLS") {
+      const sourceDir = join(dir, "source");
+      for (const part of job.source.files) {
+        if (!/^[A-Za-z0-9_-]+(?:[./][A-Za-z0-9_-]+)*$/.test(part.path))
+          throw new Error("INVALID_HLS_INPUT");
+        const path = join(sourceDir, part.path);
+        mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
+        await this.transfer(part.path, "GET", r, (link) =>
+          downloadLink(
+            link,
+            path,
+            part.bytes,
+            part.sha256,
+            undefined,
+            undefined,
+            r.transferAbort?.signal,
+          ),
+        );
+      }
+      dest = validateHlsInput(
+        sourceDir,
+        job.source.files.map((p: any) => p.path),
+      );
+    } else {
+      await this.transfer("source", "GET", r, (link) =>
+        downloadLink(
+          link,
+          dest,
+          job.source.bytes,
+          job.source.sha256,
+          undefined,
+          undefined,
+          r.transferAbort?.signal,
+        ),
+      );
+    }
+    if (!r.lease.valid())
+      throw new TransferError("LEASE_EXPIRED", "Lease expired", false, true);
     const files: {
       path: string;
       bytes: number;
@@ -586,6 +723,7 @@ export class Agent {
             outDir: hlsDir,
             profile: job.params.profile,
             maxDurationSeconds: job.maxDurationSeconds,
+            maxOutputBytes: job.maxOutputBytes,
             ffmpeg: this.config.ffmpeg,
             ffprobe: this.config.ffprobe,
           },
@@ -606,20 +744,41 @@ export class Agent {
       job.params?.includeOriginal ||
       job.params?.targetLanguages;
     if (wantSubs || job.type === "media.transcribe") {
-      await this.addSpeech(r, job, dest, dir, outDir, files, steps, speechParams);
+      await this.addSpeech(
+        r,
+        job,
+        dest,
+        dir,
+        outDir,
+        files,
+        steps,
+        speechParams,
+      );
     }
     let total = 0;
     for (const file of files) total += file.bytes;
     if (total > job.maxOutputBytes)
-      throw new TransferError("OUTPUT_LIMIT", "Package exceeds maxOutputBytes", false, true);
+      throw new TransferError(
+        "OUTPUT_LIMIT",
+        "Package exceeds maxOutputBytes",
+        false,
+        true,
+      );
     if (!files.length)
-      throw new TransferError("EMPTY_ARTIFACT", "No output files were produced", false, true);
+      throw new TransferError(
+        "EMPTY_ARTIFACT",
+        "No output files were produced",
+        false,
+        true,
+      );
     const manifest: any = { files, steps };
     if (job.type === "media.transcode") {
       manifest.masterPath = "index.m3u8";
       manifest.renditions = packaged.renditions;
     }
-    const detected = steps.find((s: any) => s.name === "transcript" && s.status === "SUCCEEDED");
+    const detected = steps.find(
+      (s: any) => s.name === "transcript" && s.status === "SUCCEEDED",
+    );
     if (detected?.language) manifest.detectedLanguage = detected.language;
     const artifact = {
       id: randomUUID(),
@@ -644,12 +803,13 @@ export class Agent {
         file.kind === "SEGMENT"
           ? join(outDir, "hls", file.path)
           : join(outDir, file.path);
-      await this.transfer(file.path, "PUT", r, (link) => uploadLink(link, disk));
+      await this.transfer(file.path, "PUT", r, (link) =>
+        uploadLink(link, disk, undefined, undefined, r.transferAbort?.signal),
+      );
     }
     r.attempt.awaitingPublication = true;
     r.attempt.started = true;
     r.stage = "WAITING_PUBLICATION";
-    this.journal.save();
     await this.durable(
       r,
       frame("job.upload.complete", {
@@ -664,6 +824,36 @@ export class Agent {
     this.running.delete(r.attempt.fence.assignmentId);
     this.journal.save();
     this.log("AWAITING_PUBLICATION");
+  }
+  async speechTask(r: Running, payload: object): Promise<any> {
+    if (r.ending || !r.lease.valid()) throw new Error("LEASE_EXPIRED");
+    if (r.executor) await r.executor.stop();
+    if (r.ending || !r.lease.valid()) throw new Error("LEASE_EXPIRED");
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const executor = new Executor(
+        0,
+        r.lease,
+        (m) => {
+          if (m.type === "speech-result" && !r.ending && r.lease.valid()) {
+            settled = true;
+            r.activity++;
+            r.lastProgress = Date.now();
+            resolve(m.result);
+          } else if (m.type === "failed" || m.type === "executor-error") {
+            settled = true;
+            reject(new Error(m.code || "SPEECH_EXECUTOR_FAILED"));
+          }
+        },
+        new URL("./speech-child.js", import.meta.url),
+        payload,
+      );
+      r.executor = executor;
+      executor.child.once("exit", () => {
+        if (!settled)
+          reject(new Error(r.ending ? "CANCELLED" : "SPEECH_EXECUTOR_EXITED"));
+      });
+    });
   }
   async addSpeech(
     r: Running,
@@ -693,24 +883,25 @@ export class Agent {
         speechParams.mode || "AUTO",
         this.usage().freeMemoryBytes,
       );
-      let input = source;
-      if (model.executor === "whisper.cpp") {
-        input = wavPath(dir);
-        extractAudio(this.config.ffmpeg, source, input);
-      }
-      transcript = transcribeSource(
-        input,
+      transcript = await this.speechTask(r, {
+        operation: "recognize",
+        source,
         model,
-        speechParams.sourceLanguage || "auto",
-        this.config.whisperCpp,
-      );
+        dir,
+        requested: speechParams.sourceLanguage || "auto",
+        whisperCpp: this.config.whisperCpp,
+        ffmpeg: this.config.ffmpeg,
+        ffprobe: this.config.ffprobe,
+        maxDurationSeconds: job.maxDurationSeconds,
+        maxAudioBytes: this.usage().freeDiskBytes,
+      });
       steps.push({
         name: "transcript",
         language: transcript.language,
         status: "SUCCEEDED",
       });
     } catch (e) {
-      const code = e instanceof Error ? e.message : "TRANSCRIBE_FAILED";
+      const code = errorCode(e, "TRANSCRIBE_FAILED");
       const err = {
         code,
         message: "Speech recognition failed",
@@ -718,7 +909,12 @@ export class Agent {
       };
       if (job.type === "media.transcode") {
         for (const lang of targets)
-          steps.push({ name: "subtitles", language: lang, status: "FAILED", error: err });
+          steps.push({
+            name: "subtitles",
+            language: lang,
+            status: "FAILED",
+            error: err,
+          });
         return;
       }
       throw new TransferError(code, err.message, false, err.permanent);
@@ -726,7 +922,15 @@ export class Agent {
     if (job.type === "media.transcribe") {
       const path = "transcript.txt";
       writeUtf8(join(outDir, path), transcript.text);
-      files.push(await fileEntry(join(outDir, path), path, "TRANSCRIPT", "text/plain", transcript.language));
+      files.push(
+        await fileEntry(
+          join(outDir, path),
+          path,
+          "TRANSCRIPT",
+          "text/plain",
+          transcript.language,
+        ),
+      );
       return;
     }
     r.stage = "TRANSLATING";
@@ -738,7 +942,10 @@ export class Agent {
         await fileEntry(join(outDir, path), path, "SUBTITLE", "text/vtt", lang),
       );
     };
-    if (includeOriginal || (job.type === "media.subtitles" && !targets.length)) {
+    if (
+      includeOriginal ||
+      (job.type === "media.subtitles" && !targets.length)
+    ) {
       await writeTrack(transcript.language, transcript.cues);
       steps.push({
         name: "subtitles",
@@ -750,7 +957,11 @@ export class Agent {
       if (lang === transcript.language) {
         if (!files.some((f) => f.kind === "SUBTITLE" && f.language === lang)) {
           await writeTrack(lang, transcript.cues);
-          steps.push({ name: "subtitles", language: lang, status: "SUCCEEDED" });
+          steps.push({
+            name: "subtitles",
+            language: lang,
+            status: "SUCCEEDED",
+          });
         }
         continue;
       }
@@ -761,11 +972,17 @@ export class Agent {
           lang,
         );
         if (!model) throw new Error("TRANSLATION_UNAVAILABLE");
-        const cues = translateCues(transcript.cues, transcript.language, lang, model);
+        const cues: Cue[] = await this.speechTask(r, {
+          operation: "translate",
+          cues: transcript.cues,
+          source: transcript.language,
+          target: lang,
+          model,
+        });
         await writeTrack(lang, cues);
         steps.push({ name: "subtitles", language: lang, status: "SUCCEEDED" });
       } catch (e) {
-        const code = (e as any).code || (e instanceof Error ? e.message : "TRANSLATE_FAILED");
+        const code = errorCode(e, "TRANSLATE_FAILED");
         steps.push({
           name: "subtitles",
           language: lang,
@@ -780,14 +997,15 @@ export class Agent {
     }
   }
   durable(r: Running, f: Frame) {
+    if (r.ending || !r.lease.valid())
+      return Promise.reject(new Error("LEASE_EXPIRED"));
     r.acks.add(f.messageId);
     this.queue(f);
-    return until(
-      () => !r.acks.has(f.messageId) || r.ending,
-      120000,
-    ).then(() => {
-      if (r.ending || r.acks.has(f.messageId)) throw new Error("ACK_TIMEOUT");
-    });
+    return until(() => !r.acks.has(f.messageId) || r.ending, 120000).then(
+      () => {
+        if (r.ending || r.acks.has(f.messageId)) throw new Error("ACK_TIMEOUT");
+      },
+    );
   }
   async transfer(
     path: string,
@@ -809,7 +1027,11 @@ export class Agent {
       }
     }
   }
-  async waitLink(r: Running, path: string, method: "GET" | "PUT"): Promise<Link> {
+  async waitLink(
+    r: Running,
+    path: string,
+    method: "GET" | "PUT",
+  ): Promise<Link> {
     await until(
       () =>
         r.ending ||
@@ -829,7 +1051,7 @@ export class Agent {
     this.journal.state.attempts = this.journal.state.attempts.filter(
       (x) => x.fence.assignmentId !== a.fence.assignmentId,
     );
-    if (a.dir) cleanupWork(this.config.workDir, this.keep());
+
     this.queue(
       frame("job.failed", {
         jobId: a.jobId,
@@ -842,21 +1064,16 @@ export class Agent {
       }),
     );
   }
-  async finish(
-    r: Running,
-    code: string,
-    stopped = false,
-    permanent = false,
-  ) {
+  async finish(r: Running, code: string, stopped = false, permanent = false) {
     if (r.ending) return;
     r.ending = true;
+    r.transferAbort?.abort();
     if (r.executor) await r.executor.stop();
     this.running.delete(r.attempt.fence.assignmentId);
     if (stopped)
       this.journal.state.attempts = this.journal.state.attempts.filter(
         (a) => a.fence.assignmentId !== r.attempt.fence.assignmentId,
       );
-    this.sweep();
     if (stopped)
       this.queue(
         frame("job.stopped", {
@@ -873,6 +1090,7 @@ export class Agent {
           : "Executor stopped: " + code,
         permanent,
       );
+    this.sweep();
     this.log(code);
   }
   releaseHeld(a: Attempt) {
@@ -892,6 +1110,7 @@ export class Agent {
   }
   sweep() {
     try {
+      assertWorkVolume(this.config.workDir, this.journal);
       cleanupWork(this.config.workDir, this.keep());
       this.journal.state.lastCleanupDate = utcDate();
       this.journal.save();
@@ -982,7 +1201,7 @@ export class Agent {
     return this.closePromise;
   }
 }
-function applyConfigure(agent: Agent, settings: any) {
+async function applyConfigure(agent: Agent, settings: any) {
   if (!settings || typeof settings.workDirectory !== "string")
     throw new Error("INVALID_SETTINGS");
   const th = Math.min(
@@ -994,23 +1213,38 @@ function applyConfigure(agent: Agent, settings: any) {
     !Number.isInteger(settings.maxParallel) ||
     settings.maxParallel < 1 ||
     settings.maxParallel > 64 ||
+    [
+      settings.cpuThresholdPercent,
+      settings.memoryThresholdPercent,
+      settings.diskThresholdPercent,
+    ].some((n) => !Number.isInteger(n) || n < 1 || n > 80) ||
     th < 1 ||
     th > 80
   )
     throw new Error("INVALID_SETTINGS");
   const nextDir = resolve(settings.workDirectory);
+  let nextVolume: { path: string; dev: number; ino: number } | undefined;
   if (nextDir !== agent.config.workDir) {
+    if (agent.journal.state.models.length)
+      throw new Error("WORK_DIRECTORY_HAS_MODELS");
     if (agent.running.size || agent.journal.state.attempts.length)
       throw new Error("DEVICE_BUSY");
     const path = realpathSync(nextDir);
     const s = statSync(path);
     if (!s.isDirectory()) throw new Error("WORK_DIRECTORY_REQUIRED");
-    agent.journal.state.workVolume = { path, dev: s.dev, ino: s.ino };
+    nextVolume = { path, dev: s.dev, ino: s.ino };
+  }
+  await setAutostart(agent.config, Boolean(settings.autostart), agent.token);
+  if (nextVolume) {
+    agent.journal.state.workVolume = nextVolume;
     agent.config.workDir = nextDir;
   }
   agent.config.paused = Boolean(settings.paused);
   agent.config.maxParallel = settings.maxParallel;
   agent.config.threshold = th;
+  agent.config.cpuThresholdPercent = settings.cpuThresholdPercent;
+  agent.config.memoryThresholdPercent = settings.memoryThresholdPercent;
+  agent.config.diskThresholdPercent = settings.diskThresholdPercent;
   agent.journal.state.autostart = Boolean(settings.autostart);
   agent.journal.state.appliedSettings = settings;
   agent.journal.save();

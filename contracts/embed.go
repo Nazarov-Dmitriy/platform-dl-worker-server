@@ -3,5 +3,5 @@ package contracts
 
 import "embed"
 
-//go:embed v2/protocol.schema.json
+//go:embed v2/protocol.schema.json translation-catalog.json
 var Files embed.FS

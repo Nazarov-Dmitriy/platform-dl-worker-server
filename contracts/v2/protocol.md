@@ -334,3 +334,9 @@ HTTP: [RFC9110](https://www.rfc-editor.org/rfc/rfc9110).
 изменить новое назначение. STALE_ASSIGNMENT/LEASE_EXPIRED прекращают повтор terminal.
 Повтор accept/status использует существующий renewalId и возвращает прежний grant,
 никогда не продлевает срок относительно времени повторного запроса.
+
+
+ModelEntry может включать optional files (ModelFile): path, bytes, sha256, url.
+Размер downloadBytes равен сумме, общий sha256 — SHA-256 JCS массива files
+в исходном порядке. Проверяется каждый файл, inference полностью offline.
+Однофайловые записи сохраняют прежнюю семантику bytes/sha256 payload.
