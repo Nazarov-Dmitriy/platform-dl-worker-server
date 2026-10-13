@@ -3,17 +3,16 @@ import { realpathSync, statSync, statfsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import type { Config } from "./config.js";
 import type { Journal } from "./journal.js";
-export const testCapabilities = [
-  {
-    code: "media.transcode",
-    recognitionLanguages: [],
-    translationDirections: [],
-    autoDetect: false,
-    formats: ["hls"],
-    availability: "ONLINE",
-    profilePolicies: ["X264_EXACT"],
-  },
-];
+export const transcodeCapability = {
+  code: "media.transcode",
+  recognitionLanguages: [] as string[],
+  translationDirections: [] as { source: string; target: string }[],
+  autoDetect: false,
+  formats: ["hls"],
+  availability: "ONLINE",
+  profilePolicies: ["X264_EXACT"],
+};
+export const testCapabilities = [transcodeCapability];
 export function slotBudget(
   c: Config,
   freeMemory: number,

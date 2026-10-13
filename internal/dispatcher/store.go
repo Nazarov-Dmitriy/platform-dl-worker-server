@@ -111,10 +111,10 @@ func Open(path string, config Config) (*Store, error) {
 			return fail(e)
 		}
 	}
-	if version > 3 {
+	if version > 4 {
 		return fail(errors.New("unsupported database schema version"))
 	}
-	for i, name := range []string{"001_core.sql", "002_device_messages.sql", "003_transfers.sql"} {
+	for i, name := range []string{"001_core.sql", "002_device_messages.sql", "003_transfers.sql", "004_models.sql"} {
 		if version >= i+1 {
 			continue
 		}
@@ -145,6 +145,9 @@ func Open(path string, config Config) (*Store, error) {
 		return fail(e)
 	}
 	if s.validator, e = NewValidator(); e != nil {
+		return fail(e)
+	}
+	if e = s.seedCatalog(); e != nil {
 		return fail(e)
 	}
 	return s, nil
@@ -598,6 +601,9 @@ func (s *Store) Prune(ctx context.Context) error {
 			return e
 		}
 		if _, e := tx.Exec("DELETE FROM device_messages WHERE created_at<?", cut); e != nil {
+			return e
+		}
+		if _, e := tx.Exec("DELETE FROM device_commands WHERE status IN ('SUCCEEDED','FAILED') AND created_at<?", cut); e != nil {
 			return e
 		}
 		_, e := tx.Exec("DELETE FROM audit WHERE at<?", s.now().Add(-time.Duration(s.config.AuditDays)*24*time.Hour).UnixMilli())

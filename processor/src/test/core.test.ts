@@ -7,6 +7,7 @@ import {
   renameSync,
   rmSync,
   readFileSync,
+  writeFileSync,
 } from "node:fs";
 import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,13 @@ import { decidePlan, type Probe, type Profile } from "../packaging.js";
 import { cleanupWork, createAttemptDir, utcDate } from "../files.js";
 import { downloadLink, TransferError, uploadLink } from "../transfer.js";
 import type { Config } from "../config.js";
+import { whisperLanguages } from "../catalog.js";
+import {
+  cuesToVtt,
+  selectRecognition,
+  transcribeSource,
+  translateCues,
+} from "../speech.js";
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 test("lost and delayed grants never start or revive expired rights", () => {
   let mono = 0,
@@ -325,5 +333,67 @@ test("expired storage URLs refresh instead of rewriting the package", async (t) 
         [0],
       ),
     (e: unknown) => e instanceof TransferError && e.refresh,
+  );
+});
+test("recognition languages come from the Whisper tokenizer list", () => {
+  assert.ok(whisperLanguages.includes("yue"));
+  assert.ok(whisperLanguages.includes("uk"));
+  assert.ok(whisperLanguages.length > 90);
+  assert.equal(new Set(whisperLanguages).size, whisperLanguages.length);
+});
+test("catalog-test speech returns original text without translation", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "speech-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const pack = join(dir, "pack.json");
+  const source = join(dir, "source.json");
+  writeFileSync(
+    pack,
+    JSON.stringify({
+      language: "en",
+      text: "Hello from catalog test.",
+      cues: [{ start: 0, end: 1, text: "Hello from catalog test." }],
+      failTargets: ["uk"],
+      map: { ru: { "Hello from catalog test.": "Привет из проверки каталога." } },
+    }),
+  );
+  writeFileSync(
+    source,
+    JSON.stringify({
+      language: "en",
+      text: "Hello from catalog test.",
+      cues: [{ start: 0, end: 1, text: "Hello from catalog test." }],
+    }),
+  );
+  const model = {
+    id: "catalog-test-speech",
+    revision: "test-1",
+    state: "ACTIVE" as const,
+    path: pack,
+    purpose: "RECOGNITION" as const,
+    executor: "catalog-test",
+    recognitionLanguages: whisperLanguages,
+    translationDirections: [],
+    minimumRamBytes: 1,
+  };
+  const picked = selectRecognition([model], "FAST", 1024);
+  const out = transcribeSource(source, picked, "auto");
+  assert.equal(out.language, "en");
+  assert.equal(out.text, "Hello from catalog test.");
+  assert.equal(out.text.includes("Привет"), false);
+  assert.match(cuesToVtt(out.cues), /WEBVTT/);
+  const ru = translateCues(out.cues, "en", "ru", {
+    ...model,
+    purpose: "TRANSLATION",
+    path: pack,
+  });
+  assert.equal(ru[0].text, "Привет из проверки каталога.");
+  assert.throws(
+    () =>
+      translateCues(out.cues, "en", "uk", {
+        ...model,
+        purpose: "TRANSLATION",
+        path: pack,
+      }),
+    /TRANSLATION_UNAVAILABLE/,
   );
 });

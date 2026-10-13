@@ -39,6 +39,8 @@ func run(args []string) error {
 	weight := flags.Int("weight", 1, "Site weight 1..100")
 	ops := flags.String("operations", "media.transcode", "Comma-separated operations")
 	capsPath := flags.String("capabilities", "", "JSON file with verified offline device capabilities")
+	catalog := flags.String("catalog", "", "JSON array of ModelEntry records")
+	commandFile := flags.String("command", "", "JSON AdminCommand for a device")
 	enabled := flags.Bool("enabled", true, "Enable site/device")
 	history := flags.Int("history-days", 30, "Terminal job history retention")
 	audit := flags.Int("audit-days", 30, "Audit retention")
@@ -144,6 +146,46 @@ func run(args []string) error {
 			return e
 		}
 		return output(map[string]string{"status": "pruned"})
+	case "catalog-list":
+		v, e := store.Models(ctx)
+		if e != nil {
+			return e
+		}
+		return output(v)
+	case "catalog-import":
+		if *catalog == "" {
+			return errors.New("catalog-import requires -catalog")
+		}
+		raw, e := os.ReadFile(*catalog)
+		if e != nil {
+			return e
+		}
+		if e = store.ImportCatalog(ctx, raw); e != nil {
+			return e
+		}
+		return output(map[string]string{"status": "imported"})
+	case "command-enqueue":
+		if *id == "" || *commandFile == "" {
+			return errors.New("command-enqueue requires -id and -command")
+		}
+		raw, e := os.ReadFile(*commandFile)
+		if e != nil {
+			return e
+		}
+		v, e := store.EnqueueCommand(ctx, *id, raw)
+		if e != nil {
+			return e
+		}
+		return output(v)
+	case "command-get":
+		if *id == "" {
+			return errors.New("command-get requires -id (requestId)")
+		}
+		v, e := store.Command(ctx, *id)
+		if e != nil {
+			return e
+		}
+		return output(v)
 	case "serve":
 	default:
 		return fmt.Errorf("unknown command %q", command)
@@ -165,7 +207,7 @@ func run(args []string) error {
 	}
 	done := make(chan error, 1)
 	go func() { done <- server.ListenAndServe() }()
-	log.Printf("dispatcher listening on %s (stage 4, transfers and publication)", *listen)
+	log.Printf("dispatcher listening on %s (stage 5, catalog and speech)", *listen)
 	for {
 		select {
 		case e := <-done:

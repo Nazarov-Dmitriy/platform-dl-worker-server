@@ -232,6 +232,36 @@ type TokenView struct {
 	CreatedAt   string `json:"createdAt"`
 	Revoked     bool   `json:"revoked"`
 }
+type ModelEntry struct {
+	ID                     string   `json:"id"`
+	Revision               string   `json:"revision"`
+	Executor               string   `json:"executor"`
+	Purpose                string   `json:"purpose"`
+	OS                     []string `json:"os"`
+	Architectures          []string `json:"architectures"`
+	Accelerators           []string `json:"accelerators"`
+	RecognitionLanguages   []string `json:"recognitionLanguages"`
+	TranslationDirections  []Pair   `json:"translationDirections"`
+	DownloadBytes          int64    `json:"downloadBytes"`
+	MinimumRAMBytes        int64    `json:"minimumRamBytes"`
+	MinimumVRAMBytes       int64    `json:"minimumVramBytes"`
+	SHA256                 string   `json:"sha256"`
+	DownloadURL            string   `json:"downloadUrl"`
+	License                string   `json:"license"`
+	DescriptionSource      string   `json:"descriptionSource"`
+}
+type CommandView struct {
+	RequestID string    `json:"requestId"`
+	Status    string    `json:"status"`
+	Progress  *float64  `json:"progress"`
+	Error     *APIError `json:"error,omitempty"`
+}
+type AdminCommand struct {
+	RequestID     string `json:"requestId"`
+	Type          string `json:"type"`
+	ModelID       string `json:"modelId,omitempty"`
+	ModelRevision string `json:"modelRevision,omitempty"`
+}
 
 func UUID() string {
 	var b [16]byte
@@ -294,7 +324,7 @@ func NewValidator() (*Validator, error) {
 		return nil, e
 	}
 	v := &Validator{schemas: map[string]*jsonschema.Schema{}}
-	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck"} {
+	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck", "ModelEntry", "AdminCommand", "CommandView"} {
 		s, e := c.Compile("schema.json#/$defs/" + name)
 		if e != nil {
 			return nil, e

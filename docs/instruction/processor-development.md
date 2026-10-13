@@ -1,9 +1,10 @@
 # Обработчик: запуск Windows/macOS/Linux
 
-Этап 4, 2026-10-13. Добавлены рабочие файлы, FFmpeg HLS и прямой upload.
-Без `ffmpeg`/`ffprobe` в PATH обработчик не объявляет media.transcode.
+Этап 5, 2026-10-13. Добавлены каталог моделей, команды INSTALL/ACTIVATE/DELETE,
+расшифровка в текст и VTT-дорожки. Без `ffmpeg`/`ffprobe` нет media.transcode.
+`media.transcribe`/`media.subtitles` появляются после ACTIVE моделей.
 `testExecutor: true` по-прежнему только для транспорта и никогда не даёт READY.
-Модели — этап 5. Физический сон Mac и отрыв SSD ещё нужно проверить на устройстве.
+Физический сон Mac, отрыв SSD и замер whisper.cpp — на устройстве.
 
 ## Подготовка
 
@@ -85,11 +86,14 @@ npm start -- config.json --bind-work-volume
 | `testExecutor` | Только для отдельного тестового устройства/сайта; по умолчанию false |
 | `testDurationMs` | Длительность тестового исполнителя, по умолчанию 3000 мс |
 | `ffmpeg` / `ffprobe` | Имена или пути программ; по умолчанию `ffmpeg` и `ffprobe` |
+| `catalogExtra` | JSON-массив ModelEntry для стенда catalog-test (localhost HTTP) |
+| `whisperCpp` | Путь к `whisper-cli`; без него работает только catalog-test / отказ EXECUTOR_UNAVAILABLE |
 
 Параллельность уменьшается по доступной RAM и нагрузке. Диспетчер ждёт 15 секунд
 устойчиво допустимых ресурсов. Место для исходника и максимального результата
 резервируется для принятых работ. GPU/VRAM пока неизвестны: GPU-исполнителя ещё нет;
-выбор моделей/ускорителей — этап 5. Настройки читаются при запуске.
+выбор моделей — команды диспетчера на это устройство. Настройки читаются при запуске.
+Модели лежат в `workDir/models/` и не чистятся с датой попыток.
 
 ## Проверка без видео
 
@@ -110,7 +114,7 @@ npm test
 Полная проверка Linux из корня:
 
 ```powershell
-docker build -f processor/Dockerfile -t titunki-processor:stage3-test .
+docker build -f processor/Dockerfile -t titunki-processor:stage5-test .
 docker build --target test -t titunki-dispatcher:stage3-test .
 ```
 

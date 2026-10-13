@@ -396,6 +396,9 @@ func (s *Store) DecidePublication(ctx context.Context, site, jobID string, raw [
 		if dec.Decision == "PUBLISHED" {
 			status = publicationStatus(r.view.Artifact.Manifest.Steps)
 			r.view.Error = nil
+			if status == "PARTIAL" {
+				r.view.ManualEntryOffered = true
+			}
 		} else {
 			r.view.Error = dec.Error
 			if r.view.Error != nil {
@@ -578,7 +581,69 @@ func validateManifest(req JobRequest, art Artifact) error {
 				return problem(400, "INVALID_REQUEST", "Unknown packaging mode")
 			}
 		}
+		if e := validateSubtitleFiles(art, paths); e != nil {
+			return e
+		}
 	}
+	if req.Type == "media.transcribe" {
+		found := false
+		for _, f := range art.Manifest.Files {
+			if f.Kind == "TRANSCRIPT" {
+				found = true
+			}
+		}
+		if !found {
+			return problem(400, "INVALID_REQUEST", "Transcribe artifacts need a transcript file")
+		}
+		ok := false
+		for _, step := range art.Manifest.Steps {
+			if step.Name == "transcript" && step.Status == "SUCCEEDED" {
+				ok = true
+			}
+			if step.Status == "SUCCEEDED" && step.Error != nil || step.Status == "FAILED" && step.Error == nil {
+				return problem(400, "INVALID_REQUEST", "Step status and error are inconsistent")
+			}
+		}
+		if !ok {
+			return problem(400, "INVALID_REQUEST", "Transcript step must succeed")
+		}
+	}
+	if req.Type == "media.subtitles" {
+		ok := false
+		for _, step := range art.Manifest.Steps {
+			if (step.Name == "subtitles" || step.Name == "transcript") && step.Status == "SUCCEEDED" {
+				ok = true
+			}
+			if step.Status == "SUCCEEDED" && step.Error != nil || step.Status == "FAILED" && step.Error == nil {
+				return problem(400, "INVALID_REQUEST", "Step status and error are inconsistent")
+			}
+		}
+		if !ok {
+			return problem(400, "INVALID_REQUEST", "At least one subtitle or transcript step must succeed")
+		}
+		if e := validateSubtitleFiles(art, paths); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+func validateSubtitleFiles(art Artifact, paths map[string]bool) error {
+	for _, step := range art.Manifest.Steps {
+		if step.Name != "subtitles" || step.Status != "SUCCEEDED" {
+			continue
+		}
+		found := false
+		for _, f := range art.Manifest.Files {
+			if f.Kind == "SUBTITLE" && f.Language == step.Language {
+				found = true
+			}
+		}
+		if !found || step.Language == "" {
+			return problem(400, "INVALID_REQUEST", "Successful subtitle steps need a matching subtitle file")
+		}
+	}
+	_ = paths
 	return nil
 }
 

@@ -10,6 +10,18 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import type { Frame, Fence } from "./protocol.js";
+import type { ModelEntry, Pair } from "./catalog.js";
+export type InstalledModel = {
+  id: string;
+  revision: string;
+  state: "INSTALLED" | "ACTIVE";
+  path: string;
+  purpose: "RECOGNITION" | "TRANSLATION";
+  executor: string;
+  recognitionLanguages: string[];
+  translationDirections: Pair[];
+  minimumRamBytes: number;
+};
 export type Attempt = {
   jobId: string;
   fence: Fence;
@@ -26,9 +38,11 @@ export type State = {
   outbox: Frame[];
   lastCleanupDate?: string;
   workVolume?: { path: string; dev: number; ino: number };
+  models: InstalledModel[];
+  catalog: ModelEntry[];
 };
 export class Journal {
-  state: State = { version: 1, attempts: [], outbox: [] };
+  state: State = { version: 1, attempts: [], outbox: [], models: [], catalog: [] };
   readonly path: string;
   constructor(readonly dir: string) {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -41,6 +55,12 @@ export class Journal {
         !Array.isArray(this.state.outbox)
       )
         throw new Error("INVALID_JOURNAL");
+      this.state.models = Array.isArray(this.state.models)
+        ? this.state.models
+        : [];
+      this.state.catalog = Array.isArray(this.state.catalog)
+        ? this.state.catalog
+        : [];
     }
   }
   save() {

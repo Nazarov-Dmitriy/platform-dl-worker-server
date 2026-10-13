@@ -15,6 +15,8 @@ export type Config = {
   testDurationMs: number;
   ffmpeg: string;
   ffprobe: string;
+  catalogExtra?: string;
+  whisperCpp?: string;
 };
 export function loadConfig(path: string): Config {
   const v = JSON.parse(readFileSync(path, "utf8"));
@@ -33,6 +35,8 @@ export function loadConfig(path: string): Config {
     "testDurationMs",
     "ffmpeg",
     "ffprobe",
+    "catalogExtra",
+    "whisperCpp",
   ];
   if (Object.keys(v).some((k) => !allowed.includes(k)))
     throw new Error("UNKNOWN_CONFIG_FIELD");
@@ -76,6 +80,9 @@ export function loadConfig(path: string): Config {
     testDurationMs: v.testDurationMs ?? 3000,
     ffmpeg: typeof v.ffmpeg === "string" ? v.ffmpeg : "ffmpeg",
     ffprobe: typeof v.ffprobe === "string" ? v.ffprobe : "ffprobe",
+    catalogExtra:
+      typeof v.catalogExtra === "string" ? resolve(v.catalogExtra) : undefined,
+    whisperCpp: typeof v.whisperCpp === "string" ? v.whisperCpp : undefined,
   };
   for (const k of [
     "maxParallel",

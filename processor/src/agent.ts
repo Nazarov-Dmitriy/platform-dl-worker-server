@@ -2,17 +2,31 @@ import os from "node:os";
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readdirSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "./config.js";
 import { Journal, type Attempt } from "./journal.js";
 import { frame, parseFrame, sameFence, type Frame } from "./protocol.js";
 import { LeaseClock } from "./lease.js";
-import { Resources, testCapabilities } from "./resources.js";
+import { Resources, transcodeCapability } from "./resources.js";
 import { Executor } from "./executor.js";
 import { cleanupWork, createAttemptDir, utcDate } from "./files.js";
 import { downloadLink, sha256File, TransferError, uploadLink, type Link } from "./transfer.js";
 import { sha256Canonical } from "./jcs.js";
+import type { ModelEntry } from "./catalog.js";
+import { activateModel, deleteModel, installModel } from "./models.js";
+import {
+  cuesToVtt,
+  extractAudio,
+  selectRecognition,
+  selectTranslation,
+  transcribeSource,
+  translateCues,
+  wavPath,
+  writeUtf8,
+  type Cue,
+  type Transcript,
+} from "./speech.js";
 type Running = {
   attempt: Attempt;
   job?: any;
@@ -28,6 +42,7 @@ type Running = {
   diskBytes: number;
   grants: Link[];
   acks: Set<string>;
+  stage: string;
 };
 export class Agent {
   socket?: WebSocket;
@@ -43,6 +58,7 @@ export class Agent {
   readonly resources: Resources;
   readonly ffmpeg: boolean;
   chain: Promise<void> = Promise.resolve();
+  commandChain: Promise<void> = Promise.resolve();
   closePromise?: Promise<void>;
   constructor(
     readonly config: Config,
@@ -53,10 +69,59 @@ export class Agent {
     this.resources = new Resources(config, journal);
     this.ffmpeg =
       hasBin(config.ffmpeg) && hasBin(config.ffprobe);
+    if (config.catalogExtra) {
+      journal.state.catalog = JSON.parse(
+        readFileSync(config.catalogExtra, "utf8"),
+      ) as ModelEntry[];
+      journal.save();
+    }
     this.sweep();
   }
   caps() {
-    return this.config.testExecutor || this.ffmpeg ? testCapabilities : [];
+    const out: any[] = [];
+    if (this.config.testExecutor || this.ffmpeg)
+      out.push({ ...transcodeCapability });
+    const rec = this.journal.state.models.filter(
+      (m) => m.state === "ACTIVE" && m.purpose === "RECOGNITION",
+    );
+    const tr = this.journal.state.models.filter(
+      (m) => m.state === "ACTIVE" && m.purpose === "TRANSLATION",
+    );
+    if (rec.length) {
+      const langs = [...new Set(rec.flatMap((m) => m.recognitionLanguages))];
+      langs.sort();
+      const pairs = [
+        ...new Map(
+          tr
+            .flatMap((m) => m.translationDirections)
+            .map((p) => [p.source + ":" + p.target, p]),
+        ).values(),
+      ];
+      out.push({
+        code: "media.transcribe",
+        recognitionLanguages: langs,
+        translationDirections: [],
+        autoDetect: true,
+        formats: ["text"],
+        availability: "ONLINE",
+        profilePolicies: [],
+      });
+      out.push({
+        code: "media.subtitles",
+        recognitionLanguages: langs,
+        translationDirections: pairs,
+        autoDetect: true,
+        formats: ["vtt"],
+        availability: "ONLINE",
+        profilePolicies: [],
+      });
+    }
+    return out;
+  }
+  hasRecognition() {
+    return this.journal.state.models.some(
+      (m) => m.state === "ACTIVE" && m.purpose === "RECOGNITION",
+    );
   }
   usage() {
     const usage = this.resources.sample();
@@ -122,7 +187,7 @@ export class Agent {
         JSON.stringify(
           frame("device.hello", {
             deviceId: this.config.deviceId,
-            agentVersion: "0.4.0",
+            agentVersion: "0.5.0",
             os: process.platform === "win32" ? "windows" : process.platform,
             architecture: process.arch === "x64" ? "amd64" : process.arch,
             memoryBytes: os.totalmem(),
@@ -179,16 +244,29 @@ export class Agent {
       return;
     }
     if (!this.session) throw new Error("WELCOME_REQUIRED");
+    if (f.type === "device.command") {
+      this.commandChain = this.commandChain
+        .then(() => this.runCommand(b))
+        .catch((e) =>
+          this.log("COMMAND_FAILED_" + (e instanceof Error ? e.message : "ERR")),
+        );
+      return;
+    }
     if (f.type === "job.offer") {
       const id = b.fence.assignmentId;
       if (this.running.has(id)) return;
       if (b.jobId !== b.job.id) throw new Error("OFFER_JOB_MISMATCH");
       const usage = this.usage();
-      const transcode = b.job.type === "media.transcode";
+      const job = b.job;
+      const canRun =
+        (this.config.testExecutor && job.type === "media.transcode") ||
+        (this.ffmpeg && job.type === "media.transcode") ||
+        (this.hasRecognition() &&
+          (job.type === "media.transcribe" || job.type === "media.subtitles"));
       const ready =
-        (this.config.testExecutor || (this.ffmpeg && transcode)) &&
+        canRun &&
         this.running.size < usage.availableSlots &&
-        usage.freeDiskBytes >= b.job.source.bytes + b.job.maxOutputBytes &&
+        usage.freeDiskBytes >= job.source.bytes + job.maxOutputBytes &&
         usage.workDiskAvailable;
       if (!ready) {
         this.queue(
@@ -196,11 +274,17 @@ export class Agent {
             jobId: b.jobId,
             fence: b.fence,
             error: {
-              code: this.config.testExecutor || this.ffmpeg
+              code: canRun
                 ? "RESOURCES_UNAVAILABLE"
-                : "FFMPEG_UNAVAILABLE",
+                : job.type === "media.transcode"
+                  ? "FFMPEG_UNAVAILABLE"
+                  : "MODEL_NOT_INSTALLED",
               message: "Local admission is unavailable",
-              permanent: !this.config.testExecutor && !this.ffmpeg,
+              permanent:
+                !canRun &&
+                job.type === "media.transcode" &&
+                !this.config.testExecutor &&
+                !this.ffmpeg,
             },
           }),
         );
@@ -231,6 +315,7 @@ export class Agent {
         diskBytes: attempt.diskBytes!,
         grants: [],
         acks: new Set(),
+        stage: "WAITING_SOURCE",
       };
       this.running.set(id, r);
       r.lease.sent(accept.messageId);
@@ -338,7 +423,7 @@ export class Agent {
         r.attempt.started = true;
         this.journal.save();
         if (this.config.testExecutor) this.startTest(r);
-        else this.startVideo(r);
+        else this.startJob(r);
       } else r.executor.renew(this.config.testDurationMs, r.lease);
       return;
     }
@@ -369,22 +454,75 @@ export class Agent {
     });
     this.log("TEST_EXECUTOR_STARTED");
   }
-  startVideo(r: Running) {
-    void this.runVideo(r).catch((e) => {
+  startJob(r: Running) {
+    void this.runJob(r).catch((e) => {
       if (r.ending) return;
       const err = e instanceof TransferError ? e : null;
       return this.finish(
         r,
-        err?.code || (e instanceof Error ? e.message : "VIDEO_FAILED"),
+        err?.code || (e instanceof Error ? e.message : "JOB_FAILED"),
         false,
         err?.permanent ?? true,
       );
     });
   }
-  async runVideo(r: Running) {
+  async runCommand(cmd: {
+    requestId: string;
+    type: string;
+    modelId?: string;
+    modelRevision?: string;
+  }) {
+    const report = (
+      status: "RUNNING" | "SUCCEEDED" | "FAILED",
+      progress: number | null,
+      error?: { code: string; message: string; permanent: boolean },
+    ) => {
+      this.queue(
+        frame("device.command.result", {
+          requestId: cmd.requestId,
+          status,
+          progress,
+          ...(error ? { error } : {}),
+        }),
+      );
+    };
+    try {
+      report("RUNNING", 0);
+      if (cmd.type === "MODEL_INSTALL") {
+        await installModel(
+          this.config.workDir,
+          this.journal,
+          this.journal.state.catalog,
+          cmd.modelId!,
+          cmd.modelRevision!,
+          this.usage().freeDiskBytes,
+          (n) => report("RUNNING", n),
+        );
+      } else if (cmd.type === "MODEL_ACTIVATE") {
+        activateModel(this.journal, cmd.modelId!, cmd.modelRevision!);
+      } else if (cmd.type === "MODEL_DELETE") {
+        deleteModel(
+          this.config.workDir,
+          this.journal,
+          cmd.modelId!,
+          cmd.modelRevision!,
+          this.running.size > 0,
+        );
+      } else throw new Error("UNKNOWN_COMMAND");
+      report("SUCCEEDED", 1);
+    } catch (e) {
+      const code = e instanceof Error ? e.message : "COMMAND_FAILED";
+      report("FAILED", null, {
+        code,
+        message: "Device command failed: " + code,
+        permanent: code !== "INSUFFICIENT_DISK",
+      });
+    }
+  }
+  async runJob(r: Running) {
     const job = r.job || r.attempt.job;
-    if (!job || job.type !== "media.transcode" || job.source.kind !== "FILE")
-      throw new TransferError("UNSUPPORTED_SOURCE", "Only FILE transcode is implemented", false, true);
+    if (!job || job.source.kind !== "FILE")
+      throw new TransferError("UNSUPPORTED_SOURCE", "Only FILE sources are implemented", false, true);
     if (!r.lease.valid()) throw new TransferError("LEASE_EXPIRED", "Lease expired", false, true);
     const dir = createAttemptDir(
       this.config.workDir,
@@ -400,71 +538,87 @@ export class Agent {
         fence: r.attempt.fence,
       }),
     );
-    const dest = join(dir, "source.mp4");
+    const dest = join(dir, "source.bin");
     r.progress = 0.05;
+    r.stage = "DOWNLOADING";
     await this.transfer("source", "GET", r, (link) =>
       downloadLink(link, dest, job.source.bytes, job.source.sha256),
     );
     if (!r.lease.valid()) throw new TransferError("LEASE_EXPIRED", "Lease expired", false, true);
-    const outDir = join(dir, "hls");
+    const files: {
+      path: string;
+      bytes: number;
+      sha256: string;
+      contentType: string;
+      kind: string;
+      language?: string;
+    }[] = [];
+    const steps: any[] = [];
     let packaged: any;
-    await new Promise<void>((resolve, reject) => {
-      r.executor = new Executor(
-        3600000,
-        r.lease,
-        (m) => {
-          if (r.ending) return;
-          if (m.type === "progress") {
-            r.progress = 0.1 + Math.min(0.7, (m.progress || 0) * 0.7);
-            r.activity = m.sequence;
-            r.lastProgress = Date.now();
-          }
-          if (m.type === "packaged") {
-            packaged = m;
-            resolve();
-          }
-          if (m.type === "failed" || m.type === "executor-error")
-            reject(new Error(m.code || "EXECUTOR_FAILED"));
-        },
-        new URL("./video-child.js", import.meta.url),
-        {
-          source: dest,
-          outDir,
-          profile: job.params.profile,
-          maxDurationSeconds: job.maxDurationSeconds,
-          ffmpeg: this.config.ffmpeg,
-          ffprobe: this.config.ffprobe,
-        },
-      );
-      r.executor.child.once("exit", (code) => {
-        if (!packaged && !r.ending)
-          reject(new Error(code ? "EXECUTOR_EXITED" : "EXECUTOR_EXITED"));
+    const outDir = join(dir, "out");
+    mkdirSync(outDir, { recursive: true, mode: 0o700 });
+    if (job.type === "media.transcode") {
+      r.stage = "TRANSCODING";
+      const hlsDir = join(outDir, "hls");
+      await new Promise<void>((resolve, reject) => {
+        r.executor = new Executor(
+          3600000,
+          r.lease,
+          (m) => {
+            if (r.ending) return;
+            if (m.type === "progress") {
+              r.progress = 0.1 + Math.min(0.5, (m.progress || 0) * 0.5);
+              r.activity = m.sequence;
+              r.lastProgress = Date.now();
+            }
+            if (m.type === "packaged") {
+              packaged = m;
+              resolve();
+            }
+            if (m.type === "failed" || m.type === "executor-error")
+              reject(new Error(m.code || "EXECUTOR_FAILED"));
+          },
+          new URL("./video-child.js", import.meta.url),
+          {
+            source: dest,
+            outDir: hlsDir,
+            profile: job.params.profile,
+            maxDurationSeconds: job.maxDurationSeconds,
+            ffmpeg: this.config.ffmpeg,
+            ffprobe: this.config.ffprobe,
+          },
+        );
+        r.executor.child.once("exit", () => {
+          if (!packaged && !r.ending) reject(new Error("EXECUTOR_EXITED"));
+        });
       });
-    });
-    const manifestFiles = await listPackage(outDir);
+      files.push(...(await listPackage(hlsDir)));
+      steps.push({ name: "video", status: "SUCCEEDED" });
+    }
+    const speechParams =
+      job.params?.subtitles?.speech || job.params?.speech || job.params || {};
+    const wantSubs =
+      job.type === "media.subtitles" ||
+      job.type === "media.transcribe" ||
+      job.params?.subtitles ||
+      job.params?.includeOriginal ||
+      job.params?.targetLanguages;
+    if (wantSubs || job.type === "media.transcribe") {
+      await this.addSpeech(r, job, dest, dir, outDir, files, steps, speechParams);
+    }
     let total = 0;
-    for (const file of manifestFiles) total += file.bytes;
+    for (const file of files) total += file.bytes;
     if (total > job.maxOutputBytes)
       throw new TransferError("OUTPUT_LIMIT", "Package exceeds maxOutputBytes", false, true);
-    const steps: any[] = [{ name: "video", status: "SUCCEEDED" }];
-    for (const lang of job.params?.subtitles?.targetLanguages || []) {
-      steps.push({
-        name: "subtitles",
-        language: lang,
-        status: "SKIPPED",
-        error: {
-          code: "MODEL_NOT_INSTALLED",
-          message: "Subtitle models are installed at stage 5",
-          permanent: true,
-        },
-      });
+    if (!files.length)
+      throw new TransferError("EMPTY_ARTIFACT", "No output files were produced", false, true);
+    const manifest: any = { files, steps };
+    if (job.type === "media.transcode") {
+      manifest.masterPath = "index.m3u8";
+      manifest.renditions = packaged.renditions;
     }
-    const manifest = {
-      files: manifestFiles,
-      steps,
-      masterPath: "index.m3u8",
-      renditions: packaged.renditions,
-    };
+    const detected = steps.find((s: any) => s.name === "transcript" && s.status === "SUCCEEDED");
+    if (detected?.language) manifest.detectedLanguage = detected.language;
     const artifact = {
       id: randomUUID(),
       manifestSha256: sha256Canonical(manifest),
@@ -480,13 +634,19 @@ export class Agent {
       }),
     );
     r.progress = 0.85;
-    for (const file of manifestFiles) {
-      await this.transfer(file.path, "PUT", r, (link) =>
-        uploadLink(link, join(outDir, file.path)),
-      );
+    r.stage = "UPLOADING";
+    for (const file of files) {
+      const disk =
+        file.kind === "MASTER" ||
+        file.kind === "PLAYLIST" ||
+        file.kind === "SEGMENT"
+          ? join(outDir, "hls", file.path)
+          : join(outDir, file.path);
+      await this.transfer(file.path, "PUT", r, (link) => uploadLink(link, disk));
     }
     r.attempt.awaitingPublication = true;
     r.attempt.started = true;
+    r.stage = "WAITING_PUBLICATION";
     this.journal.save();
     await this.durable(
       r,
@@ -502,6 +662,120 @@ export class Agent {
     this.running.delete(r.attempt.fence.assignmentId);
     this.journal.save();
     this.log("AWAITING_PUBLICATION");
+  }
+  async addSpeech(
+    r: Running,
+    job: any,
+    source: string,
+    dir: string,
+    outDir: string,
+    files: any[],
+    steps: any[],
+    speechParams: any,
+  ) {
+    const nested = job.params?.subtitles;
+    const includeOriginal = Boolean(
+      job.params?.includeOriginal ?? nested?.includeOriginal,
+    );
+    const targets: string[] = [
+      ...(job.params?.targetLanguages || nested?.targetLanguages || []),
+    ];
+    if (job.type === "media.transcode" && !includeOriginal && !targets.length)
+      return;
+    r.stage = "TRANSCRIBING";
+    let transcript: Transcript;
+    try {
+      if (!this.hasRecognition()) throw new Error("MODEL_NOT_INSTALLED");
+      const model = selectRecognition(
+        this.journal.state.models,
+        speechParams.mode || "AUTO",
+        this.usage().freeMemoryBytes,
+      );
+      let input = source;
+      if (model.executor === "whisper.cpp") {
+        input = wavPath(dir);
+        extractAudio(this.config.ffmpeg, source, input);
+      }
+      transcript = transcribeSource(
+        input,
+        model,
+        speechParams.sourceLanguage || "auto",
+        this.config.whisperCpp,
+      );
+      steps.push({
+        name: "transcript",
+        language: transcript.language,
+        status: "SUCCEEDED",
+      });
+    } catch (e) {
+      const code = e instanceof Error ? e.message : "TRANSCRIBE_FAILED";
+      const err = {
+        code,
+        message: "Speech recognition failed",
+        permanent: code === "MODEL_NOT_INSTALLED",
+      };
+      if (job.type === "media.transcode") {
+        for (const lang of targets)
+          steps.push({ name: "subtitles", language: lang, status: "FAILED", error: err });
+        return;
+      }
+      throw new TransferError(code, err.message, false, err.permanent);
+    }
+    if (job.type === "media.transcribe") {
+      const path = "transcript.txt";
+      writeUtf8(join(outDir, path), transcript.text);
+      files.push(await fileEntry(join(outDir, path), path, "TRANSCRIPT", "text/plain", transcript.language));
+      return;
+    }
+    r.stage = "TRANSLATING";
+    mkdirSync(join(outDir, "subtitles"), { recursive: true, mode: 0o700 });
+    const writeTrack = async (lang: string, cues: Cue[]) => {
+      const path = "subtitles/" + lang + ".vtt";
+      writeUtf8(join(outDir, path), cuesToVtt(cues));
+      files.push(
+        await fileEntry(join(outDir, path), path, "SUBTITLE", "text/vtt", lang),
+      );
+    };
+    if (includeOriginal || (job.type === "media.subtitles" && !targets.length)) {
+      await writeTrack(transcript.language, transcript.cues);
+      steps.push({
+        name: "subtitles",
+        language: transcript.language,
+        status: "SUCCEEDED",
+      });
+    }
+    for (const lang of targets) {
+      if (lang === transcript.language) {
+        if (!files.some((f) => f.kind === "SUBTITLE" && f.language === lang)) {
+          await writeTrack(lang, transcript.cues);
+          steps.push({ name: "subtitles", language: lang, status: "SUCCEEDED" });
+        }
+        continue;
+      }
+      try {
+        const model = selectTranslation(
+          this.journal.state.models,
+          transcript.language,
+          lang,
+        );
+        if (!model) throw new Error("TRANSLATION_UNAVAILABLE");
+        const cues = translateCues(transcript.cues, transcript.language, lang, model);
+        await writeTrack(lang, cues);
+        steps.push({ name: "subtitles", language: lang, status: "SUCCEEDED" });
+      } catch (e) {
+        const code = (e as any).code || (e instanceof Error ? e.message : "TRANSLATE_FAILED");
+        steps.push({
+          name: "subtitles",
+          language: lang,
+          status: "FAILED",
+          error: {
+            code,
+            message: "Subtitle translation failed for " + lang,
+            permanent: false,
+          },
+        });
+      }
+    }
   }
   durable(r: Running, f: Frame) {
     r.acks.add(f.messageId);
@@ -642,9 +916,7 @@ export class Agent {
       renewalId: id,
       stage: r.attempt.awaitingPublication
         ? "WAITING_PUBLICATION"
-        : r.executor
-          ? "TRANSCODING"
-          : "WAITING_SOURCE",
+        : r.stage || (r.executor ? "TRANSCODING" : "WAITING_SOURCE"),
       progress: r.progress,
       activitySequence: r.activity,
       steps: [],
@@ -733,6 +1005,22 @@ function until(check: () => boolean, timeout: number) {
       }
     }, 50);
   });
+}
+async function fileEntry(
+  full: string,
+  path: string,
+  kind: string,
+  contentType: string,
+  language?: string,
+) {
+  return {
+    path,
+    bytes: statSync(full).size,
+    sha256: await sha256File(full),
+    contentType,
+    kind,
+    ...(language ? { language } : {}),
+  };
 }
 function listPackage(root: string) {
   const out: {

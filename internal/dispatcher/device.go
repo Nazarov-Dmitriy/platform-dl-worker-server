@@ -44,6 +44,8 @@ type deviceBody struct {
 	ArtifactID       string   `json:"artifactId"`
 	ManifestSHA256   string   `json:"manifestSha256"`
 	Outcome          string   `json:"outcome"`
+	RequestID        string   `json:"requestId"`
+	Status           string   `json:"status"`
 }
 type deviceHub struct {
 	sync.Mutex
@@ -216,6 +218,21 @@ func (h *HTTP) deviceDispatch(ctx context.Context, p Principal, session string, 
 			return e
 		}
 		return h.deviceWrite(ctx, c, "lease.granted", lease)
+	case "device.command.result":
+		canonical, e := canonicalTransform(encode(f))
+		if e != nil {
+			return e
+		}
+		ctx = context.WithValue(ctx, deviceRecordKey{}, deviceRecord{p, session, f.MessageID, digest(canonical)})
+		cause := (*APIError)(nil)
+		if b.Error.Code != "" {
+			copied := b.Error
+			cause = &copied
+		}
+		if e := h.store.CommandResult(ctx, p, session, b.RequestID, b.Status, b.Progress, cause); e != nil {
+			return e
+		}
+		return h.deviceWrite(ctx, c, "protocol.ack", map[string]string{"replyTo": f.MessageID})
 	case "job.decline", "job.failed", "job.stopped", "job.source.request", "job.artifact.propose", "job.upload.complete":
 		canonical, e := canonicalTransform(encode(f))
 		if e != nil {
@@ -295,6 +312,18 @@ func (h *HTTP) deviceTick(ctx context.Context, p Principal, session string, c *w
 		if e = h.store.MarkGrantDelivered(ctx, g.Grant.RequestID, g.Grant.Page); e != nil {
 			return e
 		}
+	}
+	cmds, e := h.store.PendingCommands(ctx, p, session)
+	if e != nil {
+		return e
+	}
+	for _, cmd := range cmds {
+		if e = h.deviceWrite(ctx, c, "device.command", json.RawMessage(cmd)); e != nil {
+			return e
+		}
+	}
+	if e = h.store.MarkCommandsNotified(ctx, p, session, cmds); e != nil {
+		return e
 	}
 	pubs, e := h.store.PendingPublication(ctx, p, session)
 	if e != nil {

@@ -145,7 +145,7 @@ func TestSourceDownloadAndPublicationPath(t *testing.T) {
 		t.Fatal(e)
 	}
 	done, e := s.Get(testContext, site.ID, o.JobID)
-	if e != nil || done.Status != "PARTIAL" {
+	if e != nil || done.Status != "PARTIAL" || !done.ManualEntryOffered {
 		t.Fatalf("%+v %v", done, e)
 	}
 }

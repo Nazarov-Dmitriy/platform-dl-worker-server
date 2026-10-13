@@ -1,11 +1,10 @@
-> Этап 4: transfer/publication HTTP и WSS grants. Миграция 003 добавляет transfers
-> к БД этапов 2–3. Admin API по-прежнему CLI. [Обработчик](processor-development.md).
+> Этап 5: каталог моделей и команды устройств. Миграция 004 добавляет catalog/commands
+> к БД этапов 2–4. Admin API по-прежнему CLI. [Обработчик](processor-development.md).
 
 # Диспетчер: локальная разработка и запуск
 
-Обновлено: 2026-10-13. Реализованы ядро Go/SQLite и WSS устройств с Node.js-обработчиком.
-Передача файлов/публикация — этап 4,
-модели — этап 5, аккаунты/сессии/панель — этап 6. Это ещё не готовая обработка видео.
+Обновлено: 2026-10-13. Реализованы ядро Go/SQLite, WSS, transfer/publication и каталог моделей.
+Панель — этап 6. Production-веса whisper/NLLB ставятся командами на устройство, не диспетчером.
 
 ## Требования и проверки
 
@@ -60,8 +59,18 @@ go build -trimpath -ldflags="-s -w" -o ./bin/dispatcher.exe ./cmd/dispatcher
 ./bin/dispatcher.exe token-revoke -db ./data/dispatcher.db -id <token-id>
 ./bin/dispatcher.exe site-set -db ./data/dispatcher.db -id <site-id> -weight 4 -enabled=true -operations media.transcode
 ./bin/dispatcher.exe device-set -db ./data/dispatcher.db -id <device-id> -enabled=false
+./bin/dispatcher.exe catalog-list -db ./data/dispatcher.db
+./bin/dispatcher.exe catalog-import -db ./data/dispatcher.db -catalog ./catalog.json
+./bin/dispatcher.exe command-enqueue -db ./data/dispatcher.db -id <device-id> -command ./install.json
+./bin/dispatcher.exe command-get -db ./data/dispatcher.db -id <request-id>
 ./bin/dispatcher.exe serve -db ./data/dispatcher.db -listen 127.0.0.1:8090
 ```
+
+`catalog-import` принимает JSON-массив ModelEntry. Production-записи whisper.cpp/NLLB
+сеются при `init`. catalog-test — только для стенда без загрузки гигабайт.
+Команды MODEL_INSTALL/ACTIVATE/DELETE исполняет подключённое устройство; CLI ставит
+их в очередь при остановленном диспетчере. Скачанная модель не считается готовой,
+пока нет ACTIVATE и ONLINE в возможностях устройства.
 
 У site-set явно задаются текущие weight/enabled; operations без флага сохраняются.
 Отключение сайта запрещает новые заявки, принятые завершаются; revoke токена устройства
@@ -99,7 +108,7 @@ device-create `-capabilities <file.json>`: файл содержит масси�
 Admin endpoints отвечают 501 до этапа 6. Сайт выдаёт GET/PUT хранилища сам;
 диспетчер хранит только метаданные и краткоживущие страницы grant.
 
-Результаты видео создаёт обработчик с FFmpeg; аудио/субтитры — этап 5.
+Результаты видео создаёт обработчик с FFmpeg; аудио/субтитры — активные модели на устройстве.
 Сайты остаются в SERVER-режиме до клиента v2. Не включать EXTERNAL на рабочем
 сайте до приёмки интеграции.
 

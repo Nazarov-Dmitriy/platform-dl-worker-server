@@ -144,6 +144,9 @@ func (s *Store) Connect(ctx context.Context, p Principal, caps []Capability, usa
 		if _, e := tx.Exec("UPDATE devices SET session_id=?,session_token=?,last_seen=?,ready_since=?,capabilities=?,usage=? WHERE id=?", session, p.TokenID, now.UnixMilli(), ready, string(encode(caps)), string(encode(usage)), p.ID); e != nil {
 			return e
 		}
+		if _, e := tx.Exec("UPDATE device_commands SET notified=0 WHERE device_id=? AND status='PENDING'", p.ID); e != nil {
+			return e
+		}
 		for _, f := range active {
 			if len(activeJobs) > 0 {
 				var matched int
