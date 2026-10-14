@@ -26,6 +26,7 @@
 Прежняя схема получения работ сайтом через claim/heartbeat отменена; служебные сообщения
 устройств и подтверждение публикации имеют отдельное назначение в контракте v2.
 
+- [Короткая инструкция запуска Windows / Mac / Linux](docs/instruction/quick-start.md).
 - [План работ](docs/plan/worker-plan.md).
 - [Сборка и локальный запуск диспетчера](docs/instruction/dispatcher-development.md).
 - [Запуск обработчика](docs/instruction/processor-development.md).
