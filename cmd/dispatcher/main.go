@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -44,6 +45,8 @@ func run(args []string) error {
 	commandFile := flags.String("command", "", "JSON AdminCommand for a device")
 	login := flags.String("login", "", "Owner login")
 	password := flags.String("password", "", "Owner password (12+ characters)")
+	passwordStdin := flags.Bool("password-stdin", false, "Read owner password from stdin, not process arguments")
+	ifNeeded := flags.Bool("if-needed", false, "Leave an existing owner unchanged (owner-bootstrap only)")
 	from := flags.String("from", "", "SQLite snapshot path for restore")
 	out := flags.String("out", "", "Optional backup destination file")
 	keep := flags.Int("keep", 7, "Local snapshot copies to retain")
@@ -59,6 +62,19 @@ func run(args []string) error {
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
+	}
+	if *ifNeeded && command != "owner-bootstrap" {
+		return errors.New("-if-needed is only supported for owner-bootstrap")
+	}
+	if *passwordStdin {
+		if (command != "owner-bootstrap" && command != "owner-reset-password") || *password != "" {
+			return errors.New("-password-stdin requires an owner command without -password")
+		}
+		value, e := readOwnerPassword(os.Stdin)
+		if e != nil {
+			return e
+		}
+		*password = value
 	}
 	config := dispatcher.DefaultConfig()
 	config.HistoryDays = *history
@@ -201,6 +217,10 @@ func run(args []string) error {
 		return output(v)
 	case "owner-bootstrap":
 		if e := store.BootstrapOwner(ctx, *login, *password); e != nil {
+			var api *dispatcher.APIError
+			if *ifNeeded && errors.As(e, &api) && api.Code == "ALREADY_INITIALIZED" {
+				return output(map[string]string{"status": "owner-exists"})
+			}
 			return e
 		}
 		return output(map[string]string{"status": "owner-created"})
@@ -276,4 +296,19 @@ func run(args []string) error {
 			}
 		}
 	}
+}
+
+func readOwnerPassword(input io.Reader) (string, error) {
+	value, err := io.ReadAll(io.LimitReader(input, 4097))
+	if err != nil {
+		return "", errors.New("cannot read owner password")
+	}
+	if len(value) > 4096 {
+		return "", errors.New("owner password exceeds 4096 bytes")
+	}
+	password := strings.TrimSuffix(strings.TrimSuffix(string(value), "\n"), "\r")
+	if strings.ContainsAny(password, "\r\n\x00") || len(password) < 12 {
+		return "", errors.New("owner password must be a single line of at least 12 characters")
+	}
+	return password, nil
 }

@@ -1,0 +1,46 @@
+name: worker-dispatcher
+services:
+  dispatcher:
+    image: ${DISPATCHER_IMAGE:?Use the release bundle or pass --image to install.sh}
+    command: [serve, -db, /data/dispatcher.db, -listen, "0.0.0.0:8090", -secure-cookies]
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp:size=16m]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 1.0
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8090/readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+  tls:
+    image: nginx:1.28.0-alpine
+    user: "10001:10001"
+    entrypoint: [nginx]
+    command: [-g, "daemon off;"]
+    ports:
+      - "${LISTEN_IP:-0.0.0.0}:${PUBLIC_PORT:-8090}:8443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./tls:/etc/worker-tls:ro
+    depends_on:
+      dispatcher: {condition: service_healthy}
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp:size=16m]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 64m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
