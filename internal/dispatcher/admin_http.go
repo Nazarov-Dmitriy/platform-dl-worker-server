@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,9 @@ const sessionCookie = "dispatcher_session"
 
 func (h *HTTP) addAdminRoutes() {
 	h.mux.HandleFunc("GET /device-ca.crt", h.connectionCertificate)
+	h.mux.HandleFunc("GET /api/v2/admin/updates", h.admin(h.adminUpdates, false))
+	h.mux.HandleFunc("POST /api/v2/admin/updates/check", h.admin(h.adminUpdateCheck, true))
+	h.mux.HandleFunc("POST /api/v2/admin/updates/install", h.admin(h.adminUpdateInstall, true))
 	h.mux.HandleFunc("GET /api/v2/admin/connection", h.admin(h.adminConnection, false))
 	h.mux.HandleFunc("PUT /api/v2/admin/connection", h.admin(h.adminConnectionSet, true))
 	h.mux.HandleFunc("POST /api/v2/admin/session", h.adminLogin)
@@ -381,6 +385,20 @@ func (h *HTTP) adminOpsSet(w http.ResponseWriter, r *http.Request, a AdminActor)
 	if json.Unmarshal(raw, &in) != nil {
 		h.failure(w, problem(400, "INVALID_REQUEST", "Invalid ops payload"))
 		return
+	}
+	if !in.Maintenance && os.Getenv("DISPATCHER_UPDATER_SOCKET") != "" {
+		data, _, err := h.updaterCall(r.Context(), "GET", "/status", nil)
+		if err != nil {
+			h.failure(w, err)
+			return
+		}
+		var state struct {
+			Phase string `json:"phase"`
+		}
+		if json.Unmarshal(data, &state) != nil || state.Phase == "waiting" || state.Phase == "installing" || state.Phase == "rollback_failed" {
+			h.failure(w, problem(409, "UPDATE_IN_PROGRESS", "Wait for the update to finish"))
+			return
+		}
 	}
 	v, e := h.store.SetMaintenance(r.Context(), a, in.Maintenance)
 	if e != nil {

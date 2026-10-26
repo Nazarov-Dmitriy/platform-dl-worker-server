@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Вход · Worker</title>
+    <script src="/panel/theme.js?v=2"></script>
+    <link rel="stylesheet" href="/panel/app.css?v=2" />
+    <script defer src="/panel/common.js?v=2"></script>
+    <script defer src="/panel/login.js?v=2"></script>
+  </head>
+  <body class="login-page">
+    <header class="login-top">
+      <label class="theme-picker"
+        >Тема<select data-theme-control aria-label="Тема оформления">
+          <option value="light">Светлая</option>
+          <option value="dark">Тёмная</option>
+          <option value="system">Как в системе</option>
+        </select></label
+      >
+    </header>
+    <main class="login-layout">
+      <a class="brand" href="/panel/" aria-label="Worker — главная"
+        ><svg class="brand-mark" viewBox="0 0 40 34" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M0 3h8l5 18 6-18h7l5 18 5-18h8L34 32h-8l-4-15-5 15H9z"
+          /></svg
+        >Worker</a
+      >
+      <section class="login-card" aria-labelledby="loginTitle">
+        <h1 id="loginTitle">Вход в диспетчер</h1>
+        <p class="login-description">
+          Управляйте обработкой медиа<br />и подключёнными устройствами
+        </p>
+        <form id="loginForm" class="login-form">
+          <label class="field"
+            >Логин<input
+              name="login"
+              autocomplete="username"
+              placeholder="Введите логин"
+              required /></label
+          ><label class="field"
+            >Пароль<span class="password-wrap"
+              ><input
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="Введите пароль"
+                required /><button
+                type="button"
+                class="password-toggle"
+                id="showPassword"
+                aria-label="Показать пароль"
+                aria-pressed="false"
+              >
+                <span data-icon="eye"></span></button></span
+          ></label>
+          <p id="loginError" class="error" role="alert"></p>
+          <button class="button primary" id="loginSubmit" type="submit">
+            <span>Войти</span><span data-icon="arrow"></span>
+          </button>
+        </form>
+      </section>
+      <section class="certificate-card">
+        <div class="certificate-info">
+          <span class="certificate-icon" data-icon="lock"></span>
+          <div>
+            <h3>Подключение устройств</h3>
+            <p>
+              Сертификат этого сервера для подключения обработчиков на Mac и
+              Windows.
+            </p>
+          </div>
+        </div>
+        <a class="button quiet" href="/device-ca.crt" download="device-ca.crt"
+          ><span data-icon="download"></span>Скачать сертификат</a
+        >
+      </section>
+      <p class="login-footer">Worker · Диспетчер обработки медиа</p>
+    </main>
+  </body>
+</html>

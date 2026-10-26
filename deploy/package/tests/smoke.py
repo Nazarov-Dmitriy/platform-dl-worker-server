@@ -23,6 +23,7 @@ def smoke(bundle):
     assert os.geteuid() == 0
     project="worker-package-smoke-"+uuid.uuid4().hex[:12]
     os.environ["WORKER_PROJECT_NAME"]=project
+    os.environ["WORKER_UPDATER_SERVICE"]="0"
     with tempfile.TemporaryDirectory(prefix="worker-package-smoke-") as temporary:
         root=Path(temporary)
         first,second=root/"first",root/"second"

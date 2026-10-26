@@ -2,5 +2,5 @@ package panel
 
 import "embed"
 
-//go:embed index.html app.js app.css
+//go:embed index.html *.js app.css login
 var Files embed.FS

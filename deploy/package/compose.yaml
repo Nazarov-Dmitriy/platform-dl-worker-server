@@ -4,11 +4,13 @@ services:
     image: ${DISPATCHER_IMAGE:?Run worker install first}
     environment:
       DISPATCHER_HOST: ${DISPATCHER_HOST:?Public address is required}
+      DISPATCHER_UPDATER_SOCKET: /updater/update.sock
       DISPATCHER_OWNER: ${DISPATCHER_OWNER:-owner}
     ports:
       - "${LISTEN_IP:-0.0.0.0}:${PUBLIC_PORT:-8090}:8090"
     volumes:
       - ./data:/data
+      - ./updater:/updater:ro
     restart: unless-stopped
     read_only: true
     tmpfs: [/tmp:size=16m]

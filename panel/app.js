@@ -1,92 +1,321 @@
-const state = { csrf: "", role: "", manageSites: false, devices: [] };
-function $(id) { return document.getElementById(id); }
+const state = {
+  csrf: "",
+  role: "",
+  manageSites: false,
+  devices: [],
+  sites: [],
+};
+const views = {
+  overview: ["Обзор", "Состояние обработки и подключённых устройств"],
+  queue: ["Очередь заданий", "Последние задания выбранного сайта"],
+  devices: [
+    "Устройства",
+    "Подключение и управление обработчиками Mac и Windows",
+  ],
+  sites: ["Сайты", "Источники заданий для обработки медиа"],
+  models: ["Модели", "Доступные модели для обработки медиа"],
+  accounts: ["Аккаунты", "Доступ к панели и роли пользователей"],
+  audit: ["Журнал", "Последние действия в диспетчере"],
+  updates: ["Обновления", "Версии и установка обновлений Worker"],
+  ops: ["Обслуживание", "Снимки данных и подготовка к обновлению"],
+};
 async function api(path, opts = {}) {
-  const headers = { ...(opts.headers || {}) };
-  if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
-  if (opts.mutate) headers["X-CSRF-Token"] = state.csrf;
-  const res = await fetch(path, { credentials: "same-origin", ...opts, headers });
-  if (res.status === 204) return null;
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.code || data.message || res.status);
-  return data;
-}
-function showApp() {
-  $("login").hidden = true;
-  $("app").hidden = false;
-  $("nav").hidden = false;
-  $("accountsTab").hidden = state.role !== "OWNER";
-  $("auditTab").hidden = state.role !== "OWNER";
-  $("opsTab").hidden = state.role !== "OWNER";
-}
-$("loginForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  $("loginError").textContent = "";
-  const fd = new FormData(e.target);
+  const { mutate, ...options } = opts;
+  const headers = { ...(options.headers || {}) };
+  if (options.body) headers["Content-Type"] = "application/json";
+  if (mutate) headers["X-CSRF-Token"] = state.csrf;
   try {
-    const s = await api("/api/v2/admin/session", {
-      method: "POST",
-      body: JSON.stringify({ login: fd.get("login"), password: fd.get("password") }),
-    });
-    state.csrf = s.csrfToken;
-    state.role = s.role;
-    state.manageSites = s.manageSites;
-    showApp();
-    await reload();
-  } catch (err) {
-    $("loginError").textContent = err.message;
+    return await request(path, { ...options, headers });
+  } catch (error) {
+    if (error.status === 401) location.replace("/panel/login/");
+    throw error;
   }
-});
-$("logout").addEventListener("click", async () => {
-  await api("/api/v2/admin/session", { method: "DELETE", mutate: true });
-  location.reload();
-});
-document.getElementById("nav").addEventListener("click", (e) => {
-  const tab = e.target.dataset.tab;
-  if (!tab) return;
-  document.querySelectorAll("[data-panel]").forEach((p) => {
-    p.hidden = p.dataset.panel !== tab;
+}
+function report(error) {
+  $("globalError").textContent = humanError(error);
+  $("globalError").hidden = false;
+}
+function message(id, text) {
+  $(id).textContent = text;
+  $(id).hidden = !text;
+}
+function on(id, event, fn) {
+  $(id).addEventListener(event, async (e) => {
+    if (event === "submit") e.preventDefault();
+    const control =
+      event === "submit"
+        ? e.target.querySelector('button[type="submit"],button:not([type])')
+        : e.currentTarget;
+    $("globalError").hidden = true;
+    $("feedback").hidden = true;
+    if (control) control.disabled = true;
+    try {
+      await fn(e);
+    } catch (error) {
+      report(error);
+    } finally {
+      if (control) control.disabled = false;
+      if (state.ops) {
+        $("opsMaintenanceOn").disabled = !!state.ops.maintenance;
+        $("opsMaintenanceOff").disabled = !state.ops.maintenance;
+      }
+      if (updateStatus) showUpdateStatus(updateStatus);
+    }
   });
-});
-async function reload() {
-  const sites = await api("/api/v2/admin/sites");
-  $("sites").textContent = JSON.stringify(sites.items, null, 2);
-  $("jobSite").innerHTML = sites.items.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
-  const devices = await api("/api/v2/admin/devices");
-  state.devices = devices.items;
-  $("deviceSelect").innerHTML = devices.items.map((d) => `<option value="${d.id}">${d.name} ${d.online ? "(online)" : "(offline)"}</option>`).join("");
-  $("catalog").textContent = JSON.stringify((await api("/api/v2/admin/models")).models.map((m) => ({ id: m.id, revision: m.revision, purpose: m.purpose })), null, 2);
-  if (state.role === "OWNER") {
-    $("accounts").textContent = JSON.stringify((await api("/api/v2/admin/accounts")).items, null, 2);
-    $("audit").textContent = JSON.stringify((await api("/api/v2/admin/audit")).items, null, 2);
-    $("ops").textContent = JSON.stringify(await api("/api/v2/admin/ops"), null, 2);
+}
+const mobileNav = matchMedia("(max-width:850px)");
+function syncSidebar() {
+  $("sidebar").inert =
+    mobileNav.matches && !document.body.classList.contains("nav-open");
+}
+function closeMenu() {
+  document.body.classList.remove("nav-open");
+  $("menuToggle").setAttribute("aria-expanded", "false");
+  syncSidebar();
+}
+mobileNav.addEventListener("change", closeMenu);
+function selectTab(tab) {
+  if (
+    !views[tab] ||
+    (["accounts", "audit", "ops", "updates"].includes(tab) &&
+      state.role !== "OWNER")
+  )
+    tab = "overview";
+  document
+    .querySelectorAll("[data-panel]")
+    .forEach((p) => (p.hidden = p.dataset.panel !== tab));
+  document
+    .querySelectorAll("[data-tab]")
+    .forEach((b) =>
+      b.setAttribute("aria-pressed", String(b.dataset.tab === tab)),
+    );
+  [$("pageTitle").textContent, $("pageSubtitle").textContent] = views[tab];
+  document.title = views[tab][0] + " · Worker";
+  closeMenu();
+}
+$("nav").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tab]");
+  if (b) {
+    location.hash = b.dataset.tab;
+    selectTab(b.dataset.tab);
   }
-  await loadJobs();
-  await loadDevice();
+});
+document.querySelectorAll("[data-go]").forEach((b) =>
+  b.addEventListener("click", () => {
+    location.hash = b.dataset.go;
+    selectTab(b.dataset.go);
+  }),
+);
+window.addEventListener("hashchange", () => selectTab(location.hash.slice(1)));
+$("menuToggle").addEventListener("click", () => {
+  const open = document.body.classList.toggle("nav-open");
+  $("menuToggle").setAttribute("aria-expanded", String(open));
+  syncSidebar();
+  if (open) $("nav").querySelector('button[aria-pressed="true"]').focus();
+});
+$("overlay").addEventListener("click", closeMenu);
+document.addEventListener("keydown", (e) => {
+  if (!mobileNav.matches || !document.body.classList.contains("nav-open"))
+    return;
+  if (e.key === "Escape") {
+    closeMenu();
+    $("menuToggle").focus();
+  }
+  if (e.key === "Tab") {
+    const controls = Array.from(
+      $("sidebar").querySelectorAll("a,button,select"),
+    ).filter((n) => !n.hidden && n.getClientRects().length);
+    const first = controls[0],
+      last = controls[controls.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+});
+function options(id, items, label, placeholder) {
+  const select = $(id),
+    previous = select.value;
+  select.replaceChildren();
+  if (!items.length) select.append(new Option(placeholder, ""));
+  items.forEach((item) => select.append(new Option(label(item), item.id)));
+  if (items.some((item) => item.id === previous)) select.value = previous;
+  select.disabled = !items.length;
 }
-$("reloadJobs").addEventListener("click", loadJobs);
+async function reload() {
+  const [sites, devices, models] = await Promise.all([
+    api("/api/v2/admin/sites"),
+    api("/api/v2/admin/devices"),
+    api("/api/v2/admin/models"),
+  ]);
+  state.sites = sites.items;
+  state.devices = devices.items;
+  options("jobSite", state.sites, (s) => s.name, "Нет доступных сайтов");
+  options("overviewSite", state.sites, (s) => s.name, "Нет доступных сайтов");
+  $("overviewSite").value = $("jobSite").value;
+  options(
+    "deviceSelect",
+    state.devices,
+    (d) => d.name + (d.online ? " · в сети" : " · не в сети"),
+    "Нет устройств",
+  );
+  $("stat-siteCount").textContent = state.sites.length;
+  $("stat-online").textContent = state.devices.filter((d) => d.online).length;
+  renderDevices("overviewDevices", state.devices);
+  renderDevices("deviceList", state.devices);
+  renderModels("catalog", models.models);
+  if (state.sites.length)
+    table(
+      "sites",
+      ["Сайт", "Состояние", "Операции", "Вес"],
+      state.sites.map((s) => [
+        titleCell(s.name, s.id, "globe"),
+        badge(s.enabled ? "Включён" : "Отключён", s.enabled ? "good" : ""),
+        s.operations.map((o) => operations[o] || o).join(", "),
+        s.weight,
+      ]),
+    );
+  else
+    empty(
+      "sites",
+      "Сайтов пока нет",
+      "Добавьте сайт, который будет отправлять задания.",
+      "globe",
+    );
+  if (state.role === "OWNER") {
+    const [accounts, audit, ops] = await Promise.all([
+      api("/api/v2/admin/accounts"),
+      api("/api/v2/admin/audit"),
+      api("/api/v2/admin/ops"),
+    ]);
+    table(
+      "accounts",
+      ["Аккаунт", "Роль", "Состояние", "Управление сайтами"],
+      accounts.items.map((a) => [
+        titleCell(a.login, null, "user"),
+        a.role === "OWNER" ? "Владелец" : "Оператор",
+        badge(a.enabled ? "Активен" : "Отключён", a.enabled ? "good" : ""),
+        a.manageSites ? "Разрешено" : "Нет",
+      ]),
+    );
+    if (audit.items.length)
+      table(
+        "audit",
+        ["Время", "Действие", "Участник", "Задание"],
+        audit.items.map((a) => [date(a.at), a.kind, a.principalId, a.jobId]),
+      );
+    else
+      empty(
+        "audit",
+        "Действий пока нет",
+        "Здесь появится история работы диспетчера.",
+        "file",
+      );
+    renderOps(ops);
+    await loadUpdateStatus();
+  }
+  await Promise.all([loadJobs(), loadDevice()]);
+}
+let jobsVersion = 0,
+  deviceVersion = 0;
 async function loadJobs() {
-  const siteId = $("jobSite").value;
-  if (!siteId) { $("jobs").textContent = ""; return; }
-  const page = await api("/api/v2/admin/jobs?siteId=" + siteId);
-  $("jobs").textContent = JSON.stringify(page.jobs, null, 2);
+  const version = ++jobsVersion,
+    id = $("jobSite").value;
+  $("cancelAll").disabled = !id;
+  const page = id
+    ? await api("/api/v2/admin/jobs?siteId=" + encodeURIComponent(id))
+    : { jobs: [] };
+  if (version !== jobsVersion) return;
+  renderJobs("jobs", page.jobs, !!id);
+  renderJobs("overviewJobs", page.jobs, !!id);
 }
-$("cancelAll").addEventListener("click", async () => {
-  const siteId = $("jobSite").value;
-  if (!siteId) return;
-  await api("/api/v2/admin/sites/" + siteId + "/cancel-all", {
+async function loadDevice() {
+  const version = ++deviceVersion,
+    id = $("deviceSelect").value;
+  $("deviceControls").hidden = !id;
+  message("issued", "");
+  message("commandOut", "");
+  if (!id) {
+    $("deviceDetail").replaceChildren();
+    return;
+  }
+  const d = state.devices.find((d) => d.id === id);
+  details("deviceDetail", [
+    ["Название", d.name],
+    ["Подключение", d.online ? "В сети" : "Не в сети"],
+    ["Последняя связь", date(d.lastSeenAt)],
+  ]);
+  const [settings, models] = await Promise.all([
+    api("/api/v2/admin/devices/" + id + "/settings"),
+    api("/api/v2/admin/devices/" + id + "/models"),
+  ]);
+  if (version !== deviceVersion) return;
+  details("settings", [
+    [
+      "Система",
+      [settings.os, settings.architecture].filter(Boolean).join(" ") ||
+        "Ещё не подключалось",
+    ],
+    [
+      "Настройки",
+      settings.desired
+        ? JSON.stringify(settings.desired) === JSON.stringify(settings.reported)
+          ? "Подтверждены устройством"
+          : "Ожидают подтверждения"
+        : "Ещё не отправлялись",
+    ],
+  ]);
+  const form = $("configureForm");
+  form.reset();
+  const values = settings.desired || settings.reported;
+  if (values)
+    Object.entries(values).forEach(([key, value]) => {
+      const input = form.elements.namedItem(key);
+      if (input) {
+        if (input.type === "checkbox") input.checked = !!value;
+        else input.value = value;
+      }
+    });
+  renderModels("compat", models.models);
+}
+on("reloadAll", "click", reload);
+on("reloadJobs", "click", loadJobs);
+on("jobSite", "change", async () => {
+  $("overviewSite").value = $("jobSite").value;
+  await loadJobs();
+});
+on("overviewSite", "change", async () => {
+  $("jobSite").value = $("overviewSite").value;
+  await loadJobs();
+});
+on("deviceSelect", "change", loadDevice);
+on("logout", "click", async () => {
+  await api("/api/v2/admin/session", { method: "DELETE", mutate: true });
+  location.replace("/panel/login/");
+});
+on("cancelAll", "click", async () => {
+  const id = $("jobSite").value;
+  if (!id || !confirm("Отменить все задания выбранного сайта?")) return;
+  const result = await api("/api/v2/admin/sites/" + id + "/cancel-all", {
     method: "POST",
     mutate: true,
-    body: JSON.stringify({ protocolVersion: "2.0", requestId: crypto.randomUUID(), reason: "panel" }),
+    body: JSON.stringify({
+      protocolVersion: "2.0",
+      requestId: crypto.randomUUID(),
+      reason: "panel",
+    }),
   });
   await loadJobs();
+  message("feedback", "Отмена запрошена. Заданий: " + result.cancelled + ".");
 });
-$("siteForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const operations = [];
-  if (fd.get("transcode")) operations.push("media.transcode");
-  if (fd.get("transcribe")) operations.push("media.transcribe");
-  if (fd.get("subtitles")) operations.push("media.subtitles");
+on("siteForm", "submit", async (e) => {
+  const fd = new FormData(e.target),
+    ops = ["transcode", "transcribe", "subtitles"]
+      .filter((k) => fd.get(k))
+      .map((k) => "media." + k);
   await api("/api/v2/admin/sites", {
     method: "POST",
     mutate: true,
@@ -94,84 +323,94 @@ $("siteForm").addEventListener("submit", async (e) => {
       name: fd.get("name"),
       enabled: true,
       weight: Number(fd.get("weight")),
-      operations,
+      operations: ops,
     }),
   });
+  e.target.reset();
   await reload();
+  message("feedback", "Сайт добавлен.");
 });
-$("deviceForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  await api("/api/v2/admin/devices", {
+on("deviceForm", "submit", async (e) => {
+  const name = new FormData(e.target).get("name");
+  const d = await api("/api/v2/admin/devices", {
     method: "POST",
     mutate: true,
-    body: JSON.stringify({ name: fd.get("name"), enabled: true }),
+    body: JSON.stringify({ name, enabled: true }),
   });
+  e.target.reset();
   await reload();
+  $("deviceSelect").value = d.id;
+  await loadDevice();
+  message(
+    "feedback",
+    "Устройство добавлено. Выдайте токен для подключения обработчика.",
+  );
 });
-$("deviceSelect").addEventListener("change", loadDevice);
-async function loadDevice() {
+on("issueDeviceToken", "click", async () => {
   const id = $("deviceSelect").value;
   if (!id) return;
-  const d = state.devices.find((x) => x.id === id);
-  $("deviceDetail").textContent = JSON.stringify(d, null, 2);
-  const settings = await api("/api/v2/admin/devices/" + id + "/settings");
-  $("settings").textContent = JSON.stringify(settings, null, 2);
-  const models = await api("/api/v2/admin/devices/" + id + "/models");
-  $("compat").textContent = JSON.stringify(models.models.map((m) => ({ id: m.id, revision: m.revision, purpose: m.purpose })), null, 2);
-}
-$("issueDeviceToken").addEventListener("click", async () => {
-  const id = $("deviceSelect").value;
   const issued = await api("/api/v2/admin/devices/" + id + "/tokens", {
     method: "POST",
     mutate: true,
     body: JSON.stringify({ requestId: crypto.randomUUID() }),
   });
-  $("issued").textContent = JSON.stringify(issued, null, 2);
+  $("issued").replaceChildren(
+    node("strong", "Сохраните токен — он показывается один раз"),
+    node("code", issued.token, "code"),
+  );
+  $("issued").hidden = false;
 });
-async function command(type) {
+async function sendCommand(body) {
   const id = $("deviceSelect").value;
-  const view = await api("/api/v2/admin/devices/" + id + "/commands", {
+  if (!id) return;
+  await api("/api/v2/admin/devices/" + id + "/commands", {
     method: "POST",
     mutate: true,
-    body: JSON.stringify({
-      requestId: crypto.randomUUID(),
-      type,
-      modelId: $("modelId").value,
-      modelRevision: $("modelRev").value,
-    }),
+    body: JSON.stringify({ requestId: crypto.randomUUID(), ...body }),
   });
-  $("commandOut").textContent = JSON.stringify(view, null, 2);
+  message(
+    "commandOut",
+    "Команда отправлена устройству. Применение зависит от его подключения.",
+  );
 }
-$("installModel").addEventListener("click", () => command("MODEL_INSTALL"));
-$("activateModel").addEventListener("click", () => command("MODEL_ACTIVATE"));
-$("deleteModel").addEventListener("click", () => command("MODEL_DELETE"));
-$("configureForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const id = $("deviceSelect").value;
-  const view = await api("/api/v2/admin/devices/" + id + "/commands", {
-    method: "POST",
-    mutate: true,
-    body: JSON.stringify({
-      requestId: crypto.randomUUID(),
-      type: "CONFIGURE",
-      settings: {
-        workDirectory: fd.get("workDirectory"),
-        paused: Boolean(fd.get("paused")),
-        autostart: Boolean(fd.get("autostart")),
-        maxParallel: Number(fd.get("maxParallel")),
-        cpuThresholdPercent: Number(fd.get("cpuThresholdPercent")),
-        memoryThresholdPercent: Number(fd.get("memoryThresholdPercent")),
-        diskThresholdPercent: Number(fd.get("diskThresholdPercent")),
-      },
-    }),
+for (const [id, type] of [
+  ["installModel", "MODEL_INSTALL"],
+  ["activateModel", "MODEL_ACTIVATE"],
+  ["deleteModel", "MODEL_DELETE"],
+])
+  on(id, "click", async () => {
+    if (!$("modelId").value.trim() || !$("modelRev").value.trim()) {
+      message("commandOut", "Укажите идентификатор и версию модели.");
+      return;
+    }
+    if (
+      type === "MODEL_DELETE" &&
+      !confirm("Удалить выбранную модель с устройства?")
+    )
+      return;
+    await sendCommand({
+      type,
+      modelId: $("modelId").value.trim(),
+      modelRevision: $("modelRev").value.trim(),
+    });
   });
-  $("commandOut").textContent = JSON.stringify(view, null, 2);
-  await loadDevice();
+on("configureForm", "submit", async (e) => {
+  const fd = new FormData(e.target),
+    settings = {
+      workDirectory: fd.get("workDirectory"),
+      paused: !!fd.get("paused"),
+      autostart: !!fd.get("autostart"),
+    };
+  for (const key of [
+    "maxParallel",
+    "cpuThresholdPercent",
+    "memoryThresholdPercent",
+    "diskThresholdPercent",
+  ])
+    settings[key] = Number(fd.get(key));
+  await sendCommand({ type: "CONFIGURE", settings });
 });
-$("accountForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
+on("accountForm", "submit", async (e) => {
   const fd = new FormData(e.target);
   await api("/api/v2/admin/accounts", {
     method: "POST",
@@ -181,29 +420,131 @@ $("accountForm").addEventListener("submit", async (e) => {
       password: fd.get("password"),
       role: fd.get("role"),
       enabled: true,
-      manageSites: Boolean(fd.get("manageSites")),
+      manageSites: !!fd.get("manageSites"),
     }),
   });
+  e.target.reset();
   await reload();
+  message("feedback", "Аккаунт добавлен.");
 });
 async function opsAction(method, path, body) {
-  $("opsOut").textContent = "";
+  await api(path, { method, mutate: true, body: JSON.stringify(body || {}) });
+  renderOps(await api("/api/v2/admin/ops"));
+  message("opsOut", "Действие выполнено. Состояние обновлено.");
+}
+on("opsMaintenanceOn", "click", () =>
+  opsAction("PUT", "/api/v2/admin/ops", { maintenance: true }),
+);
+on("opsMaintenanceOff", "click", () =>
+  opsAction("PUT", "/api/v2/admin/ops", { maintenance: false }),
+);
+on("opsBackup", "click", () => opsAction("POST", "/api/v2/admin/backup", {}));
+on("opsPrepare", "click", () =>
+  opsAction("POST", "/api/v2/admin/update-prepare", {}),
+);
+async function init() {
   try {
-    const data = await api(path, { method, mutate: true, body: JSON.stringify(body || {}) });
-    $("opsOut").textContent = JSON.stringify(data, null, 2);
-    $("ops").textContent = JSON.stringify(await api("/api/v2/admin/ops"), null, 2);
-  } catch (err) {
-    $("opsOut").textContent = err.message;
+    const session = await api("/api/v2/admin/session");
+    state.csrf = session.csrfToken;
+    state.role = session.role;
+    state.manageSites = session.manageSites;
+    ["accounts", "audit", "ops", "updates"].forEach(
+      (tab) => ($(tab + "Tab").hidden = state.role !== "OWNER"),
+    );
+    $("siteCreate").hidden = state.role !== "OWNER" && !state.manageSites;
+    $("roleLabel").textContent =
+      state.role === "OWNER" ? "Владелец" : "Оператор";
+    $("loading").hidden = true;
+    $("app").hidden = false;
+    selectTab(location.hash.slice(1));
+    await reload();
+  } catch (error) {
+    if (error.status === 401) return;
+    if ($("app").hidden) {
+      $("loading").textContent = "Не удалось загрузить панель. ";
+      const retry = node("button", "Повторить", "button");
+      retry.addEventListener("click", init);
+      $("loading").append(retry);
+    } else report(error);
   }
 }
-$("opsMaintenanceOn").addEventListener("click", () => opsAction("PUT", "/api/v2/admin/ops", { maintenance: true }));
-$("opsMaintenanceOff").addEventListener("click", () => opsAction("PUT", "/api/v2/admin/ops", { maintenance: false }));
-$("opsBackup").addEventListener("click", () => opsAction("POST", "/api/v2/admin/backup", {}));
-$("opsPrepare").addEventListener("click", () => opsAction("POST", "/api/v2/admin/update-prepare", {}));
-api("/api/v2/admin/session").then((s) => {
-  state.csrf = s.csrfToken;
-  state.role = s.role;
-  state.manageSites = s.manageSites;
-  showApp();
-  return reload();
-}).catch(() => {});
+let updateStatus = null;
+const updateBusyPhases = ["checking", "downloading", "waiting", "installing"];
+function showUpdateStatus(data) {
+  updateStatus = data;
+  const busy = updateBusyPhases.includes(data.phase);
+  details("updateVersions", [
+    [
+      "Установленная версия",
+      (data.currentVersion || "—").replace("worker-v", ""),
+    ],
+    ["Доступная версия", (data.latestVersion || "—").replace("worker-v", "")],
+  ]);
+  message("updateMessage", data.message || "Служба обновления не установлена");
+  $("checkUpdate").disabled = !data.enabled || busy;
+  $("installUpdate").disabled = !data.enabled || busy || !data.available;
+  if (busy) $("opsMaintenanceOff").disabled = true;
+}
+async function loadUpdateStatus() {
+  if (state.role !== "OWNER") return;
+  try {
+    showUpdateStatus(await api("/api/v2/admin/updates"));
+  } catch (error) {
+    if (error.status === 401) return;
+    message(
+      "updateMessage",
+      updateBusyPhases.includes(updateStatus?.phase)
+        ? "Перезапускаем диспетчер. Страница подключится автоматически…"
+        : "Служба обновления недоступна. Повторите проверку позже.",
+    );
+  }
+}
+on("checkUpdate", "click", async () => {
+  showUpdateStatus(
+    await api("/api/v2/admin/updates/check", {
+      method: "POST",
+      mutate: true,
+      body: "{}",
+    }),
+  );
+});
+on("installUpdate", "click", async () => {
+  const version = updateStatus?.latestVersion;
+  if (
+    !version ||
+    !updateStatus.available ||
+    !confirm(
+      "Установить Worker " +
+        version.replace("worker-v", "") +
+        "? Активные задания завершатся перед перезапуском.",
+    )
+  )
+    return;
+  showUpdateStatus(
+    await api("/api/v2/admin/updates/install", {
+      method: "POST",
+      mutate: true,
+      body: JSON.stringify({ version }),
+    }),
+  );
+});
+setInterval(() => {
+  if (
+    state.role === "OWNER" &&
+    (!document.querySelector('[data-panel="updates"]').hidden ||
+      updateBusyPhases.includes(updateStatus?.phase))
+  ) {
+    const before = updateStatus?.phase;
+    loadUpdateStatus().then(() => {
+      if (
+        updateBusyPhases.includes(before) &&
+        ["completed", "rolled_back"].includes(updateStatus?.phase)
+      ) {
+        // Load the assets from the newly started container, including any interface changes.
+        location.reload();
+      }
+    });
+  }
+}, 3000);
+
+init();

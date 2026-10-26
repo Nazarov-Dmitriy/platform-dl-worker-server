@@ -102,9 +102,11 @@ def exported(root, target, compose, environment, output):
         fd = os.open(output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         try:
             with os.fdopen(fd, "wb") as stream, tarfile.open(fileobj=stream, mode="w:gz") as archive:
-                for name in ("manage.py", "compose.yaml", "fingerprint.py", "README.md"):
+                for name in ("manage.py", "compose.yaml", "fingerprint.py", "update.py", "README.md"):
                     archive.add(SOURCE / name, arcname=name)
                 archive.add(ROOT / "worker", arcname="worker")
+                if (ROOT / "VERSION").exists():
+                    archive.add(ROOT / "VERSION", arcname="VERSION")
                 archive.add(target, arcname="instance", filter=lambda info: None if info.name.endswith(".install.lock") else info)
                 archive.add(images, arcname=images.name)
                 info = tarfile.TarInfo("release.env")
@@ -214,6 +216,8 @@ def main():
             run(["docker", "image", "inspect", image])
         if previous and previous["DISPATCHER_IMAGE"] != image:
             raise ValueError("Обновление версии требует обслуживания и резервной копии")
+        from update import install_service
+        install_service(ROOT, target, PROJECT)
         data = target / "data"
         if data.is_symlink():
             raise ValueError("Недопустимая символическая ссылка data")
