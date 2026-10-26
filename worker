@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+WORKER_PACKAGE_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+export WORKER_PACKAGE_ROOT
+if [ -f "$WORKER_PACKAGE_ROOT/deploy/package/manage.py" ]; then
+  exec python3 "$WORKER_PACKAGE_ROOT/deploy/package/manage.py" "$@"
+fi
+exec python3 "$WORKER_PACKAGE_ROOT/manage.py" "$@"

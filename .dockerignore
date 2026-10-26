@@ -8,3 +8,12 @@ config.json
 **/*.log
 **/node_modules
 **/dist
+
+# Runtime instances, credentials and generated delivery archives
+instance
+**/instance
+deploy/releases
+**/.env
+**/.bootstrap-password
+**/initial-owner-password
+**/tls

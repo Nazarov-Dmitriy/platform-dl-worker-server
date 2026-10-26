@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -11,11 +12,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"titunki/worker-server/internal/dispatcher"
+	"titunki/worker-server/internal/servercert"
 )
 
 func main() {
@@ -35,6 +38,7 @@ func run(args []string) error {
 	dbPath := flags.String("db", "data/dispatcher.db", "SQLite path (persistent directory)")
 	secureCookies := flags.Bool("secure-cookies", false, "Set Secure on admin cookies when served behind an HTTPS proxy")
 	listen := flags.String("listen", "127.0.0.1:8090", "HTTP listen address behind HTTPS proxy")
+	host := flags.String("host", os.Getenv("DISPATCHER_HOST"), "Public IP or DNS name for built-in TLS")
 	name := flags.String("name", "", "Site/device name")
 	id := flags.String("id", "", "Site/device/token UUID")
 	purpose := flags.String("purpose", "", "Token purpose: SITE or DEVICE")
@@ -83,6 +87,9 @@ func run(args []string) error {
 	config.LeaseTTL = *lease
 	config.StopSafety = *safety
 	config.AdmissionStable = *stable
+	if command == "health" {
+		return checkHealth(filepath.Dir(*dbPath), *listen, *host)
+	}
 	if command == "restore" {
 		epoch, e := dispatcher.RestoreDatabase(*dbPath, *from, config)
 		if e != nil {
@@ -96,6 +103,17 @@ func run(args []string) error {
 	}
 	defer store.Close()
 	ctx := context.Background()
+	var certificates *servercert.Manager
+	if command == "launch" {
+		certificates, e = servercert.New(filepath.Dir(*dbPath), *host)
+		if e != nil {
+			return e
+		}
+		if e = bootstrapContainerOwner(store, filepath.Dir(*dbPath)); e != nil {
+			return e
+		}
+		*secureCookies = true
+	}
 	switch command {
 	case "init":
 		return output(map[string]string{"status": "initialized", "epoch": store.Epoch()})
@@ -251,15 +269,21 @@ func run(args []string) error {
 			return e
 		}
 		return output(v)
-	case "serve":
+	case "serve", "launch":
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	handler := dispatcher.HandlerWithSecureCookies(store, *secureCookies)
+	if certificates != nil {
+		handler.(*dispatcher.HTTP).ConfigureConnection(certificates)
+	}
 	defer handler.(*dispatcher.HTTP).CloseDevices()
 	server := &http.Server{Addr: *listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	if certificates != nil {
+		server.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: certificates.Certificate}
+	}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	prune := time.NewTicker(time.Hour)
@@ -272,7 +296,13 @@ func run(args []string) error {
 	}
 	store.StartBackupLoop(ctx)
 	done := make(chan error, 1)
-	go func() { done <- server.ListenAndServe() }()
+	go func() {
+		if certificates != nil {
+			done <- server.ListenAndServeTLS("", "")
+		} else {
+			done <- server.ListenAndServe()
+		}
+	}()
 	log.Printf("dispatcher listening on %s (stage 7, panel /panel/, health /healthz /readyz)", *listen)
 	for {
 		select {
@@ -291,6 +321,11 @@ func run(args []string) error {
 				log.Print("lease expiry failed; durable queue retained")
 			}
 		case <-prune.C:
+			if certificates != nil {
+				if e := certificates.Refresh(); e != nil {
+					log.Print("certificate renewal failed; inspect connection configuration")
+				}
+			}
 			if e := store.Prune(ctx); e != nil {
 				log.Print("history cleanup failed; durable history retained")
 			}

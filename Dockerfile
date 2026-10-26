@@ -22,6 +22,6 @@ USER 10001:10001
 VOLUME ["/data"]
 EXPOSE 8090
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD wget -q -O /dev/null http://127.0.0.1:8090/readyz || exit 1
+  CMD dispatcher health -db /data/dispatcher.db -listen 127.0.0.1:8090 || exit 1
 ENTRYPOINT ["dispatcher"]
-CMD ["serve", "-db", "/data/dispatcher.db", "-listen", "0.0.0.0:8090"]
+CMD ["launch", "-db", "/data/dispatcher.db", "-listen", "0.0.0.0:8090"]

@@ -16,3 +16,8 @@ bin/
 
 # Generated ready-to-install bundles (source stays in deploy/standalone).
 deploy/releases/
+
+# State of the installable worker package
+instance/
+**/instance/
+**/__pycache__/

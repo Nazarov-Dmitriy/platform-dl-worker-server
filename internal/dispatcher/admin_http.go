@@ -13,6 +13,9 @@ import (
 const sessionCookie = "dispatcher_session"
 
 func (h *HTTP) addAdminRoutes() {
+	h.mux.HandleFunc("GET /device-ca.crt", h.connectionCertificate)
+	h.mux.HandleFunc("GET /api/v2/admin/connection", h.admin(h.adminConnection, false))
+	h.mux.HandleFunc("PUT /api/v2/admin/connection", h.admin(h.adminConnectionSet, true))
 	h.mux.HandleFunc("POST /api/v2/admin/session", h.adminLogin)
 	h.mux.HandleFunc("GET /api/v2/admin/session", h.admin(h.adminSession, false))
 	h.mux.HandleFunc("DELETE /api/v2/admin/session", h.admin(h.adminLogout, false))

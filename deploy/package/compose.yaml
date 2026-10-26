@@ -1,0 +1,28 @@
+name: worker-dispatcher
+services:
+  dispatcher:
+    image: ${DISPATCHER_IMAGE:?Run worker install first}
+    environment:
+      DISPATCHER_HOST: ${DISPATCHER_HOST:?Public address is required}
+      DISPATCHER_OWNER: ${DISPATCHER_OWNER:-owner}
+    ports:
+      - "${LISTEN_IP:-0.0.0.0}:${PUBLIC_PORT:-8090}:8090"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp:size=16m]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 1.0
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+    healthcheck:
+      test: [CMD, dispatcher, health, -db, /data/dispatcher.db, -listen, "127.0.0.1:8090"]
+      interval: 10s
+      timeout: 5s
+      retries: 9
+      start_period: 5s

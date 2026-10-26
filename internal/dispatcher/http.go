@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"titunki/worker-server/internal/servercert"
 )
 
 const MaxMetadataBytes int64 = 8 << 20
@@ -18,6 +19,7 @@ type HTTP struct {
 	mux           *http.ServeMux
 	hub           *deviceHub
 	secureCookies bool
+	certificates  *servercert.Manager
 }
 
 func Handler(s *Store) http.Handler { return HandlerWithSecureCookies(s, false) }
