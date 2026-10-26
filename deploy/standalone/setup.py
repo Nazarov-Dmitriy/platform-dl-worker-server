@@ -82,6 +82,90 @@ def validate_certificate(host, cert, key):
         raise ValueError("Certificate and private key do not match")
 
 
+def automatic_tls(host, target):
+    """Keep the installation CA across renewals and provider/IP changes."""
+    tls = target / "tls"
+    authority = tls / "authority"
+    for directory in (tls, authority):
+        if directory.is_symlink():
+            raise ValueError("Refusing certificate directory symlink")
+        directory.mkdir(exist_ok=True, mode=0o700)
+    os.chmod(authority, 0o700)
+    root_cert, root_key = authority / "ca.crt", authority / "ca.key"
+    if root_cert.exists() != root_key.exists():
+        raise ValueError("Incomplete installation CA; restore its certificate and key from the migration archive")
+    with tempfile.TemporaryDirectory(prefix=".certificate-", dir=authority) as temporary:
+        temporary = Path(temporary)
+        if not root_cert.exists():
+            cert, key = temporary / "ca.crt", temporary / "ca.key"
+            run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-sha256", "-days", "3650",
+                 "-subj", "/CN=Worker installation " + secrets.token_hex(8),
+                 "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0",
+                 "-addext", "keyUsage=critical,keyCertSign,cRLSign", "-keyout", str(key), "-out", str(cert)])
+            write_file(root_key, key.read_bytes(), 0o600)
+            write_file(root_cert, cert.read_bytes(), 0o644)
+        run(["openssl", "x509", "-in", str(root_cert), "-noout", "-checkend", "2592000"])
+        validate_certificate_from_key = run(["openssl", "x509", "-in", str(root_cert), "-pubkey", "-noout"])
+        if validate_certificate_from_key != run(["openssl", "pkey", "-in", str(root_key), "-passin", "pass:", "-pubout"]):
+            raise ValueError("Installation CA key does not match its certificate")
+        cert, key = tls / "fullchain.pem", tls / "privkey.pem"
+        valid = False
+        if cert.is_file() and key.is_file():
+            try:
+                validate_certificate(host, cert, key)
+                run(["openssl", "x509", "-in", str(cert), "-noout", "-checkend", "2592000"])
+                run(["openssl", "verify", "-CAfile", str(root_cert), str(cert)])
+                valid = True
+            except (RuntimeError, ValueError):
+                pass
+        if not valid:
+            leaf, leaf_key, csr, extensions = (temporary / name for name in ("leaf.pem", "leaf.key", "leaf.csr", "leaf.ext"))
+            try:
+                ipaddress.ip_address(host)
+                san = "IP:" + host
+            except ValueError:
+                san = "DNS:" + host
+            extensions.write_text("basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=" + san + "\n")
+            run(["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=Worker dispatcher",
+                 "-keyout", str(leaf_key), "-out", str(csr)])
+            run(["openssl", "x509", "-req", "-in", str(csr), "-CA", str(root_cert), "-CAkey", str(root_key),
+                 "-set_serial", "0x" + secrets.token_hex(16), "-days", "397", "-sha256", "-extfile", str(extensions), "-out", str(leaf)])
+            write_file(key, leaf_key.read_bytes(), 0o640, 0, 10001)
+            write_file(cert, leaf.read_bytes() + root_cert.read_bytes(), 0o640, 0, 10001)
+    write_file(target / "device-ca.crt", root_cert.read_bytes(), 0o644)
+    return cert, key, target / "device-ca.crt", not valid
+
+
+def renew_tls(target):
+    settings = read_env(target / ".env")
+    if settings.get("TLS_MODE") != "auto":
+        return
+    with (target / ".install.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _, _, _, changed = automatic_tls(settings["PUBLIC_HOST"], target)
+        if changed:
+            environment = dict(os.environ, **settings)
+            compose = ["docker", "compose", "--project-directory", str(target), "--env-file", str(target / ".env"), "-f", str(target / "compose.yaml")]
+            run(compose + ["exec", "-T", "tls", "nginx", "-t"], env=environment)
+            run(compose + ["exec", "-T", "tls", "nginx", "-s", "reload"], env=environment)
+            print("TLS certificate renewed; installation CA unchanged")
+
+
+def install_renew_timer(target):
+    if not shutil.which("systemctl") or not Path("/run/systemd/system").is_dir():
+        print("Automatic TLS renewal: systemd is unavailable; run install.sh again or setup.py --renew-tls before certificate expiry")
+        return
+    def quoted(value):
+        return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%").replace("$", "$$") + '"'
+    unit = ("[Unit]\nDescription=Renew worker dispatcher TLS certificate\nAfter=docker.service\nRequires=docker.service\n"
+            "[Service]\nType=oneshot\nExecStart=/usr/bin/python3 " + quoted(target / "setup.py") + " --renew-tls --dir " + quoted(target) + "\n")
+    write_file(Path("/etc/systemd/system/worker-dispatcher-cert-renew.service"), unit, 0o644)
+    write_file(Path("/etc/systemd/system/worker-dispatcher-cert-renew.timer"),
+               "[Unit]\nDescription=Daily worker dispatcher TLS renewal check\n[Timer]\nOnCalendar=daily\nPersistent=true\nRandomizedDelaySec=1h\n[Install]\nWantedBy=timers.target\n", 0o644)
+    run(["systemctl", "daemon-reload"])
+    run(["systemctl", "enable", "--now", "worker-dispatcher-cert-renew.timer"])
+
+
 def tls_ready(host, port, listen_ip, ca, timeout=90):
     context = ssl.create_default_context(cafile=str(ca) if ca else None)
     address = "127.0.0.1" if listen_ip == "0.0.0.0" else listen_ip
@@ -116,8 +200,13 @@ def install(args):
             raise ValueError("Required command not installed: " + tool)
     run(["docker", "compose", "version"])
     run(["docker", "info", "--format", "{{.ServerVersion}}"])
-    cert, key = Path(args.cert).resolve(), Path(args.key).resolve()
-    validate_certificate(host, cert, key)
+    if bool(args.cert) != bool(args.key):
+        raise ValueError("Pass both --cert and --key, or neither for automatic certificates")
+    cert, key = (Path(args.cert).resolve(), Path(args.key).resolve()) if args.cert else (None, None)
+    if cert:
+        validate_certificate(host, cert, key)
+    elif args.ca:
+        raise ValueError("--ca is only needed with your own --cert and --key")
     ca = Path(args.ca).resolve() if args.ca else None
     if ca:
         ssl.create_default_context(cafile=str(ca))
@@ -135,6 +224,7 @@ def install(args):
         environment = dict(os.environ)
         settings = {"DISPATCHER_IMAGE": image, "PUBLIC_HOST": host,
                     "PUBLIC_PORT": str(args.port), "LISTEN_IP": args.listen_ip,
+                    "TLS_MODE": "manual" if cert else "auto",
                     "OWNER_LOGIN": previous.get("OWNER_LOGIN", args.owner_login)}
         if not re.fullmatch(r"[a-zA-Z0-9_.@-]{1,64}", settings["OWNER_LOGIN"]):
             raise ValueError("Invalid owner login")
@@ -176,6 +266,8 @@ def install(args):
             directory.mkdir(exist_ok=True, mode=0o750)
             os.chown(directory, 10001 if directory.name == "data" else 0, 10001)
             os.chmod(directory, 0o750)
+        if not cert:
+            cert, key, ca, _ = automatic_tls(host, target)
         # These files belong exclusively to this installation. No backend .env is touched.
         for name in ("compose.yaml", "nginx.conf", "install.sh", "setup.py", "fingerprint.py", "export.sh", "export.py", "README.md"):
             write_file(target / name, (SOURCE / name).read_bytes(), 0o755 if name.endswith(".sh") else 0o644)
@@ -202,6 +294,10 @@ def install(args):
         run(compose + ["up", "-d", "--wait", "--wait-timeout", "90", "dispatcher"], env=environment)
         run(compose + ["up", "-d", "--no-deps", "--force-recreate", "tls"], env=environment)
         tls_ready(host, args.port, args.listen_ip, ca)
+        if settings["TLS_MODE"] == "auto":
+            if not args.no_renew_timer:
+                install_renew_timer(target)
+            print("Mac/Windows trust file (public certificate only): " + str(target / "device-ca.crt"))
         print("Ready: https://" + ("[" + host + "]" if ":" in host else host) + ":" + str(args.port) + "/panel/")
         print("Owner login: " + settings["OWNER_LOGIN"] + "; initial password file: " + str(target / "initial-owner-password"))
         print("Allow inbound TCP " + str(args.port) + " in the VPS/provider firewall. No firewall rules or host nginx were changed.")
@@ -210,17 +306,26 @@ def install(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dir", default="/opt/worker-server")
-    parser.add_argument("--host", required=True)
-    parser.add_argument("--cert", required=True, help="PEM full certificate chain")
-    parser.add_argument("--key", required=True, help="Unencrypted PEM private key")
+    parser.add_argument("--host")
+    parser.add_argument("--cert", help="Optional existing PEM full certificate chain")
+    parser.add_argument("--key", help="Optional existing unencrypted PEM private key")
     parser.add_argument("--ca", help="Optional private CA trusted for the readiness check")
     parser.add_argument("--port", type=int, default=8090)
     parser.add_argument("--listen-ip", default="0.0.0.0")
     parser.add_argument("--owner-login", default="owner")
     parser.add_argument("--image", help="Versioned image; normally supplied by the release bundle")
+    parser.add_argument("--renew-tls", action="store_true", help="Renew the automatically issued certificate if needed")
+    parser.add_argument("--no-renew-timer", action="store_true", help="Do not register the systemd renewal timer (isolated tests)")
     args = parser.parse_args()
     try:
-        install(args)
+        if args.renew_tls:
+            if os.geteuid() != 0:
+                raise ValueError("Run renewal with sudo")
+            renew_tls(Path(args.dir).resolve())
+        elif not args.host:
+            parser.error("--host is required for installation")
+        else:
+            install(args)
     except (ValueError, RuntimeError, OSError) as error:
         parser.exit(1, "Installation failed: " + str(error) + "\n")
 

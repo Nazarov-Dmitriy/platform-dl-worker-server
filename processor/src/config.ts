@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 export type Config = {
   url: string;
   deviceId: string;
@@ -22,6 +22,7 @@ export type Config = {
   allowTestModels?: boolean;
   whisperCpp?: string;
   tokenFile?: string;
+  tlsCaFile?: string;
   configFile?: string;
 };
 export function loadConfig(path: string): Config {
@@ -48,10 +49,16 @@ export function loadConfig(path: string): Config {
     "allowTestModels",
     "whisperCpp",
     "tokenFile",
+    "tlsCaFile",
   ];
   if (Object.keys(v).some((k) => !allowed.includes(k)))
     throw new Error("UNKNOWN_CONFIG_FIELD");
   const url = new URL(v.url);
+  if (v.tlsCaFile !== undefined && (typeof v.tlsCaFile !== "string" || !v.tlsCaFile.trim()))
+    throw new Error("INVALID_TLS_CA_FILE");
+  const tlsCaFile = v.tlsCaFile === undefined ? undefined : resolve(dirname(resolve(path)), v.tlsCaFile);
+  if (tlsCaFile && !readFileSync(tlsCaFile, "utf8").includes("-----BEGIN CERTIFICATE-----"))
+    throw new Error("INVALID_TLS_CA_FILE");
   if (
     url.protocol !== "wss:" &&
     !(
@@ -99,6 +106,7 @@ export function loadConfig(path: string): Config {
       typeof v.catalogExtra === "string" ? resolve(v.catalogExtra) : undefined,
     tokenFile:
       typeof v.tokenFile === "string" ? resolve(v.tokenFile) : undefined,
+    tlsCaFile,
     configFile: resolve(path),
     whisperCpp: typeof v.whisperCpp === "string" ? v.whisperCpp : undefined,
   };

@@ -6,7 +6,7 @@ cd "$ROOT"
 REVISION=$(git rev-parse --short=12 HEAD)
 if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then REVISION="$REVISION-dirty"; fi
 IMAGE=${DISPATCHER_IMAGE:-worker-dispatcher:$REVISION}
-OUT=${1:-$ROOT/bin/releases}
+OUT=${1:-$ROOT/deploy/releases}
 mkdir -p "$OUT"
 OUT=$(CDPATH='' cd -- "$OUT" && pwd)
 STAGE=$(mktemp -d)

@@ -31,12 +31,7 @@ def smoke(bundle):
         release.mkdir()
         with tarfile.open(bundle) as archive:
             archive.extractall(release, filter="data")
-        cert, key = root / "cert.pem", root / "key.pem"
-        command(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-                 "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost",
-                 "-keyout", str(key), "-out", str(cert)])
-        base = ["--host", "127.0.0.1", "--cert", str(cert), "--key", str(key),
-                "--ca", str(cert), "--listen-ip", "127.0.0.1", "--port", "18090"]
+        base = ["--host", "127.0.0.1", "--listen-ip", "127.0.0.1", "--port", "18090", "--no-renew-timer"]
         active = None
         def compose(target, *args):
             return command(["docker", "compose", "--project-directory", str(target),
@@ -48,7 +43,9 @@ def smoke(bundle):
         try:
             install(release, first)
             password = (first / "initial-owner-password").read_text().strip()
-            context = ssl.create_default_context(cafile=str(cert))
+            ca = first / "device-ca.crt"
+            trust = ca.read_bytes()
+            context = ssl.create_default_context(cafile=str(ca))
             cookies = http.cookiejar.CookieJar()
             opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context), urllib.request.HTTPCookieProcessor(cookies))
             csrf = ""
@@ -72,6 +69,7 @@ def smoke(bundle):
                         assert b" 101 " in connection.recv(2048).split(b"\r\n",1)[0], "WSS upgrade failed"
             handshake()
             install(release, first)
+            assert (first / "device-ca.crt").read_bytes() == trust
             assert (first / "initial-owner-password").read_text().strip() == password
             assert api("/api/v2/admin/session")["role"] == "OWNER", "Reinstall invalidated account/session"
             handshake()
@@ -86,11 +84,12 @@ def smoke(bundle):
             with tarfile.open(move) as archive:
                 archive.extractall(second, filter="fully_trusted")
             install(second, second)
+            assert (second / "device-ca.crt").read_bytes() == trust, "Migration replaced the trusted CA"
             assert api("/api/v2/admin/session")["role"] == "OWNER", "Migration lost session"
             assert api("/api/v2/admin/ops")["maintenance"] is True
             assert any(item["id"] == device["id"] for item in api("/api/v2/admin/devices")["items"])
             handshake()
-            print("PASS: TLS readiness, Secure login, WSS, reinstall, migration, account/session/device/token preservation")
+            print("PASS: automatic certificates without input, TLS readiness, Secure login, WSS, reinstall, migration, CA/account/session/device/token preservation")
         finally:
             if active and (active / "compose.yaml").exists():
                 compose(active, "down")

@@ -53,7 +53,7 @@ def export(output):
             fd = os.open(output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             try:
                 with os.fdopen(fd, "wb") as stream, tarfile.open(fileobj=stream, mode="w:gz") as archive:
-                    for name in ("compose.yaml", "nginx.conf", "install.sh", "setup.py", "fingerprint.py", "export.sh", "export.py", "README.md", ".env", "data", "tls", "initial-owner-password"):
+                    for name in ("compose.yaml", "nginx.conf", "install.sh", "setup.py", "fingerprint.py", "export.sh", "export.py", "README.md", ".env", "data", "tls", "device-ca.crt", "initial-owner-password"):
                         path = root / name
                         if path.exists():
                             archive.add(path, arcname=name)

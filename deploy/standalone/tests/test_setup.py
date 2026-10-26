@@ -13,6 +13,26 @@ spec.loader.exec_module(setup)
 
 
 class SetupSafetyTests(unittest.TestCase):
+    @unittest.skipUnless(os.geteuid() == 0, "Automatic TLS installation requires root")
+    def test_automatic_certificates_preserve_trust_when_ip_changes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            cert, key, ca, changed = setup.automatic_tls("127.0.0.1", target)
+            self.assertTrue(changed)
+            trust = ca.read_bytes()
+            original = cert.read_bytes()
+            setup.validate_certificate("127.0.0.1", cert, key)
+            self.assertEqual((target / "tls/authority/ca.key").stat().st_mode & 0o777, 0o600)
+            self.assertEqual((target / "tls/authority").stat().st_mode & 0o777, 0o700)
+            _, _, _, changed = setup.automatic_tls("127.0.0.1", target)
+            self.assertFalse(changed)
+            self.assertEqual(original, cert.read_bytes())
+            cert, key, ca, changed = setup.automatic_tls("192.0.2.1", target)
+            self.assertTrue(changed)
+            self.assertEqual(trust, ca.read_bytes())
+            setup.validate_certificate("192.0.2.1", cert, key)
+            setup.run(["openssl", "verify", "-CAfile", str(ca), str(cert)])
+
     def test_addresses_cannot_inject_compose_or_shell(self):
         for value in ("https://host", "host:8090", "host\nOTHER=value", "$(touch file)", "bad..host", "-bad.test"):
             with self.assertRaises(ValueError):

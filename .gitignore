@@ -13,3 +13,6 @@ bin/
 *.db
 *.db-wal
 *.db-shm
+
+# Generated ready-to-install bundles (source stays in deploy/standalone).
+deploy/releases/

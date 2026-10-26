@@ -217,6 +217,7 @@ export class Agent {
       handshakeTimeout: 10000,
       maxPayload: 8 * 1024 ** 2,
       rejectUnauthorized: true,
+      ...(this.config.tlsCaFile ? { ca: readFileSync(this.config.tlsCaFile) } : {}),
     });
     this.socket = ws;
     ws.on("open", () => {
