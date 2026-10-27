@@ -975,3 +975,18 @@ tr:last-child td {
 #tokenRecipient {
   overflow-wrap: anywhere;
 }
+
+/* Keep creation triggers separate from the expanded form. */
+#siteCreateForm,
+#accountCreateForm {
+  margin-top: 20px;
+}
+.button.site-settings-button {
+  width: 44px;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+}
+.button.site-settings-button:hover {
+  color: var(--accent-hover);
+}

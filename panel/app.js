@@ -675,7 +675,7 @@ window.addEventListener("focus", () => void refreshOverview());
 init();
 
 function siteSettingsButton(site) {
-  const button = node("button", null, "button quiet");
+  const button = node("button", null, "button quiet site-settings-button");
   button.innerHTML = icon("settings");
   button.type = "button";
   button.hidden = state.role !== "OWNER" && !state.manageSites;
