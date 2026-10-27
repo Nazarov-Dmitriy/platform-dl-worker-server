@@ -30,6 +30,12 @@ document.querySelectorAll("[data-icon]").forEach((element) => {
   element.innerHTML = icon(element.dataset.icon);
 });
 const errorCopy = {
+  DEVICE_BUSY:
+    "Устройство выполняет задание. Дождитесь завершения и повторите удаление.",
+  REVISION_CONFLICT:
+    "Устройство изменилось. Обновите список и повторите действие.",
+  PRECONDITION_REQUIRED: "Обновите список устройств и повторите действие.",
+  NOT_FOUND: "Устройство уже удалено или недоступно. Обновите список.",
   INVALID_CREDENTIALS: "Проверьте логин и пароль.",
   UNAUTHORIZED: "Проверьте логин и пароль.",
   FORBIDDEN: "У вас нет доступа к этому действию.",
@@ -63,3 +69,54 @@ async function request(path, options = {}) {
   }
   return data;
 }
+
+// Download inside the already opened HTTPS page, with a visible fetch error.
+// This endpoint is public; no account/session credential is sent with the request.
+document.querySelectorAll('a[download="device-ca.crt"]').forEach((link) => {
+  link.addEventListener("click", async (event) => {
+    event.preventDefault();
+    if (link.getAttribute("aria-busy") === "true") return;
+    link.setAttribute("aria-busy", "true");
+    let status = document.getElementById("certificateDownloadStatus");
+    if (!status) {
+      status = document.createElement("p");
+      status.id = "certificateDownloadStatus";
+      status.className = "download-status";
+      status.setAttribute("role", "status");
+      document.body.append(status);
+    }
+    status.hidden = false;
+    status.textContent = "Получаем сертификат…";
+    try {
+      const response = await fetch("/device-ca.crt", {
+        credentials: "omit",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Certificate unavailable");
+      const certificate = await response.text();
+      if (
+        !certificate.startsWith("-----BEGIN CERTIFICATE-----") ||
+        certificate.includes("PRIVATE KEY") ||
+        certificate.length > 65536
+      ) {
+        throw new Error("Invalid public certificate");
+      }
+      const url = URL.createObjectURL(
+        new Blob([certificate], { type: "application/x-x509-ca-cert" }),
+      );
+      const download = document.createElement("a");
+      download.href = url;
+      download.download = "device-ca.crt";
+      document.body.append(download);
+      download.click();
+      download.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      status.textContent = "Сертификат подготовлен к скачиванию.";
+    } catch {
+      status.textContent =
+        "Не удалось получить сертификат. Проверьте подключение и повторите скачивание.";
+    } finally {
+      link.removeAttribute("aria-busy");
+    }
+  });
+});

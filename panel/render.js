@@ -128,9 +128,16 @@ function renderDevices(target, devices) {
       "Добавьте Mac или Windows, чтобы выполнять обработку медиа.",
       "monitor",
     );
+  const manage = target === "deviceList";
   table(
     target,
-    ["Устройство", "Подключение", "CPU", "RAM"],
+    [
+      "Устройство",
+      "Подключение",
+      "CPU",
+      "RAM",
+      ...(manage ? ["Действие"] : []),
+    ],
     devices.map((d) => [
       titleCell(d.name, d.id, "monitor"),
       badge(
@@ -139,8 +146,21 @@ function renderDevices(target, devices) {
       ),
       meter(d.online ? d.usage?.cpuPercent : null),
       meter(d.online ? d.usage?.memoryUsedPercent : null),
+      ...(manage ? [deviceManageButton(d)] : []),
     ]),
   );
+}
+function deviceManageButton(device) {
+  const button = node("button", "Управлять", "button quiet");
+  button.type = "button";
+  button.dataset.deviceSelect = device.id;
+  button.setAttribute(
+    "aria-label",
+    "Управлять устройством «" + device.name + "»",
+  );
+  button.disabled = !!state.deviceActionId;
+  button.addEventListener("click", () => selectDevice(device.id));
+  return button;
 }
 function renderModels(target, models) {
   if (!models.length)

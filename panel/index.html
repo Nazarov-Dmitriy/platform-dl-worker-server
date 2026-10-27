@@ -74,7 +74,6 @@
             >Тема<select data-theme-control aria-label="Тема оформления">
               <option value="light">Светлая</option>
               <option value="dark">Тёмная</option>
-              <option value="system">Как в системе</option>
             </select></label
           ><button type="button" class="button" id="logout">
             <span data-icon="logout"></span>Выйти
@@ -217,44 +216,50 @@
               <div class="card">
                 <div class="card-heading"><h2>Добавить сайт</h2></div>
                 <div class="card-body">
-                  <form id="siteForm" class="form-grid">
-                    <label class="field"
-                      >Название сайта<input
-                        name="name"
-                        type="text"
-                        required
-                        maxlength="200"
-                        placeholder="Например, основной сайт" /></label
-                    ><label class="field"
-                      >Вес в очереди<input
-                        name="weight"
-                        type="number"
-                        min="1"
-                        max="100"
-                        value="1"
-                        required
-                    /></label>
-                    <div class="full">
-                      <p class="muted caption">Разрешённые операции</p>
-                      <label class="check-field"
-                        ><input
-                          type="checkbox"
-                          name="transcode"
-                          checked
-                        />Обработка видео</label
-                      ><label class="check-field"
-                        ><input
-                          type="checkbox"
-                          name="transcribe"
-                        />Распознавание речи</label
-                      ><label class="check-field"
-                        ><input
-                          type="checkbox"
-                          name="subtitles"
-                        />Субтитры</label
-                      >
+                  <form id="siteForm" class="stacked-form">
+                    <div class="form-grid">
+                      <label class="field"
+                        >Название сайта<input
+                          name="name"
+                          type="text"
+                          required
+                          maxlength="200"
+                          placeholder="Например, основной сайт" /></label
+                      ><label class="field"
+                        >Вес в очереди<input
+                          name="weight"
+                          type="number"
+                          min="1"
+                          max="100"
+                          value="1"
+                          required
+                      /></label>
                     </div>
-                    <button class="button primary">Добавить сайт</button>
+                    <fieldset class="form-options">
+                      <legend>Разрешённые операции</legend>
+                      <div class="option-list">
+                        <label class="check-field"
+                          ><input
+                            type="checkbox"
+                            name="transcode"
+                            checked
+                          />Обработка видео</label
+                        ><label class="check-field"
+                          ><input
+                            type="checkbox"
+                            name="transcribe"
+                          />Распознавание речи</label
+                        ><label class="check-field"
+                          ><input
+                            type="checkbox"
+                            name="subtitles"
+                          />Субтитры</label
+                        >
+                      </div>
+                    </fieldset>
+                    <div class="form-actions">
+                      <button class="button primary">Добавить сайт</button>
+                    </div>
                   </form>
                 </div>
               </div>
@@ -268,20 +273,38 @@
             <div class="card">
               <div class="card-heading"><h2>Добавить устройство</h2></div>
               <div class="card-body">
-                <form id="deviceForm" class="form-grid">
-                  <label class="field"
-                    >Название устройства<input
-                      name="name"
-                      type="text"
-                      required
-                      maxlength="200"
-                      placeholder="Например, Mac mini" /></label
-                  ><button class="button primary">Добавить устройство</button>
+                <form id="deviceForm" class="stacked-form">
+                  <div class="form-grid single-field">
+                    <label class="field"
+                      >Название устройства<input
+                        name="name"
+                        type="text"
+                        required
+                        maxlength="200"
+                        placeholder="Например, Mac mini"
+                    /></label>
+                  </div>
+                  <div class="form-actions">
+                    <button class="button primary">Добавить устройство</button>
+                  </div>
                 </form>
               </div>
             </div>
             <div class="card">
-              <div class="card-heading"><h2>Управление устройством</h2></div>
+              <div class="card-heading">
+                <div>
+                  <h2 id="selectedDeviceTitle">Управление устройством</h2>
+                  <p class="muted caption" id="selectedDeviceHint"></p>
+                </div>
+                <button
+                  type="button"
+                  class="button danger"
+                  id="deleteDevice"
+                  hidden
+                >
+                  Удалить устройство
+                </button>
+              </div>
               <div class="card-body">
                 <label class="field"
                   >Выберите устройство<select id="deviceSelect"></select
@@ -291,10 +314,13 @@
             </div>
             <div id="deviceControls" hidden>
               <div class="card">
-                <div class="card-heading"><h2>Подключение</h2></div>
+                <div class="card-heading">
+                  <h2 id="deviceConnectionTitle">Подключение устройства</h2>
+                </div>
                 <div class="card-body">
                   <p class="muted caption">
-                    Создайте токен и укажите его в приложении обработчика. Токен
+                    <strong id="tokenRecipient"></strong><br />Введите этот
+                    токен в приложении на выбранном компьютере. Токен
                     показывается один раз.
                   </p>
                   <div class="actions">
@@ -349,62 +375,73 @@
                 </div>
               </div>
               <div class="card">
-                <div class="card-heading"><h2>Настройки устройства</h2></div>
+                <div class="card-heading">
+                  <h2 id="deviceSettingsTitle">Настройки устройства</h2>
+                </div>
                 <div class="card-body">
                   <div id="settings"></div>
-                  <form id="configureForm" class="form-grid">
-                    <label class="field"
-                      >Рабочая папка<input
-                        name="workDirectory"
-                        type="text"
-                        required
-                        placeholder="Путь на устройстве" /></label
-                    ><label class="field"
-                      >Параллельные задания<input
-                        name="maxParallel"
-                        type="number"
-                        min="1"
-                        max="64"
-                        value="2"
-                        required /></label
-                    ><label class="field"
-                      >Порог загрузки CPU, %<input
-                        name="cpuThresholdPercent"
-                        type="number"
-                        min="1"
-                        max="80"
-                        value="80"
-                        required /></label
-                    ><label class="field"
-                      >Порог использования RAM, %<input
-                        name="memoryThresholdPercent"
-                        type="number"
-                        min="1"
-                        max="80"
-                        value="80"
-                        required /></label
-                    ><label class="field"
-                      >Порог заполнения диска, %<input
-                        name="diskThresholdPercent"
-                        type="number"
-                        min="1"
-                        max="80"
-                        value="80"
-                        required
-                    /></label>
-                    <div>
-                      <label class="check-field"
-                        ><input type="checkbox" name="paused" />Приостановить
-                        обработку</label
-                      ><label class="check-field"
-                        ><input
-                          type="checkbox"
-                          name="autostart"
-                          checked
-                        />Автозапуск</label
-                      >
+                  <form id="configureForm" class="stacked-form">
+                    <div class="form-grid">
+                      <label class="field full"
+                        >Рабочая папка<input
+                          name="workDirectory"
+                          type="text"
+                          required
+                          placeholder="Путь на устройстве" /></label
+                      ><label class="field"
+                        >Параллельные задания<input
+                          name="maxParallel"
+                          type="number"
+                          min="1"
+                          max="64"
+                          value="2"
+                          required /></label
+                      ><label class="field"
+                        >Порог загрузки CPU, %<input
+                          name="cpuThresholdPercent"
+                          type="number"
+                          min="1"
+                          max="80"
+                          value="80"
+                          required /></label
+                      ><label class="field"
+                        >Порог использования RAM, %<input
+                          name="memoryThresholdPercent"
+                          type="number"
+                          min="1"
+                          max="80"
+                          value="80"
+                          required /></label
+                      ><label class="field"
+                        >Порог заполнения диска, %<input
+                          name="diskThresholdPercent"
+                          type="number"
+                          min="1"
+                          max="80"
+                          value="80"
+                          required
+                      /></label>
                     </div>
-                    <button class="button primary">Отправить настройки</button>
+                    <fieldset class="form-options">
+                      <legend>Режим работы</legend>
+                      <div class="option-list">
+                        <label class="check-field"
+                          ><input type="checkbox" name="paused" />Приостановить
+                          обработку</label
+                        ><label class="check-field"
+                          ><input
+                            type="checkbox"
+                            name="autostart"
+                            checked
+                          />Автозапуск</label
+                        >
+                      </div>
+                    </fieldset>
+                    <div class="form-actions">
+                      <button class="button primary">
+                        Отправить настройки
+                      </button>
+                    </div>
                   </form>
                 </div>
               </div>
@@ -425,30 +462,41 @@
             <div class="card">
               <div class="card-heading"><h2>Добавить аккаунт</h2></div>
               <div class="card-body">
-                <form id="accountForm" class="form-grid">
-                  <label class="field"
-                    >Логин<input
-                      name="login"
-                      type="text"
-                      required
-                      autocomplete="off" /></label
-                  ><label class="field"
-                    >Пароль<input
-                      name="password"
-                      type="password"
-                      required
-                      minlength="12"
-                      autocomplete="new-password"
-                      placeholder="Не менее 12 символов" /></label
-                  ><label class="field"
-                    >Роль<select name="role">
-                      <option value="OPERATOR">Оператор</option>
-                      <option value="OWNER">Владелец</option>
-                    </select></label
-                  ><label class="check-field"
-                    ><input type="checkbox" name="manageSites" />Управление
-                    сайтами</label
-                  ><button class="button primary">Добавить аккаунт</button>
+                <form id="accountForm" class="stacked-form">
+                  <div class="form-grid">
+                    <label class="field"
+                      >Логин<input
+                        name="login"
+                        type="text"
+                        required
+                        autocomplete="off" /></label
+                    ><label class="field"
+                      >Пароль<input
+                        name="password"
+                        type="password"
+                        required
+                        minlength="12"
+                        autocomplete="new-password"
+                        placeholder="Не менее 12 символов" /></label
+                    ><label class="field"
+                      >Роль<select name="role">
+                        <option value="OPERATOR">Оператор</option>
+                        <option value="OWNER">Владелец</option>
+                      </select></label
+                    >
+                  </div>
+                  <fieldset class="form-options">
+                    <legend>Дополнительные права</legend>
+                    <div class="option-list">
+                      <label class="check-field"
+                        ><input type="checkbox" name="manageSites" />Управление
+                        сайтами</label
+                      >
+                    </div>
+                  </fieldset>
+                  <div class="form-actions">
+                    <button class="button primary">Добавить аккаунт</button>
+                  </div>
                 </form>
               </div>
             </div>

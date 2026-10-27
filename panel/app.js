@@ -236,6 +236,11 @@ async function loadDevice() {
   const version = ++deviceVersion,
     id = $("deviceSelect").value;
   $("deviceControls").hidden = !id;
+  $("deleteDevice").hidden = !id || state.role !== "OWNER";
+  $("selectedDeviceTitle").textContent = "Управление устройством";
+  $("selectedDeviceHint").textContent = id
+    ? ""
+    : "Добавьте устройство, чтобы настроить подключение.";
   message("issued", "");
   message("commandOut", "");
   if (!id) {
@@ -243,6 +248,14 @@ async function loadDevice() {
     return;
   }
   const d = state.devices.find((d) => d.id === id);
+  $("selectedDeviceTitle").textContent = "Устройство: " + d.name;
+  $("selectedDeviceHint").textContent = "ID: " + d.id;
+  $("deviceConnectionTitle").textContent = "Подключение: " + d.name;
+  $("deviceSettingsTitle").textContent = "Настройки: " + d.name;
+  $("tokenRecipient").textContent =
+    "Токен для устройства «" + d.name + "» (" + d.id + ")";
+  $("issueDeviceToken").textContent = "Выдать токен для «" + d.name + "»";
+  $("issueDeviceToken").hidden = state.role !== "OWNER";
   details("deviceDetail", [
     ["Название", d.name],
     ["Подключение", d.online ? "В сети" : "Не в сети"],
@@ -346,20 +359,84 @@ on("deviceForm", "submit", async (e) => {
     "Устройство добавлено. Выдайте токен для подключения обработчика.",
   );
 });
-on("issueDeviceToken", "click", async () => {
-  const id = $("deviceSelect").value;
-  if (!id) return;
-  const issued = await api("/api/v2/admin/devices/" + id + "/tokens", {
-    method: "POST",
-    mutate: true,
-    body: JSON.stringify({ requestId: crypto.randomUUID() }),
-  });
-  $("issued").replaceChildren(
-    node("strong", "Сохраните токен — он показывается один раз"),
-    node("code", issued.token, "code"),
-  );
-  $("issued").hidden = false;
-});
+on("issueDeviceToken", "click", () =>
+  deviceAction(async (device) => {
+    const id = device.id;
+    const issued = await api("/api/v2/admin/devices/" + id + "/tokens", {
+      method: "POST",
+      mutate: true,
+      body: JSON.stringify({ requestId: crypto.randomUUID() }),
+    });
+    $("issued").replaceChildren(
+      node("strong", "Токен устройства «" + device.name + "»"),
+      node(
+        "p",
+        "ID: " + device.id + ". Сохраните токен — он показывается один раз.",
+        "caption",
+      ),
+      node("code", issued.token, "code"),
+    );
+    $("issued").hidden = false;
+  }),
+);
+
+async function deviceAction(callback) {
+  if (state.deviceActionId) return;
+  const device = state.devices.find((d) => d.id === $("deviceSelect").value);
+  if (!device) return;
+  state.deviceActionId = device.id;
+  const controls = [
+    $("deviceSelect"),
+    $("deleteDevice"),
+    $("issueDeviceToken"),
+    $("reloadAll"),
+    ...document.querySelectorAll("[data-device-select]"),
+  ];
+  controls.forEach((control) => (control.disabled = true));
+  try {
+    await callback(device);
+  } finally {
+    state.deviceActionId = null;
+    [...controls, ...document.querySelectorAll("[data-device-select]")].forEach(
+      (control) => (control.disabled = false),
+    );
+    $("deviceSelect").disabled = !state.devices.length;
+  }
+}
+function selectDevice(id) {
+  if (state.deviceActionId) return;
+  $("deviceSelect").value = id;
+  loadDevice()
+    .then(() =>
+      $("selectedDeviceTitle").scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      }),
+    )
+    .catch(report);
+}
+on("deleteDevice", "click", () =>
+  deviceAction(async (device) => {
+    if (
+      !confirm(
+        "Удалить устройство «" +
+          device.name +
+          "»?\nID: " +
+          device.id +
+          "\nЕго токены перестанут работать. История заданий сохранится.",
+      )
+    )
+      return;
+    await api("/api/v2/admin/devices/" + device.id, {
+      method: "DELETE",
+      mutate: true,
+      headers: { "If-Match": JSON.stringify(String(device.revision)) },
+    });
+    await reload();
+    message("feedback", "Устройство «" + device.name + "» удалено.");
+  }),
+);
+
 async function sendCommand(body) {
   const id = $("deviceSelect").value;
   if (!id) return;

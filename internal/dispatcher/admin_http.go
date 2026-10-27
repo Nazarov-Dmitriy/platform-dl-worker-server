@@ -33,6 +33,7 @@ func (h *HTTP) addAdminRoutes() {
 	h.mux.HandleFunc("POST /api/v2/admin/devices", h.admin(h.adminCreateDevice, true))
 	h.mux.HandleFunc("GET /api/v2/admin/devices", h.admin(h.adminListDevices, false))
 	h.mux.HandleFunc("PUT /api/v2/admin/devices/{id}", h.admin(h.adminUpdateDevice, true))
+	h.mux.HandleFunc("DELETE /api/v2/admin/devices/{id}", h.admin(h.adminDeleteDevice, true))
 	h.mux.HandleFunc("POST /api/v2/admin/devices/{id}/tokens", h.admin(h.adminIssueDeviceToken, true))
 	h.mux.HandleFunc("POST /api/v2/admin/devices/{id}/commands", h.admin(h.adminCommand, true))
 	h.mux.HandleFunc("GET /api/v2/admin/devices/{id}/commands/{requestId}", h.admin(h.adminCommandGet, false))

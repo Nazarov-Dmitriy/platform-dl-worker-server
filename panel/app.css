@@ -881,3 +881,97 @@ tr:last-child td {
     transition: none !important;
   }
 }
+
+.download-status {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 80;
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 14px 18px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  font-size: 14px;
+}
+
+/* Fields, options and actions have separate rows in every panel form. */
+.stacked-form {
+  display: grid;
+  gap: 24px;
+}
+.stacked-form .form-grid {
+  align-items: start;
+}
+.form-grid.single-field {
+  grid-template-columns: minmax(0, 640px);
+}
+.form-options {
+  padding: 0;
+  border: 0;
+  margin: 0;
+  min-width: 0;
+}
+.form-options legend {
+  padding: 0;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.option-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  max-width: 900px;
+}
+.option-list .check-field {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--soft);
+  align-items: center;
+  gap: 10px;
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.form-actions .button {
+  flex: 0 1 auto;
+  min-width: 170px;
+}
+#selectedDeviceHint {
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+#tokenRecipient {
+  font-weight: 600;
+  color: var(--text);
+}
+@media (max-width: 600px) {
+  .option-list {
+    grid-template-columns: 1fr;
+  }
+  .form-actions .button {
+    width: 100%;
+  }
+}
+
+.option-list .check-field:only-child {
+  max-width: 440px;
+}
+.card-heading > div {
+  min-width: 0;
+}
+#selectedDeviceTitle,
+#deviceConnectionTitle,
+#deviceSettingsTitle,
+#tokenRecipient {
+  overflow-wrap: anywhere;
+}

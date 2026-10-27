@@ -348,7 +348,7 @@ func (s *Store) AdminUpdateDevice(ctx context.Context, a AdminActor, id, match s
 		var rev int64
 		var name string
 		var enabled int
-		e := tx.QueryRow("SELECT name,enabled,revision FROM devices WHERE id=?", id).Scan(&name, &enabled, &rev)
+		e := tx.QueryRow("SELECT name,enabled,revision FROM devices WHERE id=? AND deleted=0", id).Scan(&name, &enabled, &rev)
 		if errors.Is(e, sql.ErrNoRows) {
 			return problem(404, "NOT_FOUND", "Device not found")
 		}
@@ -393,7 +393,7 @@ func (s *Store) deviceView(ctx context.Context, id string) (map[string]any, erro
 	var enabled, last int64
 	var rev int64
 	var capsRaw, usageRaw, session string
-	e := s.db.QueryRowContext(ctx, "SELECT name,enabled,revision,capabilities,usage,last_seen,session_id FROM devices WHERE id=?", id).Scan(&name, &enabled, &rev, &capsRaw, &usageRaw, &last, &session)
+	e := s.db.QueryRowContext(ctx, "SELECT name,enabled,revision,capabilities,usage,last_seen,session_id FROM devices WHERE id=? AND deleted=0", id).Scan(&name, &enabled, &rev, &capsRaw, &usageRaw, &last, &session)
 	if errors.Is(e, sql.ErrNoRows) {
 		return nil, problem(404, "NOT_FOUND", "Device not found")
 	}
