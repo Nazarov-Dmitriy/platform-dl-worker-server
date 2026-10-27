@@ -990,3 +990,12 @@ tr:last-child td {
 .button.site-settings-button:hover {
   color: var(--accent-hover);
 }
+
+/* Keep maintenance actions, explanations and feedback visibly separate. */
+.ops-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 24px; }
+.ops-action { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px; border: 1px solid var(--border); border-radius: 10px; }
+.ops-action h3 { margin: 0; font-size: 16px; }
+.ops-action p { margin: 0; line-height: 1.6; }
+.ops-action .button { margin-top: auto; max-width: 100%; white-space: normal; }
+#opsOut { margin-top: 22px; margin-bottom: 0; }
+@media (max-width: 700px) { .ops-actions { grid-template-columns: 1fr; } }

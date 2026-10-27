@@ -194,7 +194,7 @@ function details(target, pairs) {
 function renderOps(data) {
   state.ops = data;
   details("ops", [
-    ["Режим", data.maintenance ? "Обслуживание" : "Работает"],
+    ["Режим", data.maintenance ? "Выдача заданий приостановлена" : "Выдача заданий включена"],
     ["В очереди", data.queued],
     ["Назначается", data.offered],
     ["В работе", data.running],

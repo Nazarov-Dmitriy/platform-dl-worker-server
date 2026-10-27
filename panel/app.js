@@ -516,20 +516,20 @@ on("accountForm", "submit", async (e) => {
   toggleAccountCreate(false);
   message("feedback", "Аккаунт добавлен.");
 });
-async function opsAction(method, path, body) {
+async function opsAction(method, path, body, success) {
   await api(path, { method, mutate: true, body: JSON.stringify(body || {}) });
   renderOps(await api("/api/v2/admin/ops"));
-  message("opsOut", "Действие выполнено. Состояние обновлено.");
+  message("opsOut", success || "Состояние обновлено.");
 }
 on("opsMaintenanceOn", "click", () =>
-  opsAction("PUT", "/api/v2/admin/ops", { maintenance: true }),
+  opsAction("PUT", "/api/v2/admin/ops", { maintenance: true }, "Выдача приостановлена. Новые задания остаются в очереди."),
 );
 on("opsMaintenanceOff", "click", () =>
-  opsAction("PUT", "/api/v2/admin/ops", { maintenance: false }),
+  opsAction("PUT", "/api/v2/admin/ops", { maintenance: false }, "Выдача возобновлена. Задания передаются устройствам."),
 );
-on("opsBackup", "click", () => opsAction("POST", "/api/v2/admin/backup", {}));
+on("opsBackup", "click", () => opsAction("POST", "/api/v2/admin/backup", {}, "Резервная копия базы сохранена на сервере."));
 on("opsPrepare", "click", () =>
-  opsAction("POST", "/api/v2/admin/update-prepare", {}),
+  opsAction("POST", "/api/v2/admin/update-prepare", {}, "Выдача приостановлена. Проверьте готовность к обновлению выше. После ручных работ нажмите «Возобновить выдачу»."),
 );
 async function init() {
   try {

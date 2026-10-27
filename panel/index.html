@@ -520,16 +520,27 @@
               <div class="card-heading"><h2>Состояние диспетчера</h2></div>
               <div class="card-body">
                 <div id="ops"></div>
-                <div class="actions">
-                  <button type="button" class="button" id="opsMaintenanceOn">
-                    Включить обслуживание</button
-                  ><button type="button" class="button" id="opsMaintenanceOff">
-                    Завершить обслуживание</button
-                  ><button type="button" class="button" id="opsBackup">
-                    Создать снимок</button
-                  ><button type="button" class="button" id="opsPrepare">
-                    Подготовить обновление
-                  </button>
+                <div class="ops-actions">
+                  <div class="ops-action">
+                    <h3>Пауза выдачи заданий</h3>
+                    <p class="muted">Новые задания останутся в очереди. Уже запущенные продолжат работу.</p>
+                    <button type="button" class="button" id="opsMaintenanceOn">Приостановить выдачу</button>
+                  </div>
+                  <div class="ops-action">
+                    <h3>Возобновление работы</h3>
+                    <p class="muted">Снять паузу и снова передавать задания подключённым устройствам.</p>
+                    <button type="button" class="button" id="opsMaintenanceOff">Возобновить выдачу</button>
+                  </div>
+                  <div class="ops-action">
+                    <h3>Резервная копия</h3>
+                    <p class="muted">Сохранить снимок базы диспетчера на сервере. Медиафайлы в копию не входят. Работа не приостанавливается.</p>
+                    <button type="button" class="button" id="opsBackup">Создать резервную копию</button>
+                  </div>
+                  <div class="ops-action">
+                    <h3>Подготовка к ручному обновлению</h3>
+                    <p class="muted">Приостановить выдачу и создать копию после завершения текущих заданий. Если они ещё работают, повторите действие позже. Обновление не устанавливается; выдача останется на паузе.</p>
+                    <button type="button" class="button" id="opsPrepare">Подготовить обновление</button>
+                  </div>
                 </div>
                 <p id="opsOut" class="notice-box" role="status" hidden></p>
               </div>
