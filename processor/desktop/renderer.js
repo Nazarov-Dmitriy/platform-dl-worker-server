@@ -3,12 +3,44 @@ const $ = (id) => document.getElementById(id),
 let current = { phase: "stopped", running: 0, connected: false, paused: false },
   caPath = "",
   busy = false;
+let autostart = { supported: false, enabled: false, configured: false };
+let pendingAutostart;
 function notice(message) {
   $("notice").textContent = message || "";
   $("notice").hidden = !message;
 }
+function drawAutostart(value) {
+  if (value) autostart = value;
+  $("autostart").checked = pendingAutostart ?? autostart.enabled;
+  $("autostart").disabled =
+    busy ||
+    !autostart.supported ||
+    (!autostart.configured && !autostart.enabled);
+  $("autostartHint").textContent =
+    pendingAutostart !== undefined
+      ? "Сохраняем настройку…"
+      : !autostart.supported
+        ? "Доступно в собранном приложении Windows."
+        : !autostart.configured
+          ? "Сначала сохраните подключение."
+          : autostart.enabled
+            ? "Включено. После входа в Windows обработчик подключится сам. Папку приложения не перемещайте."
+            : "Выключено. Приложение запускается вручную.";
+}
+$("autostart").onchange = () => {
+  const enabled = $("autostart").checked;
+  pendingAutostart = enabled;
+  void action(async () => {
+    try {
+      drawAutostart(await window.processor.autostart(enabled));
+    } finally {
+      pendingAutostart = undefined;
+    }
+  });
+};
 function draw(status) {
   current = status;
+  drawAutostart(status.autostart);
   const active = !["stopped", "error"].includes(status.phase);
   $("connection").textContent = status.paused
     ? "На паузе"

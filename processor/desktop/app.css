@@ -230,3 +230,27 @@ fieldset:disabled {
     width: 100%;
   }
 }
+
+.startup-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  cursor: pointer;
+}
+.startup-toggle input {
+  width: 19px;
+  min-width: 19px;
+  height: 19px;
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+}
+.startup-toggle small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 4px;
+}
+.startup-card .hint {
+  margin-top: 12px;
+}

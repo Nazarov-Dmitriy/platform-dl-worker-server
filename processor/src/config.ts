@@ -24,6 +24,7 @@ export type Config = {
   tokenFile?: string;
   tlsCaFile?: string;
   configFile?: string;
+  desktopAutostart?: (enabled: boolean) => Promise<void>;
 };
 export function loadConfig(path: string): Config {
   const v = JSON.parse(readFileSync(path, "utf8"));
@@ -54,10 +55,19 @@ export function loadConfig(path: string): Config {
   if (Object.keys(v).some((k) => !allowed.includes(k)))
     throw new Error("UNKNOWN_CONFIG_FIELD");
   const url = new URL(v.url);
-  if (v.tlsCaFile !== undefined && (typeof v.tlsCaFile !== "string" || !v.tlsCaFile.trim()))
+  if (
+    v.tlsCaFile !== undefined &&
+    (typeof v.tlsCaFile !== "string" || !v.tlsCaFile.trim())
+  )
     throw new Error("INVALID_TLS_CA_FILE");
-  const tlsCaFile = v.tlsCaFile === undefined ? undefined : resolve(dirname(resolve(path)), v.tlsCaFile);
-  if (tlsCaFile && !readFileSync(tlsCaFile, "utf8").includes("-----BEGIN CERTIFICATE-----"))
+  const tlsCaFile =
+    v.tlsCaFile === undefined
+      ? undefined
+      : resolve(dirname(resolve(path)), v.tlsCaFile);
+  if (
+    tlsCaFile &&
+    !readFileSync(tlsCaFile, "utf8").includes("-----BEGIN CERTIFICATE-----")
+  )
     throw new Error("INVALID_TLS_CA_FILE");
   if (
     url.protocol !== "wss:" &&

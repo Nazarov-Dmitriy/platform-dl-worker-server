@@ -20,7 +20,12 @@ const {
 const { join } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { validateSettings } = require("./settings.cjs");
+const { createLoginController } = require("./login.cjs");
 app.setName("Worker Processor");
+if (process.platform === "win32")
+  app.setAppUserModelId("ru.difat.workerprocessor");
+const loginController = createLoginController(app);
+const backgroundLaunch = process.argv.includes("--background");
 let window,
   tray,
   child,
@@ -38,6 +43,7 @@ function atomic(name, value) {
 }
 function emit(values) {
   snapshot = { ...snapshot, ...values };
+  if (backgroundLaunch && values.phase === "error" && window) show();
   if (window && !window.isDestroyed())
     window.webContents.send("processor:status", snapshot);
   if (tray)
@@ -49,6 +55,23 @@ function emit(values) {
             ? "остановлен"
             : "подключение"),
     );
+}
+function autostartState() {
+  return {
+    ...loginController.state(),
+    configured:
+      existsSync(join(directory, "config.json")) &&
+      existsSync(join(directory, "credential.bin")),
+  };
+}
+function setDesktopAutostart(enabled) {
+  if (enabled && !autostartState().configured)
+    throw Error("Сначала сохраните подключение к серверу.");
+  const actual = loginController.set(enabled);
+  emit({ autostart: autostartState() });
+  if (child?.connected)
+    child.send({ type: "autostart-state", enabled: actual.enabled });
+  return autostartState();
 }
 function publicSettings() {
   return { ...saved, tokenSet: existsSync(join(directory, "credential.bin")) };
@@ -97,6 +120,26 @@ async function start() {
   emit({ phase: "connecting", message: "Подключаемся к серверу…" });
   processChild.on("message", (message) => {
     if (message && message.type === "status") emit(message.status);
+    else if (
+      message?.type === "autostart-request" &&
+      typeof message.enabled === "boolean" &&
+      typeof message.requestId === "string" &&
+      message.requestId.length <= 64
+    ) {
+      let result;
+      try {
+        setDesktopAutostart(message.enabled);
+        result = { ok: true };
+      } catch {
+        result = { ok: false };
+      }
+      if (processChild.connected)
+        processChild.send({
+          type: "autostart-result",
+          requestId: message.requestId,
+          ...result,
+        });
+    }
   });
   processChild.on("error", () =>
     emit({ phase: "error", message: "Не удалось запустить обработчик." }),
@@ -115,6 +158,7 @@ async function start() {
     type: "start",
     config: join(directory, "config.json"),
     token,
+    autostartEnabled: autostartState().enabled,
   });
   return snapshot;
 }
@@ -153,8 +197,8 @@ async function quit() {
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on("second-instance", () => {
-    if (window) show();
+  app.on("second-instance", (_event, argv) => {
+    if (window && !argv.includes("--background")) show();
   });
   app.whenReady().then(() => {
     directory = app.getPath("userData");
@@ -171,7 +215,7 @@ else {
       height: 820,
       minWidth: 620,
       minHeight: 620,
-      show: !process.argv.includes("--smoke"),
+      show: !backgroundLaunch && !process.argv.includes("--smoke"),
       backgroundColor: "#10171e",
       title: "Worker Processor",
       icon: join(__dirname, "icon.png"),
@@ -182,6 +226,8 @@ else {
         sandbox: true,
       },
     });
+    snapshot.autostart = autostartState();
+    window.on("focus", () => emit({ autostart: autostartState() }));
     window.removeMenu();
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     window.webContents.on("will-navigate", (event, url) => {
@@ -226,6 +272,7 @@ else {
     );
     tray.on("double-click", show);
     tray.on("click", show);
+    handle("processor:autostart", setDesktopAutostart);
     handle("processor:state", () => ({
       settings: publicSettings(),
       status: snapshot,
@@ -293,6 +340,7 @@ else {
         ),
       );
       atomic("settings.json", JSON.stringify(saved, null, 2));
+      emit({ autostart: autostartState() });
       return publicSettings();
     });
     handle("processor:start", start);
@@ -310,7 +358,18 @@ else {
       void quit();
       return true;
     });
-    window.loadFile(html);
+    window.loadFile(html).then(async () => {
+      if (!backgroundLaunch) return;
+      try {
+        await start();
+      } catch (error) {
+        emit({
+          phase: "error",
+          message: error.message || "Не удалось восстановить подключение.",
+        });
+        show();
+      }
+    });
   });
   app.on("activate", () => {
     if (window) show();

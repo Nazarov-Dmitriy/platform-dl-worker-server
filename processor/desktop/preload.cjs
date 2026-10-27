@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("processor", {
   stop: () => invoke("processor:stop"),
   pause: (paused) => invoke("processor:pause", paused),
   quit: () => invoke("processor:quit"),
+  autostart: (enabled) => invoke("processor:autostart", enabled),
   onStatus: (callback) => {
     const listener = (_event, status) => callback(status);
     ipcRenderer.on("processor:status", listener);

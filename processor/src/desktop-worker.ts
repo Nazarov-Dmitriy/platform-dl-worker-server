@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { loadConfig } from "./config.js";
 import { Agent } from "./agent.js";
 import { Journal } from "./journal.js";
@@ -25,6 +26,19 @@ function status(message?: string) {
     },
   });
 }
+const startupRequests = new Map<
+  string,
+  { resolve: () => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
+>();
+let nativeAutostart: boolean | undefined;
+function updateAutostartState(enabled: boolean) {
+  nativeAutostart = enabled;
+  if (!agent) return;
+  agent.journal.state.autostart = enabled;
+  if (agent.journal.state.appliedSettings)
+    agent.journal.state.appliedSettings.autostart = enabled;
+  agent.journal.save();
+}
 async function stop() {
   if (timer) clearInterval(timer);
   if (agent) await agent.close();
@@ -33,6 +47,23 @@ async function stop() {
 }
 process.on("message", async (input: any) => {
   try {
+    if (input?.type === "autostart-result") {
+      const pending = startupRequests.get(input.requestId);
+      if (pending) {
+        clearTimeout(pending.timer);
+        startupRequests.delete(input.requestId);
+        if (input.ok === true) pending.resolve();
+        else pending.reject(new Error("AUTOSTART_INSTALL_FAILED"));
+      }
+      return;
+    }
+    if (
+      input?.type === "autostart-state" &&
+      typeof input.enabled === "boolean"
+    ) {
+      updateAutostartState(input.enabled);
+      return;
+    }
     if (input?.type === "start") {
       if (agent || starting) throw Error("ALREADY_RUNNING");
       starting = true;
@@ -43,6 +74,16 @@ process.on("message", async (input: any) => {
       )
         throw Error("TOKEN_REQUIRED");
       const config = loadConfig(input.config);
+      config.desktopAutostart = (enabled) =>
+        new Promise<void>((resolve, reject) => {
+          const requestId = randomUUID();
+          const timer = setTimeout(() => {
+            startupRequests.delete(requestId);
+            reject(new Error("AUTOSTART_INSTALL_FAILED"));
+          }, 10000);
+          startupRequests.set(requestId, { resolve, reject, timer });
+          process.send?.({ type: "autostart-request", requestId, enabled });
+        });
       mkdirSync(config.stateDir, { recursive: true, mode: 0o700 });
       unlock = await lockInstance(config.stateDir);
       const journal = new Journal(config.stateDir);
@@ -55,6 +96,9 @@ process.on("message", async (input: any) => {
           status("Сервер отклонил запрос. Проверьте ID и токен устройства.");
         else if (event === "CONNECTED") status();
       });
+      if (nativeAutostart !== undefined) updateAutostartState(nativeAutostart);
+      else if (typeof input.autostartEnabled === "boolean")
+        updateAutostartState(input.autostartEnabled);
       agent.start();
       status();
       timer = setInterval(() => status(), 1000);

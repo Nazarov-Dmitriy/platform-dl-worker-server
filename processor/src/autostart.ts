@@ -8,6 +8,10 @@ export async function setAutostart(
   enabled: boolean,
   token: string,
 ) {
+  if (config.desktopAutostart) {
+    await config.desktopAutostart(enabled);
+    return;
+  }
   if (!config.configFile) {
     if (enabled) throw new Error("AUTOSTART_CONFIG_PATH_REQUIRED");
     return;

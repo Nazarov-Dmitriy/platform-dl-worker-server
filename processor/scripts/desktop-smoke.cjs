@@ -34,12 +34,19 @@ async function main() {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   let application;
-  async function launch() {
+  const checkStartup = process.env.DESKTOP_CHECK_AUTOSTART === "1";
+  const startupName =
+    "Worker Processor Test " + require("node:crypto").randomUUID();
+  async function launch(background = false) {
     const packaged = !!process.env.DESKTOP_EXECUTABLE;
     application = await _electron.launch({
       executablePath: process.env.DESKTOP_EXECUTABLE || require("electron"),
       args: packaged
-        ? ["--smoke", "--user-data-dir=" + profile]
+        ? [
+            "--smoke",
+            "--user-data-dir=" + profile,
+            ...(background ? ["--background"] : []),
+          ]
         : [entry, "--smoke"],
       env,
     });
@@ -164,9 +171,95 @@ async function main() {
         path: process.env.DESKTOP_SCREENSHOT,
         fullPage: true,
       });
+    if (checkStartup) {
+      assert(
+        process.platform === "win32" && process.env.DESKTOP_EXECUTABLE,
+        "Startup acceptance requires a packaged Windows app",
+      );
+      await application.evaluate(({ app }, name) => {
+        const set = app.setLoginItemSettings.bind(app),
+          get = app.getLoginItemSettings.bind(app);
+        globalThis.__startupAcceptance = { set, get, name };
+        app.setLoginItemSettings = (settings) => set({ ...settings, name });
+        app.getLoginItemSettings = (options) => {
+          const value = get(options);
+          return {
+            ...value,
+            launchItems: value.launchItems
+              .filter((item) => item.name === name)
+              .map((item) => ({ ...item, name: "Worker Processor" })),
+          };
+        };
+      }, startupName);
+      await application.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].focus(),
+      );
+      await page.waitForFunction(
+        () => !document.getElementById("autostart").disabled,
+      );
+      await page.locator("#autostart").click();
+      await page.waitForFunction(() =>
+        document
+          .getElementById("autostartHint")
+          .textContent.startsWith("Включено"),
+      );
+      const record = await application.evaluate(() => {
+        const value = globalThis.__startupAcceptance;
+        return value
+          .get({ path: process.execPath, args: ["--background"] })
+          .launchItems.find((item) => item.name === value.name);
+      });
+      assert(record?.enabled);
+      const rawCommand = require("node:child_process").execFileSync(
+        path.join(process.env.SystemRoot, "System32/reg.exe"),
+        [
+          "query",
+          "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+          "/v",
+          startupName,
+        ],
+        { windowsHide: true, encoding: "utf8" },
+      );
+      assert(/\s--background\s*$/.test(rawCommand));
+      assert(!rawCommand.includes(fixture.token));
+      assert(!JSON.stringify(record).includes(fixture.token));
+      await page.locator("#autostart").click();
+      await page.waitForFunction(() =>
+        document
+          .getElementById("autostartHint")
+          .textContent.startsWith("Выключено"),
+      );
+      assert.equal(
+        await application.evaluate(() => {
+          const value = globalThis.__startupAcceptance;
+          return value
+            .get({ path: process.execPath, args: ["--background"] })
+            .launchItems.some((item) => item.name === value.name);
+        }),
+        false,
+      );
+      await application.evaluate(({ app }) => {
+        const value = globalThis.__startupAcceptance;
+        value.set({
+          name: value.name,
+          path: process.execPath,
+          args: ["--background"],
+          openAtLogin: false,
+        });
+        app.setLoginItemSettings = value.set;
+        app.getLoginItemSettings = value.get;
+      });
+    }
     assert.deepEqual(errors, []);
     await quit(page);
-    const reopened = await launch();
+    const reopened = await launch(checkStartup);
+    if (checkStartup)
+      assert.equal(
+        await application.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0].isVisible(),
+        ),
+        false,
+      );
     await reopened.waitForFunction(
       () => document.querySelector("[name=server]").value.length > 0,
     );
@@ -175,16 +268,36 @@ async function main() {
       fixture.deviceId,
     );
     assert.equal(await reopened.locator("[name=token]").inputValue(), "");
-    await reopened.locator("#connect").click();
+    if (!checkStartup) await reopened.locator("#connect").click();
     await reopened.waitForFunction(
       () => document.getElementById("connection").textContent === "Подключён",
     );
     await quit(reopened);
     console.log(
-      "PASS: native app, real verified WSS, encrypted token, close to background, pause/resume, stop, saved reconnect.",
+      "PASS: native app, verified WSS, encrypted token, close to background, pause/resume, stop, saved reconnect; optional Windows startup registration and automatic hidden launch.",
     );
   } finally {
     if (application) await application.close().catch(() => {});
+    if (checkStartup) {
+      if (!/^Worker Processor Test [0-9a-f-]{36}$/.test(startupName))
+        throw Error("Unexpected startup test key");
+      const { spawnSync } = require("node:child_process");
+      for (const key of [
+        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run",
+      ]) {
+        spawnSync("reg.exe", ["delete", key, "/v", startupName, "/f"], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
+        const result = spawnSync("reg.exe", ["query", key, "/v", startupName], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
+        if (result.status === 0)
+          throw Error("Temporary startup registration was not removed");
+      }
+    }
     const resolved = path.resolve(temporary),
       parent = path.resolve(os.tmpdir()) + path.sep;
     if (
