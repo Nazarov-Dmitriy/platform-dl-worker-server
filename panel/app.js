@@ -479,7 +479,6 @@ for (const [id, type] of [
 on("configureForm", "submit", async (e) => {
   const fd = new FormData(e.target),
     settings = {
-      workDirectory: fd.get("workDirectory"),
       paused: !!fd.get("paused"),
       autostart: !!fd.get("autostart"),
     };

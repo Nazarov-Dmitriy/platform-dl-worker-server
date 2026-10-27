@@ -275,7 +275,7 @@ type AdminActor struct {
 	ManageSites     bool
 }
 type DeviceSettings struct {
-	WorkDirectory          string `json:"workDirectory"`
+	WorkDirectory          string `json:"workDirectory,omitempty"`
 	Paused                 bool   `json:"paused"`
 	Autostart              bool   `json:"autostart"`
 	MaxParallel            int    `json:"maxParallel"`

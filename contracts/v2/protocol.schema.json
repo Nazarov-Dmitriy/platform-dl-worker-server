@@ -1911,7 +1911,6 @@
                 }
               },
               "required": [
-                "workDirectory",
                 "paused",
                 "autostart",
                 "maxParallel",

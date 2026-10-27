@@ -92,7 +92,6 @@ export class Agent {
   ) {
     const applied = journal.state.appliedSettings as any;
     if (applied) {
-      config.workDir = resolve(applied.workDirectory);
       config.paused = Boolean(applied.paused);
       config.maxParallel = applied.maxParallel;
       config.cpuThresholdPercent = applied.cpuThresholdPercent;
@@ -1204,7 +1203,7 @@ export class Agent {
   }
 }
 async function applyConfigure(agent: Agent, settings: any) {
-  if (!settings || typeof settings.workDirectory !== "string")
+  if (!settings || typeof settings !== "object")
     throw new Error("INVALID_SETTINGS");
   const th = Math.min(
     settings.cpuThresholdPercent,
@@ -1224,23 +1223,7 @@ async function applyConfigure(agent: Agent, settings: any) {
     th > 80
   )
     throw new Error("INVALID_SETTINGS");
-  const nextDir = resolve(settings.workDirectory);
-  let nextVolume: { path: string; dev: number; ino: number } | undefined;
-  if (nextDir !== agent.config.workDir) {
-    if (agent.journal.state.models.length)
-      throw new Error("WORK_DIRECTORY_HAS_MODELS");
-    if (agent.running.size || agent.journal.state.attempts.length)
-      throw new Error("DEVICE_BUSY");
-    const path = realpathSync(nextDir);
-    const s = statSync(path);
-    if (!s.isDirectory()) throw new Error("WORK_DIRECTORY_REQUIRED");
-    nextVolume = { path, dev: s.dev, ino: s.ino };
-  }
   await setAutostart(agent.config, Boolean(settings.autostart), agent.token);
-  if (nextVolume) {
-    agent.journal.state.workVolume = nextVolume;
-    agent.config.workDir = nextDir;
-  }
   agent.config.paused = Boolean(settings.paused);
   agent.config.maxParallel = settings.maxParallel;
   agent.config.threshold = th;
@@ -1248,7 +1231,8 @@ async function applyConfigure(agent: Agent, settings: any) {
   agent.config.memoryThresholdPercent = settings.memoryThresholdPercent;
   agent.config.diskThresholdPercent = settings.diskThresholdPercent;
   agent.journal.state.autostart = Boolean(settings.autostart);
-  agent.journal.state.appliedSettings = settings;
+  const { workDirectory: ignoredRemotePath, ...remoteSettings } = settings;
+  agent.journal.state.appliedSettings = remoteSettings;
   agent.journal.save();
 }
 function hasBin(bin: string) {

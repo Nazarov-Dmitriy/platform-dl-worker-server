@@ -668,7 +668,7 @@ test("resource thresholds remain independent", () => {
   assert.equal(slotBudget(c, 100, 50, 20, 20, "NORMAL", true), 0);
   assert.equal(slotBudget(c, 100, 20, 70, 20, "NORMAL", true), 0);
 });
-test("confirmed device settings survive a processor restart", async (t) => {
+test("confirmed device settings survive restart without overriding the local work folder", async (t) => {
   const { Agent } = await import("../agent.js");
   const dir = mkdtempSync(join(tmpdir(), "persisted-settings-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -707,10 +707,22 @@ test("confirmed device settings survive a processor restart", async (t) => {
     new Journal(join(dir, "state")),
     () => {},
   );
-  assert.equal(agent.config.workDir, work);
+  assert.equal(agent.config.workDir, dir);
   assert.equal(agent.config.paused, true);
   assert.equal(agent.config.maxParallel, 1);
   assert.equal(agent.config.memoryThresholdPercent, 60);
+  for (const extra of [{}, { workDirectory: join(dir, "remote-must-not-create") }]) {
+    await agent.runCommand({
+      requestId: randomUUID(), type: "CONFIGURE",
+      settings: { ...extra, paused: false, autostart: false, maxParallel: 3,
+        cpuThresholdPercent: 65, memoryThresholdPercent: 55, diskThresholdPercent: 75 },
+    } as any);
+    assert.equal(agent.config.workDir, dir);
+    assert.equal(agent.config.maxParallel, 3);
+    assert.equal(agent.config.cpuThresholdPercent, 65);
+    assert.equal(agent.config.paused, false);
+    assert.equal("workDirectory" in (agent.journal.state.appliedSettings || {}), false);
+  }
   await agent.close();
 });
 
