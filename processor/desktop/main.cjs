@@ -354,6 +354,10 @@ else {
       child.send({ type: "pause", paused });
       return snapshot;
     });
+    handle("processor:hide", () => {
+      window.hide();
+      return true;
+    });
     handle("processor:quit", () => {
       void quit();
       return true;

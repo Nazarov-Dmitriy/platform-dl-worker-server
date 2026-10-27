@@ -176,23 +176,24 @@ button:disabled {
   flex-wrap: wrap;
 }
 .summary {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  font-size: 12px;
-  color: var(--muted);
-  margin: 22px 0;
+  display: grid;
+  gap: 10px;
+  padding: 24px;
+  margin: 24px 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 13px;
 }
-.summary #detail {
-  text-align: right;
-  max-width: 70%;
-}
-footer {
-  font-size: 12px;
-  color: var(--muted);
+.summary h2 { margin: 0; color: var(--muted); font-size: 14px; }
+.summary #activity { font-size: 25px; font-weight: 700; }
+.summary #detail { color: var(--muted); overflow-wrap: anywhere; }
+.window-actions {
+  justify-content: flex-end;
   border-top: 1px solid var(--border);
-  padding-top: 16px;
+  padding-top: 20px;
 }
+#settings { margin-bottom: 24px; }
 .notice {
   background: #422730;
   border: 1px solid #69414c;

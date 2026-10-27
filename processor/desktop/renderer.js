@@ -116,6 +116,8 @@ form.onsubmit = (event) => {
 $("pause").onclick = () =>
   action(() => window.processor.pause(!current.paused));
 $("stop").onclick = () => action(() => window.processor.stop());
+$("hide").onclick = () => action(() => window.processor.hide());
+$("quit").onclick = () => action(() => window.processor.quit());
 window.processor.onStatus(draw);
 window.processor
   .state()

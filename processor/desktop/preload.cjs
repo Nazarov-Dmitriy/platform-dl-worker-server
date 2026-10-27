@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("processor", {
   start: () => invoke("processor:start"),
   stop: () => invoke("processor:stop"),
   pause: (paused) => invoke("processor:pause", paused),
+  hide: () => invoke("processor:hide"),
   quit: () => invoke("processor:quit"),
   autostart: (enabled) => invoke("processor:autostart", enabled),
   onStatus: (callback) => {
