@@ -19,9 +19,11 @@ function status(message?: string) {
       phase: agent?.session ? "connected" : agent ? "connecting" : "stopped",
       connected: !!agent?.session,
       running: agent?.running.size || 0,
+      processing: agent ? { maxParallel: agent.config.maxParallel, cpuThreads: agent.config.cpuThreads,
+        videoMode: agent.config.videoMode, audioMode: agent.config.audioMode } : undefined,
       jobs: agent ? [...agent.running.values()].map(r => ({
         id: r.attempt.jobId, type: r.job?.type || "media.transcode",
-        stage: r.stage, progress: r.progress,
+        stage: r.stage, progress: r.progress, encoder: r.encoder,
       })) : [],
       paused: !!agent?.config.paused,
       message:
@@ -116,6 +118,15 @@ process.on("message", async (input: any) => {
         agent.journal.state.appliedSettings.paused = input.paused;
       agent.journal.save();
       status();
+    } else if (input?.type === "processing" && agent) {
+      const s = input.settings;
+      if (!Number.isInteger(s?.maxParallel) || s.maxParallel < 1 || s.maxParallel > 64 ||
+          !Number.isInteger(s.cpuThreads) || s.cpuThreads < 1 || s.cpuThreads > 1024 ||
+          !["auto", "cpu", "gpu"].includes(s.videoMode) || !["auto", "cpu", "gpu"].includes(s.audioMode))
+        throw Error("INVALID_RESOURCE_CONFIG");
+      Object.assign(agent.config, s, { localSettings: true });
+      agent.nextHeartbeat = 0;
+      status("Настройки обработки применены. Текущие задания продолжаются; режимы и потоки применятся к новым.");
     } else if (input?.type === "stop") await stop();
   } catch {
     process.send?.({

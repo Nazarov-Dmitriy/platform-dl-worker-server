@@ -66,6 +66,8 @@ type Running = {
   grants: Link[];
   acks: Set<string>;
   stage: string;
+  encoder?: string;
+  processing?: Pick<Config, "videoMode" | "audioMode" | "cpuThreads" | "maxParallel">;
 };
 export class Agent {
   socket?: WebSocket;
@@ -92,7 +94,7 @@ export class Agent {
     const applied = journal.state.appliedSettings as any;
     if (applied) {
       config.paused = Boolean(applied.paused);
-      config.maxParallel = applied.maxParallel;
+      if (!config.localSettings) config.maxParallel = applied.maxParallel;
       config.cpuThresholdPercent = applied.cpuThresholdPercent;
       config.memoryThresholdPercent = applied.memoryThresholdPercent;
       config.diskThresholdPercent = applied.diskThresholdPercent;
@@ -128,7 +130,7 @@ export class Agent {
   caps() {
     const out: any[] = [];
     if (this.config.testExecutor || this.ffmpeg)
-      out.push({ ...transcodeCapability });
+      out.push({ ...transcodeCapability, profilePolicies: this.config.videoMode === "gpu" ? ["HARDWARE_ALLOWED"] : ["X264_EXACT", "HARDWARE_ALLOWED"] });
     const rec = this.journal.state.models.filter(
       (m) =>
         m.state === "ACTIVE" &&
@@ -376,6 +378,7 @@ export class Agent {
         grants: [],
         acks: new Set(),
         stage: "WAITING_SOURCE",
+        processing: { videoMode: this.config.videoMode, audioMode: this.config.audioMode, cpuThreads: this.config.cpuThreads, maxParallel: this.config.maxParallel },
         transferAbort: new AbortController(),
       };
       this.running.set(id, r);
@@ -712,6 +715,7 @@ export class Agent {
           r.lease,
           (m) => {
             if (r.ending) return;
+            if (m.type === "encoder") r.encoder = m.encoder;
             if (m.type === "progress") {
               r.progress = 0.1 + Math.min(0.7, (m.progress || 0) * 0.7);
               r.activity = m.sequence;
@@ -731,6 +735,8 @@ export class Agent {
             profile: job.params.profile,
             maxDurationSeconds: job.maxDurationSeconds,
             maxOutputBytes: job.maxOutputBytes,
+            videoMode: r.processing?.videoMode || this.config.videoMode || "auto",
+            cpuThreads: Math.max(1, Math.floor((r.processing?.cpuThreads || this.config.cpuThreads || 2) / (r.processing?.maxParallel || this.config.maxParallel))),
             ffmpeg: this.config.ffmpeg,
             ffprobe: this.config.ffprobe,
           },
@@ -903,6 +909,8 @@ export class Agent {
         model,
         dir,
         requested: speechParams.sourceLanguage || "auto",
+        audioMode: r.processing?.audioMode || this.config.audioMode || "auto",
+        cpuThreads: Math.max(1, Math.floor((r.processing?.cpuThreads || this.config.cpuThreads || 2) / (r.processing?.maxParallel || this.config.maxParallel))),
         whisperCpp: this.config.whisperCpp,
         ffmpeg: this.config.ffmpeg,
         ffprobe: this.config.ffprobe,
@@ -1237,7 +1245,7 @@ async function applyConfigure(agent: Agent, settings: any) {
   )
     throw new Error("INVALID_SETTINGS");
   agent.config.paused = Boolean(settings.paused);
-  agent.config.maxParallel = settings.maxParallel;
+  if (!agent.config.localSettings) agent.config.maxParallel = settings.maxParallel;
   agent.config.threshold = th;
   agent.config.cpuThresholdPercent = settings.cpuThresholdPercent;
   agent.config.memoryThresholdPercent = settings.memoryThresholdPercent;

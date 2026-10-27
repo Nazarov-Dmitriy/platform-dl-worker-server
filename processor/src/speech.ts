@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { InstalledModel } from "./journal.js";
@@ -49,11 +49,13 @@ export function transcribeSource(
   model: InstalledModel,
   requested: string,
   whisperCpp?: string,
+  mode: "auto" | "cpu" | "gpu" = "auto",
+  cpuThreads = 2,
 ): Transcript {
   if (model.executor === "catalog-test")
     return catalogTestSpeech(source, model.path, requested);
   if (model.executor === "whisper.cpp")
-    return whisperCppSpeech(source, model.path, requested, whisperCpp);
+    return whisperCppSpeech(source, model.path, requested, whisperCpp, mode, cpuThreads);
   throw new Error("EXECUTOR_UNAVAILABLE");
 }
 
@@ -95,9 +97,18 @@ function whisperCppSpeech(
   modelPath: string,
   requested: string,
   bin?: string,
+  mode: "auto" | "cpu" | "gpu" = "auto",
+  cpuThreads = 2,
 ): Transcript {
   const exe = bin || "whisper-cli";
-  const args = ["-m", modelPath, "-f", source, "-oj", "-np"];
+  const args = ["-m", modelPath, "-f", source, "-oj", "-np", "-t", String(cpuThreads)];
+  if (mode === "cpu") args.push("-ng");
+  if (mode === "gpu") {
+    const probe = spawnSync(exe, ["-m", modelPath, "-f", source, "-d", "1", "-nt", "-np", "-t", String(cpuThreads)],
+      { timeout: 60000, windowsHide: true, encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
+    if (probe.status !== 0 || !/whisper_backend_init_gpu: using [^\n]+ backend/.test(probe.stderr || "") ||
+        /failed to initialize .* backend/.test(probe.stderr || "")) throw Error("GPU_UNAVAILABLE");
+  }
   if (requested && requested !== "auto") args.push("-l", requested);
   else args.push("-l", "auto");
   execFileSync(exe, args, {
@@ -216,13 +227,15 @@ export function writeUtf8(path: string, text: string) {
   writeFileSync(path, text, { encoding: "utf8" });
 }
 
-export function extractAudio(ffmpeg: string, source: string, dest: string) {
+export function extractAudio(ffmpeg: string, source: string, dest: string, cpuThreads = 2) {
   execFileSync(
     ffmpeg,
     [
       "-y",
       "-protocol_whitelist",
       "file,pipe",
+      "-threads", String(cpuThreads),
+      "-filter_threads", "1",
       "-i",
       source,
       "-vn",

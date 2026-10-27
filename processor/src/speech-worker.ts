@@ -45,9 +45,9 @@ try {
       )
         throw new Error("INSUFFICIENT_DISK");
       input = wavPath(w.dir);
-      extractAudio(w.ffmpeg, w.source, input);
+      extractAudio(w.ffmpeg, w.source, input, w.cpuThreads || 2);
     }
-    result = transcribeSource(input, w.model, w.requested, w.whisperCpp);
+    result = transcribeSource(input, w.model, w.requested, w.whisperCpp, w.audioMode || "auto", w.cpuThreads || 2);
   } else if (w.operation === "translate") {
     if (w.model.executor === "transformers-js") {
       const { env, pipeline } = await import("@huggingface/transformers");

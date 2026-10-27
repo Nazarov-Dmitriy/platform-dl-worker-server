@@ -30,6 +30,7 @@ export function slotBudget(
     disk < (c.diskThresholdPercent ?? c.threshold)
     ? Math.min(
         c.maxParallel,
+        c.localSettings ? (c.cpuThreads || c.maxParallel) : c.maxParallel,
         Math.max(
           0,
           Math.floor((freeMemory - c.reserveMemoryBytes) / c.taskMemoryBytes),

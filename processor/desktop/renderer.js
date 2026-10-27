@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id),
-  form = $("settings");
+  form = $("settings"),
+  processingForm = $("processingSettings");
 let current = { phase: "stopped", running: 0, connected: false, paused: false },
   caPath = "",
   busy = false;
@@ -11,6 +12,39 @@ function screen(settings) {
   $("settingsScreen").hidden = !settings;
   window.scrollTo(0, 0);
 }
+function settingsTab(processing) {
+  form.hidden = processing;
+  processingForm.hidden = !processing;
+  $("startupCard").hidden = processing;
+  $("connectionTab").setAttribute("aria-pressed", String(!processing));
+  $("processingTab").setAttribute("aria-pressed", String(processing));
+}
+$("connectionTab").onclick = () => settingsTab(false);
+$("processingTab").onclick = () => settingsTab(true);
+function processingInput() {
+  return { maxParallel: Number(processingForm.elements.maxParallel.value),
+    cpuThreads: Number(processingForm.elements.cpuThreads.value),
+    videoMode: processingForm.elements.videoMode.value,
+    audioMode: processingForm.elements.audioMode.value,
+    workDir: processingForm.elements.workDir.value };
+}
+function fillProcessing(settings) {
+  for (const name of ["workDir", "maxParallel", "cpuThreads", "videoMode", "audioMode"])
+    if (settings[name] != null) processingForm.elements[name].value = settings[name];
+  if (settings.cpuCount) {
+    processingForm.elements.cpuThreads.max = settings.cpuCount;
+    $("cpuHint").textContent = "Доступно логических CPU-потоков: " + settings.cpuCount + ".";
+  }
+}
+processingForm.onsubmit = event => {
+  event.preventDefault();
+  void action(async () => {
+    const settings = await window.processor.processing(processingInput());
+    fillProcessing(settings);
+    $("processingNotice").textContent = "Сохранено. Параллельность обновлена; режимы и потоки применятся к новым заданиям.";
+    $("processingNotice").hidden = false;
+  });
+};
 $("openSettings").onclick = () => screen(true);
 $("back").onclick = () => screen(false);
 $("start").onclick = () => configured
@@ -65,6 +99,11 @@ function drawJobs(jobs = []) {
     const id = document.createElement("small"); id.textContent = job.id;
     name.append(title, id);
     const stage = document.createElement("td"); stage.textContent = stages[job.stage] || "Подготовка";
+    if (job.stage === "TRANSCODING" && job.encoder) {
+      const engine = document.createElement("small");
+      engine.textContent = job.encoder === "h264_nvenc" ? "NVIDIA NVENC" : job.encoder === "copy" ? "Без перекодирования" : "Процессор";
+      stage.append(engine);
+    }
     const cell = document.createElement("td");
     const wrap = document.createElement("div"); wrap.className = "job-progress";
     const bar = document.createElement("progress"); bar.max = 100;
@@ -115,6 +154,10 @@ function draw(status) {
     .querySelectorAll("input,button")
     .forEach((input) => (input.disabled = active || busy));
   $("connect").disabled = active || busy;
+  processingForm.querySelectorAll("input,button").forEach(input => input.disabled = busy);
+  processingForm.elements.workDir.disabled = active || busy;
+  $("chooseDirectory").disabled = active || busy;
+
   $("pause").disabled = !active || busy;
   $("stop").disabled = !active || busy;
   $("pause").textContent = status.paused ? "Продолжить" : "Пауза";
@@ -144,7 +187,7 @@ $("chooseCertificate").onclick = () =>
 $("chooseDirectory").onclick = () =>
   action(async () => {
     const chosen = await window.processor.directory();
-    if (chosen) form.elements.workDir.value = chosen;
+    if (chosen) processingForm.elements.workDir.value = chosen;
   });
 form.onsubmit = (event) => {
   event.preventDefault();
@@ -154,8 +197,7 @@ form.onsubmit = (event) => {
       deviceId: form.elements.deviceId.value,
       token: form.elements.token.value,
       caPath,
-      workDir: form.elements.workDir.value,
-      maxParallel: Number(form.elements.maxParallel.value),
+      ...processingInput(),
     });
     form.elements.token.value = "";
     $("tokenHint").textContent =
@@ -177,7 +219,8 @@ window.processor
   .state()
   .then(({ settings, status }) => {
     configured = !!settings.tokenSet;
-    for (const name of ["server", "deviceId", "workDir", "maxParallel"])
+    fillProcessing(settings);
+    for (const name of ["server", "deviceId"])
       if (settings[name] != null) form.elements[name].value = settings[name];
     if (settings.tokenSet)
       $("tokenHint").textContent =

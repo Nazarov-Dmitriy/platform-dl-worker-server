@@ -48,7 +48,7 @@ export function crfValue(crf: number) {
 }
 export function decidePlan(probe: Probe, profile: Profile): PlanItem[] {
   if (profile.allowUpscale) throw new Error("PROFILE_SUBSTITUTION_FORBIDDEN");
-  if (profile.encoderPolicy !== "X264_EXACT" || profile.codec !== "h264")
+  if (!["X264_EXACT", "HARDWARE_ALLOWED"].includes(profile.encoderPolicy) || profile.codec !== "h264")
     throw new Error("UNSUPPORTED_PROFILE");
   const requested = profile.qualities.filter(
     (q, i) => profile.qualities.indexOf(q) === i,

@@ -5,6 +5,8 @@
 [site-connections-discussion.md](./plan/site-connections-discussion.md).
 
 ## Не выполнено
+- [ ] **Ускорение Mac mini M2** — VideoToolbox для видео, Metal для речи, проверка отдельной macOS-сборки; Windows-режимы реализованы в 0.8.0. [Продолжение плана](./plan/processor-desktop-plan.md#настройки-обработки-продолжение-для-mac-m2).
+
 - [ ] **Приложение обработчика для Windows и macOS** — ручной запуск, окно, работа в фоне и tray/menu bar; автозапуск по желанию. Linux отложен.
   - [ ] **Бэк / ядро** — интеграция существующего Agent и жизненного цикла; [план](./plan/processor-desktop-plan.md#этап-1--интеграция-существующего-обработчика).
   - [ ] **Фронт / desktop** — общая оболочка, настройки и сборки Windows `.exe` / macOS `.app`; [план](./plan/processor-desktop-plan.md#этап-2--интерфейс-и-фон).

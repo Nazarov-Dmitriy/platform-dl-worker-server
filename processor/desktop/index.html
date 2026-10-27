@@ -46,6 +46,10 @@
       </section>
       <section id="settingsScreen" hidden>
         <div class="screen-heading"><h1>Настройки</h1><button id="back" type="button">К заданиям</button></div>
+      <nav class="settings-tabs" aria-label="Раздел настроек">
+        <button id="connectionTab" type="button" aria-pressed="true">Подключение</button>
+        <button id="processingTab" type="button" aria-pressed="false">Обработка и ресурсы</button>
+      </nav>
       <form id="settings">
         <div class="card">
           <h2>Сервер и устройство</h2>
@@ -97,37 +101,36 @@
           >
           <p id="fingerprint" class="fingerprint" hidden></p>
         </div>
-        <div class="card">
-          <h2>Обработка</h2>
-          <label
-            >Рабочая папка
-            <div class="picker">
-              <input
-                name="workDir"
-                readonly
-                required
-                placeholder="Папка для файлов обработки"
-              /><button id="chooseDirectory" type="button">
-                Выбрать папку
-              </button>
-            </div></label
-          ><label class="parallel"
-            >Параллельные задания<input
-              name="maxParallel"
-              type="number"
-              min="1"
-              max="64"
-              value="1"
-              required
-          /></label>
-        </div>
         <div class="actions">
           <button id="connect" class="primary" type="submit">
             Сохранить и подключить</button
           >
         </div>
       </form>
-      <section class="card startup-card">
+      <form id="processingSettings" hidden>
+        <div class="card">
+          <h2>Обработка и ресурсы</h2>
+          <label>Рабочая папка<div class="picker"><input name="workDir" readonly required placeholder="Папка для файлов обработки"><button id="chooseDirectory" type="button">Выбрать папку</button></div></label>
+          <label class="parallel">Параллельные задания<input name="maxParallel" type="number" min="1" max="64" value="1" required></label>
+          <label class="parallel">Бюджет CPU-потоков<input name="cpuThreads" type="number" min="1" value="2" required></label>
+          <p id="cpuHint" class="hint"></p>
+          <p class="hint">Бюджет делится между параллельными заданиями. Это ограничение потоков, а не точный процент CPU. При работе на видеокарте CPU тоже используется.</p>
+          <fieldset class="mode-options"><legend>Видео</legend><div class="mode-choices">
+            <label><input type="radio" name="videoMode" value="auto" checked>Автоматически</label>
+            <label><input type="radio" name="videoMode" value="cpu">Процессор</label>
+            <label><input type="radio" name="videoMode" value="gpu">Видеокарта</label>
+          </div><p class="hint">Авто использует NVIDIA NVENC, если он доступен. Старые задания с обязательным CPU-профилем выполняются на CPU.</p></fieldset>
+          <fieldset class="mode-options"><legend>Распознавание речи</legend><div class="mode-choices">
+            <label><input type="radio" name="audioMode" value="auto" checked>Автоматически</label>
+            <label><input type="radio" name="audioMode" value="cpu">Процессор</label>
+            <label><input type="radio" name="audioMode" value="gpu">Видеокарта</label>
+          </div><p class="hint">Авто использует ускорение установленного движка. Для GeForce нужна сборка whisper.cpp с CUDA. Подготовка аудиофайла выполняется на CPU.</p></fieldset>
+        </div>
+        <div class="actions"><button id="applyProcessing" class="primary" type="submit">Сохранить настройки обработки</button></div>
+        <p class="hint">Параллельность меняется сразу. Режимы и CPU-потоки применяются к новым заданиям; текущие продолжают работу.</p>
+        <p id="processingNotice" class="notice success" role="status" hidden></p>
+      </form>
+      <section class="card startup-card" id="startupCard">
         <label class="startup-toggle"
           ><input id="autostart" type="checkbox" disabled /><span
             ><strong>Запускать при входе в Windows</strong

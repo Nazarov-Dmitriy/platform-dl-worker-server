@@ -729,6 +729,12 @@ test("confirmed device settings survive restart without overriding the local wor
     assert.equal("autostart" in (agent.journal.state.appliedSettings || {}), false);
     assert.equal("workDirectory" in (agent.journal.state.appliedSettings || {}), false);
   }
+  agent.config.localSettings = true;
+  agent.config.maxParallel = 5;
+  await agent.runCommand({requestId: randomUUID(), type: "CONFIGURE", settings: {
+    paused: false, maxParallel: 1, cpuThresholdPercent: 70, memoryThresholdPercent: 70, diskThresholdPercent: 70,
+  }} as any);
+  assert.equal(agent.config.maxParallel, 5, "remote settings must preserve the local concurrency preference");
   await agent.close();
 });
 

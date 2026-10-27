@@ -271,3 +271,16 @@ fieldset:disabled {
 .job-progress { display: flex; align-items: center; gap: 12px; min-width: 170px; }
 .job-progress progress { width: 140px; height: 8px; accent-color: var(--accent); }
 .job-progress span { white-space: nowrap; font-size: 12px; }
+
+.settings-tabs { display: flex; gap: 12px; margin: 0 0 24px; flex-wrap: wrap; }
+.settings-tabs button[aria-pressed="true"] { background: var(--accent); color: #08212b; }
+.mode-options { border: 0; margin: 26px 0 0; padding: 0; }
+.mode-options legend { font-weight: 650; margin-bottom: 14px; }
+.mode-choices { display: flex; flex-wrap: wrap; gap: 12px; }
+.mode-choices label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 14px 18px; border: 1px solid var(--border); border-radius: 9px; }
+.mode-choices input { width: 18px; min-width: 18px; margin: 0; accent-color: var(--accent); }
+.mode-options .hint { margin-top: 12px; }
+#processingSettings > .hint { margin-top: 16px; }
+#processingNotice { margin-top: 18px; }
+
+.notice.success { color: #a9eac4; background: #173c30; border: 1px solid #285c47; }

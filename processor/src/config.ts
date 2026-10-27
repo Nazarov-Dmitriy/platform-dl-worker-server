@@ -6,6 +6,10 @@ export type Config = {
   stateDir: string;
   workDir: string;
   maxParallel: number;
+  cpuThreads?: number;
+  videoMode?: "auto" | "cpu" | "gpu";
+  audioMode?: "auto" | "cpu" | "gpu";
+  localSettings?: boolean;
   reserveMemoryBytes: number;
   taskMemoryBytes: number;
   reserveDiskBytes: number;
@@ -33,7 +37,7 @@ export function loadConfig(path: string): Config {
     "deviceId",
     "stateDir",
     "workDir",
-    "maxParallel",
+    "maxParallel", "cpuThreads", "videoMode", "audioMode", "localSettings",
     "reserveMemoryBytes",
     "taskMemoryBytes",
     "reserveDiskBytes",
@@ -99,6 +103,10 @@ export function loadConfig(path: string): Config {
     stateDir: resolve(v.stateDir),
     workDir: resolve(v.workDir),
     maxParallel: v.maxParallel ?? 2,
+    cpuThreads: v.cpuThreads ?? 2,
+    videoMode: v.videoMode ?? "auto",
+    audioMode: v.audioMode ?? "auto",
+    localSettings: v.localSettings === true,
     reserveMemoryBytes: v.reserveMemoryBytes ?? 2 * 1024 ** 3,
     taskMemoryBytes: v.taskMemoryBytes ?? 1024 ** 3,
     reserveDiskBytes: v.reserveDiskBytes ?? 2 * 1024 ** 3,
@@ -151,5 +159,8 @@ export function loadConfig(path: string): Config {
   ])
     if (!Number.isInteger(threshold) || threshold! < 1 || threshold! > 80)
       throw new Error("INVALID_RESOURCE_CONFIG");
+  if (!Number.isInteger(c.cpuThreads) || c.cpuThreads! < 1 || c.cpuThreads! > 1024 ||
+      !["auto", "cpu", "gpu"].includes(c.videoMode!) || !["auto", "cpu", "gpu"].includes(c.audioMode!))
+    throw new Error("INVALID_RESOURCE_CONFIG");
   return c;
 }

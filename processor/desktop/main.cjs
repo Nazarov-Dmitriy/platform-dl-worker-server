@@ -19,6 +19,8 @@ const {
 } = require("node:fs");
 const { join } = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { validateProcessing } = require("./processing.cjs");
+const { availableParallelism } = require("node:os");
 const { validateSettings } = require("./settings.cjs");
 const { createLoginController, NAME } = require("./login.cjs");
 app.setName("Worker Processor");
@@ -104,7 +106,7 @@ function setDesktopAutostart(enabled) {
   return autostartState();
 }
 function publicSettings() {
-  return { ...saved, tokenSet: existsSync(join(directory, "credential.bin")) };
+  return { ...validateProcessing(saved), ...saved, cpuCount: availableParallelism(), tokenSet: existsSync(join(directory, "credential.bin")) };
 }
 async function stop() {
   if (!child) return;
@@ -240,6 +242,17 @@ else {
         );
       } catch {}
     }
+    // Migrate previous releases once so the visible preferences match the runtime config.
+    const processingConfig = join(directory, "config.json");
+    if (existsSync(processingConfig)) {
+      try {
+        const config = JSON.parse(readFileSync(processingConfig, "utf8"));
+        const preferences = validateProcessing({ ...config, ...saved });
+        saved = { ...saved, ...preferences };
+        atomic("settings.json", JSON.stringify(saved, null, 2));
+        atomic("config.json", JSON.stringify({ ...config, ...preferences, localSettings: true }, null, 2));
+      } catch { snapshot.message = "Проверьте настройки обработки перед запуском."; }
+    }
     restoreDesktopAutostart();
     window = new BrowserWindow({
       width: 1160,
@@ -349,7 +362,7 @@ else {
         server: settings.server,
         deviceId: settings.deviceId,
         workDir: settings.workDir,
-        maxParallel: settings.maxParallel,
+        ...validateProcessing({ ...saved, ...input }),
         fingerprint: settings.fingerprint,
       };
       atomic(
@@ -363,8 +376,9 @@ else {
             tlsCaFile: settings.ca ? previousCa : undefined,
             stateDir: join(directory, "state"),
             workDir: settings.workDir,
-            maxParallel: settings.maxParallel,
+            ...validateProcessing({ ...saved, ...input }),
             paused: false,
+            localSettings: true,
           },
           null,
           2,
@@ -372,6 +386,30 @@ else {
       );
       atomic("settings.json", JSON.stringify(saved, null, 2));
       emit({ autostart: autostartState() });
+      return publicSettings();
+    });
+    handle("processor:processing", async (input) => {
+      const next = validateProcessing(input);
+      let workDir = saved.workDir;
+      if (input.workDir && input.workDir !== saved.workDir && saved.server && saved.deviceId) {
+        if (child) throw Error("Остановите обработчик перед сменой рабочей папки.");
+        workDir = validateSettings({ ...saved, ...input }).workDir;
+        const journalPath = join(directory, "state", "journal.json");
+        if (existsSync(journalPath)) {
+          const journal = JSON.parse(readFileSync(journalPath, "utf8"));
+          if (journal.attempts?.length) throw Error("Сначала завершите незавершённые задания перед сменой папки.");
+          delete journal.workVolume;
+          writeFileSync(journalPath, JSON.stringify(journal), { mode: 0o600 });
+        }
+      }
+      const configPath = join(directory, "config.json");
+      if (existsSync(configPath)) {
+        const config = JSON.parse(readFileSync(configPath, "utf8"));
+        atomic("config.json", JSON.stringify({ ...config, ...next, workDir, localSettings: true }, null, 2));
+      }
+      saved = { ...saved, ...next, workDir };
+      atomic("settings.json", JSON.stringify(saved, null, 2));
+      if (child?.connected) child.send({ type: "processing", settings: next });
       return publicSettings();
     });
     handle("processor:start", start);

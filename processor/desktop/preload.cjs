@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("processor", {
   directory: () => invoke("processor:directory"),
   certificate: () => invoke("processor:certificate"),
   save: (settings) => invoke("processor:save", settings),
+  processing: (settings) => invoke("processor:processing", settings),
   start: () => invoke("processor:start"),
   stop: () => invoke("processor:stop"),
   pause: (paused) => invoke("processor:pause", paused),

@@ -1,3 +1,5 @@
+import { canNvenc, selectVideoEncoder, videoCodecArgs } from "./encoding.js";
+import { setPriority, constants } from "node:os";
 import { VideoProgress } from "./video-progress.js";
 import { performance } from "node:perf_hooks";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
@@ -17,6 +19,8 @@ let monoDeadline = 0,
   stopping = false;
 let ffmpegProc: ChildProcess | undefined;
 let work: any;
+let encoder = "libx264";
+let threads = 2;
 function exit(code = 0) {
   if (stopping) return;
   stopping = true;
@@ -111,11 +115,16 @@ async function run() {
     throw new Error("DURATION_LIMIT");
   const profile: Profile = work.profile;
   const plan = decidePlan(probe, profile);
+  threads = Math.max(1, Math.min(1024, Number(work.cpuThreads) || 2));
+  const needsEncoding = plan.some(item => item.mode === "ENCODE");
+  if (needsEncoding) encoder = selectVideoEncoder(work.videoMode || "auto", profile.encoderPolicy,
+    work.videoMode !== "cpu" && profile.encoderPolicy === "HARDWARE_ALLOWED" && canNvenc(work.ffmpeg));
   const renditions = [];
   let sequence = 0;
   for (const [index, item] of plan.entries()) {
     const dir = join(work.outDir, folder(item.quality));
     mkdirSync(dir, { recursive: true });
+    process.send?.({ type: "encoder", encoder: item.mode === "COPY" ? "copy" : encoder });
     await runFfmpeg(item, probe, profile, work.source, dir, (fraction) => {
       sequence++;
       process.send?.({
@@ -172,6 +181,8 @@ function runFfmpeg(
     "-y",
     "-protocol_whitelist",
     "file,pipe",
+    "-threads", String(threads),
+    "-filter_threads", "1",
     "-i",
     source,
     "-map",
@@ -194,12 +205,7 @@ function runFfmpeg(
     args.push(
       "-vf",
       `scale=${item.width}:${item.height}:force_original_aspect_ratio=decrease,pad=${item.width}:${item.height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p`,
-      "-c:v",
-      "libx264",
-      "-preset",
-      profile.preset,
-      "-crf",
-      String(crfValue(profile.crf)),
+      ...videoCodecArgs(encoder, profile.preset, crfValue(profile.crf), item.targetKbps, threads),
       "-pix_fmt",
       "yuv420p",
       "-g",
@@ -238,6 +244,9 @@ function runFfmpeg(
       windowsHide: true,
       detached: process.platform !== "win32",
     });
+    if (ffmpegProc.pid) {
+      try { setPriority(ffmpegProc.pid, constants.priority.PRIORITY_BELOW_NORMAL); } catch {}
+    }
     const progress = new VideoProgress(probe.duration, onProgress);
     ffmpegProc.stdout?.on("data", chunk => progress.push(chunk.toString()));
     ffmpegProc.stderr?.resume();
