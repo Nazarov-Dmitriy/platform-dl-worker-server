@@ -58,6 +58,26 @@ class UpdateTests(unittest.TestCase):
         self.updater.compose = lambda *args: None
         self.updater.health = lambda: None
 
+    def test_maintenance_and_polling_close_every_connection(self):
+        # A sqlite connection context only commits/rolls back; it does not close.
+        # Retained handles can keep an unlinked WAL shared-memory file after update.
+        connections = []
+        connect = sqlite3.connect
+        def opened(*args, **kwargs):
+            db = connect(*args, **kwargs)
+            connections.append(db)
+            return db
+        with patch('update.sqlite3.connect', side_effect=opened):
+            self.updater.wait_idle()
+            self.assertEqual(self.updater.active(), 0)
+            self.updater.maintenance(False)
+        self.assertGreaterEqual(len(connections), 4)
+        for db in connections:
+            with self.assertRaises(sqlite3.ProgrammingError):
+                db.execute('SELECT 1')
+        with connect(self.target / 'data/dispatcher.db') as db:
+            self.assertEqual(db.execute("SELECT value FROM metadata WHERE key='maintenance'").fetchone()[0], '0')
+
     def test_version_comparison_and_invalid_releases(self):
         self.assertGreater(update.version('worker-v1.10.0'), update.version('worker-v1.9.9'))
         for tag in ('latest','worker-v01.2.3','worker-v1.2','worker-v1.2.3;rm','worker-v1.2.3-beta'):

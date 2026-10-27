@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Root-owned updater; the dispatcher can only check/install published releases over a Unix socket."""
+from contextlib import closing
 import argparse
 import fcntl
 import hashlib
@@ -210,11 +211,14 @@ class Updater:
                 with (self.target / ".install.lock").open("a") as lock:
                     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     self.install(tag)
-        except Exception:
+        except Exception as error:
             logging.exception("Worker release operation failed")
             # Do not leak HTTP headers, tokens, subprocess output or host paths to the panel.
             if self.status()["phase"] not in ("rolled_back", "rollback_failed"):
-                self.publish(phase="failed", message="Не удалось выполнить обновление. Проверьте доступ к GitHub и журнал службы обновления.")
+                self.publish(phase="failed", message=(
+                    "Служба обновления не смогла прочитать базу диспетчера. Проверьте журнал службы обновления."
+                    if isinstance(error, sqlite3.DatabaseError) else
+                    "Не удалось выполнить обновление. Проверьте доступ к GitHub и журнал службы обновления."))
             if self.draining and self.resume and not self.journal.exists():
                 self.maintenance(False)
         finally:
@@ -231,15 +235,16 @@ class Updater:
         return result.stdout
 
     def maintenance(self, enabled):
-        with sqlite3.connect(self.target / "data/dispatcher.db", timeout=10) as db:
+        with closing(sqlite3.connect(self.target / "data/dispatcher.db", timeout=10)) as db:
             db.execute("INSERT INTO metadata(key,value) VALUES('maintenance',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", ("1" if enabled else "0",))
+            db.commit()
 
     def active(self):
-        with sqlite3.connect((self.target / "data/dispatcher.db").as_uri() + "?mode=ro", uri=True) as db:
+        with closing(sqlite3.connect((self.target / "data/dispatcher.db").as_uri() + "?mode=ro", uri=True)) as db:
             return db.execute("SELECT count(*) FROM assignments WHERE state IN ('OFFERED','RUNNING','CANCELLING','RELEASING')").fetchone()[0]
 
     def wait_idle(self):
-        with sqlite3.connect(self.target / "data/dispatcher.db", timeout=10) as db:
+        with closing(sqlite3.connect(self.target / "data/dispatcher.db", timeout=10)) as db:
             previous = db.execute("SELECT value FROM metadata WHERE key='maintenance'").fetchone()
             self.resume = not previous or previous[0] != "1"
         self.draining = True

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """worker install/start/stop/status/logs/where/export. All state stays in ./instance."""
+from contextlib import closing
 import argparse
 import fcntl
 import getpass
@@ -84,7 +85,7 @@ def exported(root, target, compose, environment, output):
     output = Path(output).resolve()
     if output.exists() or output.is_relative_to(root) or output.is_relative_to(target):
         raise ValueError("Укажите новый архив за пределами папки пакета и данных")
-    with sqlite3.connect((target / "data/dispatcher.db").as_uri() + "?mode=ro", uri=True) as db:
+    with closing(sqlite3.connect((target / "data/dispatcher.db").as_uri() + "?mode=ro", uri=True)) as db:
         active = db.execute("SELECT count(*) FROM assignments WHERE state IN ('OFFERED','RUNNING','CANCELLING','RELEASING')").fetchone()[0]
         maintenance = db.execute("SELECT value FROM metadata WHERE key='maintenance'").fetchone()
         if active or not maintenance or maintenance[0] != "1":
