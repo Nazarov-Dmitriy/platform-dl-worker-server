@@ -351,12 +351,12 @@ func (s *Store) DecidePublication(ctx context.Context, site, jobID string, raw [
 		return nil, delivery, e
 	}
 	var dec struct {
-		ArtifactID     string   `json:"artifactId"`
-		Fence          Fence    `json:"fence"`
-		ManifestSHA256 string   `json:"manifestSha256"`
-		Decision       string   `json:"decision"`
-		PublicationID  string   `json:"publicationId"`
-		ClaimID        string   `json:"claimId"`
+		ArtifactID     string    `json:"artifactId"`
+		Fence          Fence     `json:"fence"`
+		ManifestSHA256 string    `json:"manifestSha256"`
+		Decision       string    `json:"decision"`
+		PublicationID  string    `json:"publicationId"`
+		ClaimID        string    `json:"claimId"`
 		Error          *APIError `json:"error"`
 	}
 	_ = json.Unmarshal(raw, &dec)
@@ -738,7 +738,7 @@ func checkLinkURL(link Link) error {
 	}
 	host := strings.ToLower(u.Hostname())
 	if u.Scheme == "http" {
-		if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+		if host != "127.0.0.1" && host != "localhost" && host != "::1" && !strings.HasSuffix(host, ".localhost") {
 			return problem(400, "INVALID_REQUEST", "Non-local grant URLs must use TLS")
 		}
 	} else if u.Scheme != "https" {

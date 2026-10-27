@@ -31,6 +31,7 @@ export async function downloadLink(
   backoff = DEFAULT_BACKOFF,
   now = () => Date.now(),
   signal?: AbortSignal,
+  onProgress?: (bytes: number) => void,
 ) {
   if (link.method !== "GET")
     throw new TransferError("INVALID_GRANT", "GET required", false, true);
@@ -71,6 +72,7 @@ export async function downloadLink(
                 true,
               ),
             );
+          onProgress?.(received);
           callback(null, chunk);
         },
       });

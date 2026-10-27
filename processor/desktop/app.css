@@ -59,7 +59,7 @@ header {
   border-color: #285c47;
 }
 main {
-  max-width: 850px;
+  max-width: 1100px;
   padding: 28px 32px 24px;
   margin: auto;
 }
@@ -260,3 +260,14 @@ fieldset:disabled {
 .dashboard-actions { margin: 24px 0; }
 #dashboard { min-height: 360px; }
 #workState { font-size: 18px; font-weight: 600; }
+
+.jobs-card { margin: 28px 0; padding: 24px; border: 1px solid var(--border); border-radius: 12px; }
+.jobs-card h2 { margin: 0 0 22px; }
+.jobs-scroll { overflow-x: auto; }
+.jobs-table { width: 100%; border-collapse: collapse; text-align: left; }
+.jobs-table th { padding: 14px 16px; color: var(--muted); font-size: 12px; }
+.jobs-table td { padding: 20px 16px; border-top: 1px solid var(--border); }
+.jobs-table small { display: block; margin-top: 8px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.job-progress { display: flex; align-items: center; gap: 12px; min-width: 170px; }
+.job-progress progress { width: 140px; height: 8px; accent-color: var(--accent); }
+.job-progress span { white-space: nowrap; font-size: 12px; }

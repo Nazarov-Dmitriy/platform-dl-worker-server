@@ -242,7 +242,7 @@ else {
     }
     restoreDesktopAutostart();
     window = new BrowserWindow({
-      width: 960,
+      width: 1160,
       height: 820,
       minWidth: 620,
       minHeight: 620,

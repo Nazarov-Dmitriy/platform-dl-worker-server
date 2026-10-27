@@ -29,6 +29,14 @@
           <span id="workState">Обработчик не запущен</span>
           <span id="detail">Готов к настройке подключения</span>
         </section>
+        <section class="jobs-card" aria-label="Задания этого устройства">
+          <h2>Задания на этом устройстве</h2>
+          <div class="jobs-scroll"><table class="jobs-table">
+            <thead><tr><th>Задание</th><th>Этап</th><th>Прогресс</th></tr></thead>
+            <tbody id="jobsBody"></tbody>
+          </table></div>
+          <p id="jobsEmpty" class="hint">Активных заданий пока нет.</p>
+        </section>
         <p class="hint">Новые задания назначает сервер. Общая очередь доступна в панели диспетчера.</p>
         <div class="actions dashboard-actions">
           <button id="start" class="primary" type="button">Подключиться</button>

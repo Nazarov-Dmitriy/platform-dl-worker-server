@@ -19,6 +19,10 @@ function status(message?: string) {
       phase: agent?.session ? "connected" : agent ? "connecting" : "stopped",
       connected: !!agent?.session,
       running: agent?.running.size || 0,
+      jobs: agent ? [...agent.running.values()].map(r => ({
+        id: r.attempt.jobId, type: r.job?.type || "media.transcode",
+        stage: r.stage, progress: r.progress,
+      })) : [],
       paused: !!agent?.config.paused,
       message:
         lastMessage ||

@@ -644,8 +644,12 @@ export class Agent {
       }),
     );
     let dest = join(dir, "source.bin");
-    r.progress = 0.05;
+    r.progress = 0;
     r.stage = "DOWNLOADING";
+    let downloadedBytes = 0;
+    const downloadProgress = (bytes: number) => {
+      r.progress = Math.max(r.progress || 0, Math.min(0.1, (downloadedBytes + bytes) / Math.max(1, job.source.bytes) * 0.1));
+    };
     if (job.source.kind === "HLS") {
       const sourceDir = join(dir, "source");
       for (const part of job.source.files) {
@@ -662,8 +666,10 @@ export class Agent {
             undefined,
             undefined,
             r.transferAbort?.signal,
+            downloadProgress,
           ),
         );
+        downloadedBytes += part.bytes;
       }
       dest = validateHlsInput(
         sourceDir,
@@ -679,6 +685,7 @@ export class Agent {
           undefined,
           undefined,
           r.transferAbort?.signal,
+          downloadProgress,
         ),
       );
     }
@@ -706,7 +713,7 @@ export class Agent {
           (m) => {
             if (r.ending) return;
             if (m.type === "progress") {
-              r.progress = 0.1 + Math.min(0.5, (m.progress || 0) * 0.5);
+              r.progress = 0.1 + Math.min(0.7, (m.progress || 0) * 0.7);
               r.activity = m.sequence;
               r.lastProgress = Date.now();
             }
@@ -796,6 +803,8 @@ export class Agent {
     );
     r.progress = 0.85;
     r.stage = "UPLOADING";
+    let uploadedBytes = 0;
+    const uploadBytes = files.reduce((sum, file) => sum + file.bytes, 0);
     for (const file of files) {
       const disk =
         file.kind === "MASTER" ||
@@ -806,10 +815,13 @@ export class Agent {
       await this.transfer(file.path, "PUT", r, (link) =>
         uploadLink(link, disk, undefined, undefined, r.transferAbort?.signal),
       );
+      uploadedBytes += file.bytes;
+      r.progress = 0.85 + 0.13 * uploadedBytes / Math.max(1, uploadBytes);
     }
     r.attempt.awaitingPublication = true;
     r.attempt.started = true;
     r.stage = "WAITING_PUBLICATION";
+    r.progress = 0.99;
     await this.durable(
       r,
       frame("job.upload.complete", {

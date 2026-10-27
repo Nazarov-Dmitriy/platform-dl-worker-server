@@ -259,3 +259,39 @@ func TestRejectedPublicationFailsWithoutRequeue(t *testing.T) {
 		t.Fatalf("%+v %v", view, e)
 	}
 }
+
+func TestLocalStorageGrantURLs(t *testing.T) {
+	for _, raw := range []string{"http://s3.localhost:9000/media/source", "http://localhost:9000/source", "http://127.0.0.1:9000/source", "https://storage.example/source"} {
+		if err := checkLinkURL(Link{URL: raw}); err != nil {
+			t.Fatalf("accepted storage endpoint %s: %v", raw, err)
+		}
+	}
+	for _, raw := range []string{"http://storage.example/source", "http://localhost.example/source", "http://s3.localhost.example/source", "http://192.168.1.2/source"} {
+		if err := checkLinkURL(Link{URL: raw}); err == nil {
+			t.Fatalf("non-local HTTP endpoint accepted: %s", raw)
+		}
+	}
+}
+func TestLocalStorageSourceGrantReachesDevice(t *testing.T) {
+	s, _, _ := openTest(t)
+	site, p, session, o := runningOffer(t, s)
+	if err := s.RequestSource(testContext, p, session, o.Fence, o.JobID); err != nil {
+		t.Fatal(err)
+	}
+	page, err := s.ListTransfers(testContext, site.ID, o.JobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := page["requests"].([]TransferRequest)
+	_, err = s.GrantTransfer(testContext, site.ID, o.JobID, encode(TransferGrant{
+		ProtocolVersion: "2.0", RequestID: requests[0].ID, Fence: o.Fence, Page: 0, LastPage: true,
+		Links: []Link{{Path: "source", ObjectName: "uploads/video.mp4", URL: "http://s3.localhost:9000/media/source", ExpiresAt: stamp(s.now().Add(time.Hour)), Method: "GET", Headers: map[string]string{}}},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	grants, err := s.PendingGrants(testContext, p, session)
+	if err != nil || len(grants) != 1 {
+		t.Fatalf("source grant not delivered: %v, %d", err, len(grants))
+	}
+}

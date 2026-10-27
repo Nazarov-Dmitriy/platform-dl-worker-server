@@ -1,3 +1,4 @@
+import { VideoProgress } from "./video-progress.js";
 import { performance } from "node:perf_hooks";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -112,15 +113,15 @@ async function run() {
   const plan = decidePlan(probe, profile);
   const renditions = [];
   let sequence = 0;
-  for (const item of plan) {
+  for (const [index, item] of plan.entries()) {
     const dir = join(work.outDir, folder(item.quality));
     mkdirSync(dir, { recursive: true });
-    await runFfmpeg(item, probe, profile, work.source, dir, () => {
+    await runFfmpeg(item, probe, profile, work.source, dir, (fraction) => {
       sequence++;
       process.send?.({
         type: "progress",
         sequence,
-        progress: Math.min(0.9, sequence / (plan.length * 20)),
+        progress: (index + fraction) / plan.length,
       });
     });
     const playlist = folder(item.quality) + "/index.m3u8";
@@ -159,13 +160,14 @@ function runFfmpeg(
   profile: Profile,
   source: string,
   dir: string,
-  onProgress: () => void,
+  onProgress: (fraction: number) => void,
 ) {
   const gop = Math.max(
     1,
     Math.round((probe.fps || 30) * profile.segmentDurationSeconds),
   );
   const args = [
+    "-progress", "pipe:1", "-nostats",
     "-hide_banner",
     "-y",
     "-protocol_whitelist",
@@ -232,11 +234,13 @@ function runFfmpeg(
   );
   return new Promise<void>((resolve, reject) => {
     ffmpegProc = spawn(work.ffmpeg, args, {
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
       detached: process.platform !== "win32",
     });
-    ffmpegProc.stderr?.on("data", () => onProgress());
+    const progress = new VideoProgress(probe.duration, onProgress);
+    ffmpegProc.stdout?.on("data", chunk => progress.push(chunk.toString()));
+    ffmpegProc.stderr?.resume();
     ffmpegProc.on("error", reject);
     ffmpegProc.on("exit", (code) => {
       ffmpegProc = undefined;

@@ -49,8 +49,38 @@ $("autostart").onchange = () => {
     }
   });
 };
+const stages = {
+  WAITING_SOURCE: "Ожидаем исходный файл", DOWNLOADING: "Скачивание исходного файла",
+  TRANSCODING: "Обработка видео", TRANSCRIBING: "Распознавание речи",
+  TRANSLATING: "Перевод", UPLOADING: "Загрузка результата",
+  WAITING_PUBLICATION: "Подтверждение результата",
+};
+function drawJobs(jobs = []) {
+  const rows = jobs.map(job => {
+    const row = document.createElement("tr");
+    const name = document.createElement("td");
+    const title = document.createElement("strong");
+    title.textContent = ({ "media.transcode": "Обработка видео", "media.transcribe": "Распознавание речи", "media.subtitles": "Субтитры" })[job.type] || "Обработка медиа";
+    const id = document.createElement("small"); id.textContent = job.id;
+    name.append(title, id);
+    const stage = document.createElement("td"); stage.textContent = stages[job.stage] || "Подготовка";
+    const cell = document.createElement("td");
+    const wrap = document.createElement("div"); wrap.className = "job-progress";
+    const bar = document.createElement("progress"); bar.max = 100;
+    const label = document.createElement("span");
+    if (typeof job.progress === "number" && Number.isFinite(job.progress)) {
+      const percent = Math.min(99, Math.max(0, Math.floor(job.progress * 100)));
+      bar.value = percent; label.textContent = percent + "%";
+    } else label.textContent = "Подготовка…";
+    bar.setAttribute("aria-label", "Прогресс задания " + job.id);
+    wrap.append(bar, label); cell.append(wrap); row.append(name, stage, cell); return row;
+  });
+  $("jobsBody").replaceChildren(...rows);
+  $("jobsEmpty").hidden = rows.length > 0;
+}
 function draw(status) {
   current = status;
+  drawJobs(status.jobs);
   drawAutostart(status.autostart);
   const active = !["stopped", "error"].includes(status.phase);
   $("connection").textContent = status.paused
