@@ -23,20 +23,21 @@ import (
 var migrations embed.FS
 
 type Config struct {
-	HeartbeatInterval time.Duration
-	StopSafety        time.Duration
-	OfferTTL          time.Duration
-	LeaseTTL          time.Duration
-	OnlineTTL         time.Duration
-	AdmissionStable   time.Duration
-	QueueDelay        time.Duration
-	HistoryDays       int
-	AuditDays         int
-	CPUThreshold      float64
-	MemoryThreshold   float64
-	DiskThreshold     float64
-	MinimumFreeMemory int64
-	ExecutorAttempts  int
+	PrivateHTTPStorageSites map[string]bool
+	HeartbeatInterval       time.Duration
+	StopSafety              time.Duration
+	OfferTTL                time.Duration
+	LeaseTTL                time.Duration
+	OnlineTTL               time.Duration
+	AdmissionStable         time.Duration
+	QueueDelay              time.Duration
+	HistoryDays             int
+	AuditDays               int
+	CPUThreshold            float64
+	MemoryThreshold         float64
+	DiskThreshold           float64
+	MinimumFreeMemory       int64
+	ExecutorAttempts        int
 }
 
 func DefaultConfig() Config {

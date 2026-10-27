@@ -67,6 +67,7 @@ type Running = {
   acks: Set<string>;
   stage: string;
   encoder?: string;
+  download?: { bytes: number; total: number };
   processing?: Pick<Config, "videoMode" | "audioMode" | "cpuThreads" | "maxParallel">;
 };
 export class Agent {
@@ -648,9 +649,10 @@ export class Agent {
     );
     let dest = join(dir, "source.bin");
     r.progress = 0;
-    r.stage = "DOWNLOADING";
+    r.stage = "WAITING_SOURCE";
     let downloadedBytes = 0;
     const downloadProgress = (bytes: number) => {
+      r.download = { bytes: Math.min(job.source.bytes, downloadedBytes + bytes), total: job.source.bytes };
       r.progress = Math.max(r.progress || 0, Math.min(0.1, (downloadedBytes + bytes) / Math.max(1, job.source.bytes) * 0.1));
     };
     if (job.source.kind === "HLS") {
@@ -660,8 +662,9 @@ export class Agent {
           throw new Error("INVALID_HLS_INPUT");
         const path = join(sourceDir, part.path);
         mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
-        await this.transfer(part.path, "GET", r, (link) =>
-          downloadLink(
+        await this.transfer(part.path, "GET", r, (link) => {
+          r.stage = "DOWNLOADING";
+          return downloadLink(
             link,
             path,
             part.bytes,
@@ -670,8 +673,8 @@ export class Agent {
             undefined,
             r.transferAbort?.signal,
             downloadProgress,
-          ),
-        );
+          );
+        });
         downloadedBytes += part.bytes;
       }
       dest = validateHlsInput(
@@ -679,8 +682,9 @@ export class Agent {
         job.source.files.map((p: any) => p.path),
       );
     } else {
-      await this.transfer("source", "GET", r, (link) =>
-        downloadLink(
+      await this.transfer("source", "GET", r, (link) => {
+        r.stage = "DOWNLOADING";
+        return downloadLink(
           link,
           dest,
           job.source.bytes,
@@ -689,8 +693,8 @@ export class Agent {
           undefined,
           r.transferAbort?.signal,
           downloadProgress,
-        ),
-      );
+        );
+      });
     }
     if (!r.lease.valid())
       throw new TransferError("LEASE_EXPIRED", "Lease expired", false, true);
@@ -1054,12 +1058,11 @@ export class Agent {
     path: string,
     method: "GET" | "PUT",
   ): Promise<Link> {
-    await until(
-      () =>
-        r.ending ||
-        r.grants.some((g) => g.path === path && g.method === method),
-      120000,
-    );
+    try {
+      await until(() => r.ending || r.grants.some(g => g.path === path && g.method === method), 120000);
+    } catch {
+      throw new Error(method === "GET" ? "SOURCE_GRANT_TIMEOUT" : "UPLOAD_GRANT_TIMEOUT");
+    }
     if (r.ending) throw new Error("STOPPED");
     return r.grants.find((g) => g.path === path && g.method === method)!;
   }

@@ -5,6 +5,7 @@ services:
     environment:
       DISPATCHER_HOST: ${DISPATCHER_HOST:?Public address is required}
       DISPATCHER_UPDATER_SOCKET: /updater/update.sock
+      DISPATCHER_PRIVATE_HTTP_STORAGE_SITES: ${DISPATCHER_PRIVATE_HTTP_STORAGE_SITES:-}
       DISPATCHER_OWNER: ${DISPATCHER_OWNER:-owner}
     ports:
       - "${LISTEN_IP:-0.0.0.0}:${PUBLIC_PORT:-8090}:8090"

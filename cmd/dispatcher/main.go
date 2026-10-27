@@ -81,6 +81,9 @@ func run(args []string) error {
 		*password = value
 	}
 	config := dispatcher.DefaultConfig()
+	if e := config.SetPrivateHTTPStorageSites(os.Getenv("DISPATCHER_PRIVATE_HTTP_STORAGE_SITES")); e != nil {
+		return e
+	}
 	config.HistoryDays = *history
 	config.AuditDays = *audit
 	config.HeartbeatInterval = *heartbeat

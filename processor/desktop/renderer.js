@@ -84,7 +84,7 @@ $("autostart").onchange = () => {
   });
 };
 const stages = {
-  WAITING_SOURCE: "Ожидаем исходный файл", DOWNLOADING: "Скачивание исходного файла",
+  WAITING_SOURCE: "Ожидаем доступ к исходному файлу", DOWNLOADING: "Скачивание исходного файла",
   TRANSCODING: "Обработка видео", TRANSCRIBING: "Распознавание речи",
   TRANSLATING: "Перевод", UPLOADING: "Загрузка результата",
   WAITING_UPLOAD: "Ожидаем разрешение на загрузку",
@@ -105,10 +105,20 @@ function drawJobs(jobs = []) {
       stage.append(engine);
     }
     const cell = document.createElement("td");
+    if (job.stage === "DOWNLOADING" && job.download?.total > 0) {
+      const bytes = document.createElement("small");
+      bytes.textContent = (job.download.bytes / 1048576).toFixed(1) + " / " + (job.download.total / 1048576).toFixed(1) + " МБ";
+      stage.append(bytes);
+    }
     const wrap = document.createElement("div"); wrap.className = "job-progress";
     const bar = document.createElement("progress"); bar.max = 100;
     const label = document.createElement("span");
-    if (typeof job.progress === "number" && Number.isFinite(job.progress)) {
+    if (job.stage === "WAITING_SOURCE") {
+      label.textContent = "Ждём ссылку";
+    } else if (job.stage === "DOWNLOADING" && job.download?.total > 0) {
+      const percent = Math.min(100, Math.max(0, Math.floor(job.download.bytes / job.download.total * 100)));
+      bar.value = percent; label.textContent = percent + "% скачано";
+    } else if (typeof job.progress === "number" && Number.isFinite(job.progress)) {
       const percent = Math.min(99, Math.max(0, Math.floor(job.progress * 100)));
       bar.value = percent; label.textContent = percent + "%";
     } else label.textContent = "Подготовка…";

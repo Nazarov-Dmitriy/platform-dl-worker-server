@@ -352,6 +352,7 @@ def main():
             saved["host"] = host
             write(data / "connection.json", json.dumps(saved), owner=10001)
         settings = {"DISPATCHER_IMAGE":image, "DISPATCHER_HOST":host, "DISPATCHER_OWNER":login, "PUBLIC_PORT":str(port), "LISTEN_IP":interface}
+        settings["DISPATCHER_PRIVATE_HTTP_STORAGE_SITES"] = os.environ.get("DISPATCHER_PRIVATE_HTTP_STORAGE_SITES", previous.get("DISPATCHER_PRIVATE_HTTP_STORAGE_SITES", ""))
         environment.update(settings)
         write(target / "compose.yaml", (SOURCE / "compose.yaml").read_bytes(), 0o644)
         write(target / ".env", "".join(k+"="+v+"\n" for k,v in settings.items()))

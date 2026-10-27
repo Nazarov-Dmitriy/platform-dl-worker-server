@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"net/url"
 	"sort"
 	"strings"
@@ -259,7 +260,7 @@ func (s *Store) GrantTransfer(ctx context.Context, site, jobID string, raw []byt
 		if e != nil {
 			return e
 		}
-		if e = validateLinks(grant, required, method, r.site, r.request.ID, t.fence, t.kind, r.request); e != nil {
+		if e = validateLinks(grant, required, method, r.site, r.request.ID, t.fence, t.kind, r.request, s.config.PrivateHTTPStorageSites[r.site]); e != nil {
 			return e
 		}
 		mapping := mappingFingerprint(grant.Links)
@@ -681,7 +682,7 @@ func requiredGrant(r jobRow, kind string, artifact []byte, fence Fence) ([]strin
 	return requiredPaths(art.Manifest.Files), "PUT", nil
 }
 
-func validateLinks(grant TransferGrant, required []string, method, site, job string, f Fence, kind string, req JobRequest) error {
+func validateLinks(grant TransferGrant, required []string, method, site, job string, f Fence, kind string, req JobRequest, allowPrivateHTTP ...bool) error {
 	seen := map[string]bool{}
 	prefix := "jobs/" + site + "/" + job + "/" + f.DispatcherEpoch + "/" + formatGeneration(f.Generation) + "/" + f.AssignmentID + "/"
 	for _, link := range grant.Links {
@@ -716,7 +717,7 @@ func validateLinks(grant TransferGrant, required []string, method, site, job str
 				return problem(400, "INVALID_REQUEST", "Upload objectName must be prefix plus relative path")
 			}
 		}
-		if e := checkLinkURL(link); e != nil {
+		if e := checkLinkURL(link, allowPrivateHTTP...); e != nil {
 			return e
 		}
 	}
@@ -731,7 +732,7 @@ func validateLinks(grant TransferGrant, required []string, method, site, job str
 	return nil
 }
 
-func checkLinkURL(link Link) error {
+func checkLinkURL(link Link, allowPrivateHTTP ...bool) error {
 	if len(link.URL) > 16*1024 {
 		return problem(400, "INVALID_REQUEST", "URL exceeds the metadata limit")
 	}
@@ -742,7 +743,11 @@ func checkLinkURL(link Link) error {
 	host := strings.ToLower(u.Hostname())
 	if u.Scheme == "http" {
 		if host != "127.0.0.1" && host != "localhost" && host != "::1" && !strings.HasSuffix(host, ".localhost") {
-			return problem(400, "INVALID_REQUEST", "Non-local grant URLs must use TLS")
+			ip, e := netip.ParseAddr(host)
+			permitted := len(allowPrivateHTTP) > 0 && allowPrivateHTTP[0] && e == nil && ip.Zone() == "" && ip.Unmap().IsPrivate()
+			if !permitted {
+				return problem(400, "INVALID_REQUEST", "Non-local grant URLs must use TLS unless private HTTP storage is explicitly enabled for this site")
+			}
 		}
 	} else if u.Scheme != "https" {
 		return problem(400, "INVALID_REQUEST", "Unsupported grant URL scheme")

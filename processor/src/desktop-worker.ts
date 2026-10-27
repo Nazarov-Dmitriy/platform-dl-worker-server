@@ -23,7 +23,7 @@ function status(message?: string) {
         videoMode: agent.config.videoMode, audioMode: agent.config.audioMode } : undefined,
       jobs: agent ? [...agent.running.values()].map(r => ({
         id: r.attempt.jobId, type: r.job?.type || "media.transcode",
-        stage: r.stage, progress: r.progress, encoder: r.encoder,
+        stage: r.stage, progress: r.progress, encoder: r.encoder, download: r.download,
       })) : [],
       paused: !!agent?.config.paused,
       message:
