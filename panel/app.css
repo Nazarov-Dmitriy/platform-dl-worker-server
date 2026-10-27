@@ -999,3 +999,10 @@ tr:last-child td {
 .ops-action .button { margin-top: auto; max-width: 100%; white-space: normal; }
 #opsOut { margin-top: 22px; margin-bottom: 0; }
 @media (max-width: 700px) { .ops-actions { grid-template-columns: 1fr; } }
+
+.audit-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 20px 24px; border-top: 1px solid var(--border); color: var(--muted); }
+.error-details { max-width: 420px; }
+.error-details summary { color: var(--accent); cursor: pointer; font-weight: 600; }
+.error-details p { margin-top: 10px; line-height: 1.6; }
+.error-details code { display: block; margin-top: 10px; overflow-wrap: anywhere; }
+.audit-job { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }

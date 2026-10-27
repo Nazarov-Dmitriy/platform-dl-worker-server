@@ -332,7 +332,17 @@ func (h *HTTP) adminJobs(w http.ResponseWriter, r *http.Request, a AdminActor) {
 		}
 		after = n
 	}
-	page, e := h.store.AdminJobs(r.Context(), r.URL.Query().Get("siteId"), after, limit)
+	var page map[string]any
+	var e error
+	if r.URL.Query().Get("order") == "desc" {
+		if after != 0 {
+			h.failure(w, problem(400, "INVALID_PAGE", "Recent jobs do not accept a cursor"))
+			return
+		}
+		page, e = h.store.RecentAdminJobs(r.Context(), r.URL.Query().Get("siteId"), limit)
+	} else {
+		page, e = h.store.AdminJobs(r.Context(), r.URL.Query().Get("siteId"), after, limit)
+	}
 	if e != nil {
 		h.failure(w, e)
 		return
@@ -432,17 +442,36 @@ func (h *HTTP) adminAudit(w http.ResponseWriter, r *http.Request, a AdminActor) 
 		h.failure(w, e)
 		return
 	}
-	limit := 50
-	if v := r.URL.Query().Get("limit"); v != "" {
-		n, e := strconv.Atoi(v)
-		if e == nil {
-			limit = n
+	q := r.URL.Query()
+	f := AuditFilter{Limit: 20, Kind: q.Get("kind"), Principal: q.Get("principalId"), Job: q.Get("jobId"), ErrorsOnly: q.Get("errorsOnly") == "true"}
+	var e error
+	if q.Get("limit") != "" {
+		f.Limit, e = strconv.Atoi(q.Get("limit"))
+		if e != nil {
+			h.failure(w, problem(400, "INVALID_PAGE", "Invalid limit"))
+			return
 		}
 	}
-	v, e := h.store.AdminAudit(r.Context(), limit)
+	if q.Get("cursor") != "" {
+		f.Cursor, e = strconv.ParseInt(q.Get("cursor"), 10, 64)
+		if e != nil {
+			h.failure(w, problem(400, "INVALID_PAGE", "Invalid cursor"))
+			return
+		}
+	}
+	for name, dest := range map[string]*time.Time{"from": &f.From, "to": &f.To} {
+		if q.Get(name) != "" {
+			*dest, e = time.Parse(time.RFC3339, q.Get(name))
+			if e != nil {
+				h.failure(w, problem(400, "INVALID_PAGE", "Invalid date filter"))
+				return
+			}
+		}
+	}
+	page, e := h.store.AuditPage(r.Context(), f)
 	if e != nil {
 		h.failure(w, e)
 		return
 	}
-	h.reply(w, 200, map[string]any{"items": v})
+	h.reply(w, 200, page)
 }

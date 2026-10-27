@@ -84,6 +84,8 @@ const statuses = {
   QUEUED: ["В очереди", "notice"],
   ACCEPTED: ["Принято", "info"],
   RUNNING: ["Обработка", "info"],
+  AWAITING_PUBLICATION: ["Ожидает публикации", "notice"],
+  ASSIGNED: ["Назначено", "info"],
   PUBLISHING: ["Публикация", "info"],
   SUCCEEDED: ["Готово", "good"],
   PARTIAL: ["Частично готово", "notice"],
@@ -111,12 +113,13 @@ function renderJobs(target, jobs, hasSite) {
     );
   table(
     target,
-    ["Задание", "Статус", "Прогресс", "Обновлено"],
+    ["Задание", "Статус", "Прогресс", "Обновлено", "Подробности"],
     jobs.map((j) => [
       titleCell(operations[j.type] || j.type, j.id, "file"),
       badge(...(statuses[j.status] || [j.status, ""])),
       meter(j.progress == null ? null : j.progress * 100),
       date(j.updatedAt),
+      j.error ? errorDetails(j.error, j.id) : "—",
     ]),
   );
 }
@@ -204,4 +207,48 @@ function renderOps(data) {
   $("stat-running").textContent = data.running ?? "—";
   $("opsMaintenanceOn").disabled = !!data.maintenance;
   $("opsMaintenanceOff").disabled = !data.maintenance;
+}
+
+const auditLabels = {
+ CATALOG_IMPORTED:"Каталог моделей обновлён", COMMAND_ENQUEUED:"Команда отправлена устройству",
+ OWNER_BOOTSTRAP:"Создан аккаунт владельца", OWNER_PASSWORD_RESET:"Пароль владельца сброшен", ADMIN_LOGIN:"Вход в панель",
+ SITE_CREATED:"Сайт добавлен", SITE_DELETED:"Сайт удалён", DEVICE_CREATED:"Устройство добавлено", DEVICE_DELETED:"Устройство удалено",
+ TOKEN_ISSUED:"Выдан токен подключения", TOKEN_REVOKED:"Токен подключения отозван", RESTORE_SEALED:"Завершено восстановление из копии",
+ JOB_QUEUED:"Задание добавлено в очередь", JOB_ASSIGNED:"Задание назначено устройству", JOB_RUNNING:"Началась обработка",
+ JOB_AWAITING_PUBLICATION:"Результат загружен, ожидает публикации", PUBLICATION_CLAIMED:"Сайт начал публикацию",
+ JOB_SUCCEEDED:"Задание завершено", JOB_PARTIAL:"Задание завершено частично", JOB_FAILED:"Ошибка обработки",
+ JOB_REJECTED:"Задание отклонено", JOB_CANCELLED:"Задание отменено", JOB_CANCELLING:"Запрошена отмена задания",
+ JOB_RELEASED:"Задание передано в резерв", JOB_RELEASING:"Запрошен возврат задания",
+ DEVICE_CONNECTED:"Устройство подключилось", DEVICE_UPDATED:"Настройки устройства изменены",
+ SITE_UPDATED:"Настройки сайта изменены", SITE_CANCEL_ALL:"Запрошена отмена заданий сайта",
+ ACCOUNT_CREATED:"Аккаунт создан", ACCOUNT_UPDATED:"Аккаунт изменён",
+ TRANSFER_SOURCE:"Устройство запросило исходный файл", ARTIFACT_PROPOSED:"Результат подготовлен",
+ MAINTENANCE_ON:"Выдача заданий приостановлена", MAINTENANCE_OFF:"Выдача заданий возобновлена",
+ BACKUP:"Создана резервная копия", LOGIN:"Вход в панель", LOGOUT:"Выход из панели",
+};
+const jobErrorLabels = {
+ WAIT_TIMEOUT:"Обработчик не получил ответ за отведённое время.",
+ INVALID_REQUEST:"Параметры задания не прошли проверку сервиса.",
+ SOURCE_DOWNLOAD_FAILED:"Не удалось скачать исходный файл.", UPLOAD_FAILED:"Не удалось загрузить результат в хранилище.",
+ GPU_UNAVAILABLE:"Аппаратное ускорение недоступно. Проверьте выбранный режим и установленный движок.",
+ FFMPEG_FAILED:"Ошибка кодирования видео.", PLAYLIST_INVALID:"Результат содержит некорректный список видеофайлов.",
+ LEASE_EXPIRED:"Истекло время разрешения на выполнение задания.",
+};
+function errorDetails(error, jobId) {
+ const details = node("details", "", "error-details");
+ details.append(node("summary", "Подробнее"));
+ details.append(node("p", error ? (jobErrorLabels[error.code] || "Задание завершилось с ошибкой.") : "Подробности этой ошибки не сохранились."));
+ if(error?.code) details.append(node("code", "Код: " + error.code));
+ if(error?.message) details.append(node("p", error.message));
+ if(jobId) details.append(node("code", "Задание: " + jobId));
+ return details;
+}
+function renderAudit(items) {
+ if(!items.length) return empty("audit", "События не найдены", "Измените фильтры или период.", "file");
+ table("audit",["Время","Действие","Участник","Задание","Подробности"],items.map(a=>{
+   const failure=/FAILED|ERROR|REJECTED/.test(a.kind);
+   const job=node("div", "", "audit-job");
+   if(a.jobId){job.append(node("span",a.jobId,"code"));const history=node("button","История","button quiet");history.type="button";history.onclick=()=>{$("auditFilters").reset();$("auditJob").value=a.jobId;void loadAudit("reset")};job.append(history)}else job.textContent="—";
+   return [date(a.at),badge(auditLabels[a.kind] || "Событие диспетчера", failure?"danger":""),titleCell(a.principalName || a.principalId,a.principalName?a.principalId:null),job,failure?errorDetails(a.error,a.jobId):"—"];
+ }));
 }

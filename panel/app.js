@@ -93,6 +93,7 @@ function selectTab(tab) {
   [$("pageTitle").textContent, $("pageSubtitle").textContent] = views[tab];
   document.title = views[tab][0] + " · Worker";
   closeMenu();
+  if (tab === "audit" && state.role === "OWNER" && overviewReady) void loadAudit();
   if (tab === "updates") void loadPublicCertificate();
   if (tab === "overview" && overviewReady) void refreshOverview();
 }
@@ -190,9 +191,8 @@ async function reload() {
       "globe",
     );
   if (state.role === "OWNER") {
-    const [accounts, audit, ops] = await Promise.all([
+    const [accounts, ops] = await Promise.all([
       api("/api/v2/admin/accounts"),
-      api("/api/v2/admin/audit"),
       api("/api/v2/admin/ops"),
     ]);
     table(
@@ -205,19 +205,11 @@ async function reload() {
         a.manageSites ? "Разрешено" : "Нет",
       ]),
     );
-    if (audit.items.length)
-      table(
-        "audit",
-        ["Время", "Действие", "Участник", "Задание"],
-        audit.items.map((a) => [date(a.at), a.kind, a.principalId, a.jobId]),
-      );
-    else
-      empty(
-        "audit",
-        "Действий пока нет",
-        "Здесь появится история работы диспетчера.",
-        "file",
-      );
+    const participant = $("auditPrincipal"), previousParticipant = participant.value;
+    participant.replaceChildren(new Option("Все участники", ""));
+    [...state.sites, ...state.devices, ...accounts.items].forEach(item => participant.append(new Option(item.name || item.login || item.id, item.id)));
+    participant.value = previousParticipant;
+    await loadAudit();
     renderOps(ops);
     await loadUpdateStatus();
   }
@@ -230,7 +222,7 @@ async function loadJobs() {
     id = $("jobSite").value;
   $("cancelAll").disabled = !id;
   const page = id
-    ? await api("/api/v2/admin/jobs?siteId=" + encodeURIComponent(id))
+    ? await api("/api/v2/admin/jobs?siteId=" + encodeURIComponent(id) + "&order=desc&limit=10")
     : { jobs: [] };
   if (version !== jobsVersion) return;
   renderJobs("jobs", page.jobs, !!id);
@@ -651,7 +643,7 @@ async function refreshOverview() {
     const [sites, devices, jobs, ops] = await Promise.all([
       api("/api/v2/admin/sites"),
       api("/api/v2/admin/devices"),
-      siteId ? api("/api/v2/admin/jobs?siteId=" + encodeURIComponent(siteId)) : Promise.resolve({jobs:[]}),
+      siteId ? api("/api/v2/admin/jobs?siteId=" + encodeURIComponent(siteId) + "&order=desc&limit=10") : Promise.resolve({jobs:[]}),
       state.role === "OWNER" ? api("/api/v2/admin/ops") : Promise.resolve(null),
     ]);
     if (document.hidden || document.querySelector('[data-panel="overview"]').hidden || siteId !== $("overviewSite").value) return;
@@ -749,3 +741,29 @@ on("enablePublicCertificate", "click", async () => {
   finally { certificateRequestBusy = false; }
 });
 setInterval(() => { if (!document.hidden && !document.querySelector('[data-panel="updates"]').hidden) void loadPublicCertificate(); }, 5000);
+
+let auditCursor = "", auditNextCursor = null, auditPrevious = [], auditLoading = false, appliedAuditQuery = null;
+Object.entries(auditLabels).sort((a,b)=>a[1].localeCompare(b[1],"ru")).forEach(([kind,label])=>$("auditKind").append(new Option(label,kind)));
+async function loadAudit(action = "refresh") {
+ if(auditLoading || state.role !== "OWNER") return;
+ if(action === "reset") {auditCursor="";auditPrevious=[];auditNextCursor=null;appliedAuditQuery=null;}
+ if(action === "next") {if(!auditNextCursor)return;auditPrevious.push(auditCursor);auditCursor=String(auditNextCursor);}
+ if(action === "prev") {if(!auditPrevious.length)return;auditCursor=auditPrevious.pop();}
+ auditLoading=true;$("auditPrev").disabled=true;$("auditNext").disabled=true;
+ try{
+  const query=new URLSearchParams({limit:"20"});
+  if(!appliedAuditQuery) {
+  for(const [id,key] of [["auditKind","kind"],["auditPrincipal","principalId"],["auditJob","jobId"]])if($(id).value.trim())query.set(key,$(id).value.trim());
+  for(const [id,key] of [["auditFrom","from"],["auditTo","to"]])if($(id).value)query.set(key,new Date($(id).value).toISOString());
+  if($("auditErrors").checked)query.set("errorsOnly","true");
+  appliedAuditQuery=query.toString();
+  }
+  const requestQuery=new URLSearchParams(appliedAuditQuery);
+  if(auditCursor)requestQuery.set("cursor",auditCursor);
+  const page=await api("/api/v2/admin/audit?"+requestQuery);auditNextCursor=page.nextCursor;
+  renderAudit(page.items);$("auditPageLabel").textContent="Страница "+(auditPrevious.length+1)+" · записей: "+page.items.length;
+ }catch(error){report(error)}finally{auditLoading=false;$("auditPrev").disabled=!auditPrevious.length;$("auditNext").disabled=!auditNextCursor;}
+}
+$("auditFilters").addEventListener("submit",event=>{event.preventDefault();void loadAudit("reset")});
+$("auditReset").onclick=()=>{$("auditFilters").reset();void loadAudit("reset")};
+$("auditPrev").onclick=()=>void loadAudit("prev");$("auditNext").onclick=()=>void loadAudit("next");

@@ -506,8 +506,18 @@
           </section>
           <section data-panel="audit" hidden>
             <div class="card">
-              <div class="card-heading"><h2>Последние действия</h2></div>
+              <div class="card-heading"><h2>История действий</h2></div>
+              <form id="auditFilters" class="card-body form-grid">
+                <label>Действие<select id="auditKind"><option value="">Все действия</option></select></label>
+                <label>Участник<select id="auditPrincipal"><option value="">Все участники</option></select></label>
+                <label class="full">ID задания<input id="auditJob" placeholder="Вставьте полный ID задания"></label>
+                <label>С даты и времени<input id="auditFrom" type="datetime-local"></label>
+                <label>По дату и время<input id="auditTo" type="datetime-local"></label>
+                <label class="check-field full"><input id="auditErrors" type="checkbox">Только ошибки</label>
+                <div class="form-actions full"><button class="button primary" type="submit">Применить фильтры</button><button id="auditReset" class="button quiet" type="button">Сбросить</button></div>
+              </form>
               <div id="audit"></div>
+              <div class="audit-pagination"><button id="auditPrev" class="button" type="button" disabled>Назад</button><span id="auditPageLabel">Страница 1 · до 20 записей</span><button id="auditNext" class="button" type="button" disabled>Далее</button></div>
             </div>
           </section>
           <section data-panel="ops" hidden>
