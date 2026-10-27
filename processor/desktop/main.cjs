@@ -313,7 +313,7 @@ else {
         throw Error("При смене сервера или устройства нужен его токен.");
       if (settings.token)
         atomic("credential.bin", safeStorage.encryptString(settings.token));
-      atomic("device-ca.crt", settings.ca);
+      if (settings.ca) atomic("device-ca.crt", settings.ca);
       saved = {
         server: settings.server,
         deviceId: settings.deviceId,
@@ -329,7 +329,7 @@ else {
               settings.server.replace("https:", "wss:") +
               "/api/v2/device/connect",
             deviceId: settings.deviceId,
-            tlsCaFile: previousCa,
+            tlsCaFile: settings.ca ? previousCa : undefined,
             stateDir: join(directory, "state"),
             workDir: settings.workDir,
             maxParallel: settings.maxParallel,

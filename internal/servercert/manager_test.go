@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
@@ -111,5 +112,38 @@ func TestInvalidAddressAndWrongCertificateDoNotChangeConnection(t *testing.T) {
 	}
 	if m.View().Host != "localhost" || m.View().Mode != "auto" || time.Until(m.View().ExpiresAt) < time.Hour {
 		t.Fatal("invalid input changed active TLS")
+	}
+}
+
+func TestPublicBundleValidatesHostChainAndKeepsActivePairOnBadReplacement(t *testing.T) {
+	dir := t.TempDir()
+	manager, err := New(dir, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := manager.Certificate(nil)
+	cert, _ := os.ReadFile(filepath.Join(dir, "tls/fullchain.pem"))
+	key, _ := os.ReadFile(filepath.Join(dir, "tls/privkey.pem"))
+	raw, _ := json.Marshal(map[string]string{"host": "127.0.0.1", "certificate": string(cert), "privateKey": string(key)})
+	roots := x509.NewCertPool()
+	roots.AppendCertsFromPEM(manager.PublicCA())
+	if _, err = verifiedPublicPair(raw, "127.0.0.1", roots); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = verifiedPublicPair(raw, "192.0.2.1", roots); err == nil {
+		t.Fatal("wrong IP accepted")
+	}
+	if _, err = verifiedPublicPair(raw, "127.0.0.1", x509.NewCertPool()); err == nil {
+		t.Fatal("untrusted chain accepted")
+	}
+	if err = os.WriteFile(filepath.Join(dir, "tls/public.json"), []byte("malformed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := manager.Certificate(nil)
+	if !bytes.Equal(before.Certificate[0], after.Certificate[0]) {
+		t.Fatal("invalid replacement broke active certificate")
+	}
+	if _, err = New(dir, "127.0.0.1"); err == nil {
+		t.Fatal("startup silently fell back after invalid public certificate")
 	}
 }

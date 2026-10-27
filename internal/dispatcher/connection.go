@@ -56,3 +56,32 @@ func (h *HTTP) adminConnectionSet(w http.ResponseWriter, r *http.Request, a Admi
 	}
 	h.reply(w, 200, h.certificates.View())
 }
+
+func (h *HTTP) adminPublicCertificate(w http.ResponseWriter, r *http.Request, actor AdminActor) {
+	if err := requireOwner(actor); err != nil {
+		h.failure(w, err)
+		return
+	}
+	data, code, err := h.updaterCall(r.Context(), "GET", "/certificate", nil)
+	if err != nil {
+		h.failure(w, err)
+		return
+	}
+	h.reply(w, code, data)
+}
+func (h *HTTP) adminEnablePublicCertificate(w http.ResponseWriter, r *http.Request, actor AdminActor) {
+	if err := requireOwner(actor); err != nil {
+		h.failure(w, err)
+		return
+	}
+	if h.certificates == nil || h.certificates.View().Mode == "manual" {
+		h.failure(w, problem(409, "INVALID_CONNECTION", "Switch to automatic certificate mode first"))
+		return
+	}
+	data, code, err := h.updaterCall(r.Context(), "POST", "/certificate", map[string]any{})
+	if err != nil {
+		h.failure(w, err)
+		return
+	}
+	h.reply(w, code, data)
+}

@@ -1,3 +1,4 @@
+import { rootCertificates } from "node:tls";
 import { errorCode } from "./errors.js";
 import { setAutostart } from "./autostart.js";
 import { validateHlsInput } from "./hls-input.js";
@@ -217,7 +218,7 @@ export class Agent {
       handshakeTimeout: 10000,
       maxPayload: 8 * 1024 ** 2,
       rejectUnauthorized: true,
-      ...(this.config.tlsCaFile ? { ca: readFileSync(this.config.tlsCaFile) } : {}),
+      ...(this.config.tlsCaFile ? { ca: [...rootCertificates, readFileSync(this.config.tlsCaFile)] } : {}),
     });
     this.socket = ws;
     ws.on("open", () => {

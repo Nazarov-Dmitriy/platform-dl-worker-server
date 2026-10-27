@@ -60,6 +60,7 @@ function on(id, event, fn) {
         $("opsMaintenanceOff").disabled = !state.ops.maintenance;
       }
       if (updateStatus) showUpdateStatus(updateStatus);
+      if (certificateStatus) showPublicCertificate(certificateStatus);
     }
   });
 }
@@ -92,6 +93,7 @@ function selectTab(tab) {
   [$("pageTitle").textContent, $("pageSubtitle").textContent] = views[tab];
   document.title = views[tab][0] + " · Worker";
   closeMenu();
+  if (tab === "updates") void loadPublicCertificate();
   if (tab === "overview" && overviewReady) void refreshOverview();
 }
 $("nav").addEventListener("click", (e) => {
@@ -727,3 +729,25 @@ async function siteAction(kind) {
 }
 on("issueSiteToken", "click", () => siteAction("token"));
 on("deleteSite", "click", () => siteAction("delete"));
+
+let certificateRequestBusy = false;
+let certificateStatus = null;
+function showPublicCertificate(value) {
+  certificateStatus = value;
+  const expires = value.expiresAt ? " Действует до " + new Date(value.expiresAt * 1000).toLocaleString("ru-RU") + "." : "";
+  message("publicCertificateStatus", value.message + expires);
+  $("enablePublicCertificate").disabled = !!value.busy || certificateRequestBusy;
+  $("enablePublicCertificate").textContent = value.busy ? "Получаем сертификат…" : value.enabled ? "Проверить продление" : "Включить Let’s Encrypt";
+}
+async function loadPublicCertificate() {
+  if (state.role !== "OWNER") return;
+  try { showPublicCertificate(await api("/api/v2/admin/connection/public-certificate")); }
+  catch { message("publicCertificateStatus", "Служба сертификатов недоступна. Требуется обновление службы Worker на сервере."); }
+}
+on("enablePublicCertificate", "click", async () => {
+  if (certificateRequestBusy || !confirm("Получить сертификат Let’s Encrypt для IP сервера? Требуется доступный TCP 80. Вы принимаете условия Let’s Encrypt (https://letsencrypt.org/repository/). Windows-приложение должно быть обновлено для доверия публичным сертификатам.")) return;
+  certificateRequestBusy = true;
+  try { showPublicCertificate(await api("/api/v2/admin/connection/public-certificate", {method:"POST",mutate:true,body:"{}"})); }
+  finally { certificateRequestBusy = false; }
+});
+setInterval(() => { if (!document.hidden && !document.querySelector('[data-panel="updates"]').hidden) void loadPublicCertificate(); }, 5000);

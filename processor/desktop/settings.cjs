@@ -30,25 +30,30 @@ function validateSettings(input) {
   if (!isAbsolute(workDir) || !statSync(workDir).isDirectory())
     throw Error("Выберите существующую рабочую папку.");
   const caPath = String(input.caPath || "");
-  if (!isAbsolute(caPath) || statSync(caPath).size > 65536)
-    throw Error("Выберите публичный сертификат device-ca.crt.");
-  const ca = readFileSync(caPath, "utf8");
-  if (ca.includes("PRIVATE KEY"))
-    throw Error("Нужен публичный сертификат, а не приватный ключ.");
-  let certificate;
-  try {
-    certificate = new X509Certificate(ca);
-  } catch {
-    throw Error("Файл не является сертификатом.");
+  let ca = "",
+    fingerprint = "";
+  if (caPath) {
+    if (!isAbsolute(caPath) || statSync(caPath).size > 65536)
+      throw Error("Выберите публичный сертификат device-ca.crt.");
+    ca = readFileSync(caPath, "utf8");
+    if (ca.includes("PRIVATE KEY"))
+      throw Error("Нужен публичный сертификат, а не приватный ключ.");
+    let certificate;
+    try {
+      certificate = new X509Certificate(ca);
+    } catch {
+      throw Error("Файл не является сертификатом.");
+    }
+    if (
+      !certificate.ca ||
+      Date.parse(certificate.validTo) < Date.now() ||
+      Date.parse(certificate.validFrom) > Date.now()
+    )
+      throw Error(
+        "Сертификат CA недействителен. Скачайте его из панели сервера.",
+      );
+    fingerprint = certificate.fingerprint256;
   }
-  if (
-    !certificate.ca ||
-    Date.parse(certificate.validTo) < Date.now() ||
-    Date.parse(certificate.validFrom) > Date.now()
-  )
-    throw Error(
-      "Сертификат CA недействителен. Скачайте его из панели сервера.",
-    );
   const maxParallel = Number(input.maxParallel || 1);
   if (!Number.isSafeInteger(maxParallel) || maxParallel < 1 || maxParallel > 64)
     throw Error("Число параллельных заданий должно быть от 1 до 64.");
@@ -62,7 +67,7 @@ function validateSettings(input) {
     ca,
     maxParallel,
     token,
-    fingerprint: certificate.fingerprint256,
+    fingerprint,
   };
 }
 module.exports = { validateSettings };

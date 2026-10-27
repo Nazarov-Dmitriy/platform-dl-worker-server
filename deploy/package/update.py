@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 
 from fingerprint import image_fingerprint
-from manage import read_env, ready, write
+from manage import PublicCertificate, read_env, ready, write
 
 REPOSITORY = "Nazarov-Dmitriy/platform-dl-worker-server"
 VERSION = re.compile(r"worker-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
@@ -127,6 +127,7 @@ class Updater:
     def __init__(self, root, target, project, github=None):
         self.root, self.target, self.project = Path(root).resolve(), Path(target).resolve(), project
         self.source = self.root / "deploy/package" if (self.root / "deploy/package/manage.py").exists() else self.root
+        self.certificates = PublicCertificate(self.target, self.project)
         self.github = github or GitHub(os.environ.get("GH_TOKEN", ""))
         self.lock = threading.Lock()
         self.guard = threading.RLock()
@@ -142,6 +143,30 @@ class Updater:
             if self.state["phase"] not in ("idle", "completed", "failed", "rolled_back"):
                 self.interrupted = self.state["phase"] in ("waiting", "installing")
                 self.state.update(phase="failed", message="Предыдущая операция прервана. Проверьте состояние сервиса.")
+
+    def certificate_command(self):
+        self.certificates.host()
+        if not self.lock.acquire(blocking=False):
+            raise ValueError("Дождитесь текущей операции")
+        self.certificates.publish(busy=True, message="Запрашиваем сертификат Let’s Encrypt…")
+        threading.Thread(target=self.renew_certificate, args=(True,), daemon=True).start()
+        return self.certificates.state()
+
+    def renew_certificate(self, enable=False):
+        try:
+            self.certificates.run(enable=enable)
+        except Exception:
+            logging.exception("Public certificate renewal failed")
+        finally:
+            self.lock.release()
+
+    def certificate_loop(self):
+        while True:
+            state = self.certificates.state()
+            interval = 3600 if not state.get("lastSuccess") or state.get("lastAttempt", 0) > state.get("lastSuccess", 0) else 12 * 3600
+            if state.get("enabled") and time.time() - state.get("lastAttempt", 0) >= interval and self.lock.acquire(blocking=False):
+                self.renew_certificate()
+            time.sleep(60)
 
     def current(self):
         path = self.root / "VERSION"
@@ -346,7 +371,9 @@ class API(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        self.send(200, self.server.updater.status()) if self.path == "/status" else self.send(404, {})
+        if self.path == "/certificate": self.send(200, self.server.updater.certificates.state())
+        elif self.path == "/status": self.send(200, self.server.updater.status())
+        else: self.send(404, {})
 
     def do_POST(self):
         try:
@@ -354,11 +381,11 @@ class API(http.server.BaseHTTPRequestHandler):
             if length < 0 or length > 2048 or self.headers.get("Transfer-Encoding"):
                 raise ValueError()
             body = json.loads(self.rfile.read(length) or b"{}")
-            if self.path not in ("/check", "/install") or not isinstance(body, dict):
+            if self.path not in ("/check", "/install", "/certificate") or not isinstance(body, dict):
                 raise ValueError()
             if set(body) - ({"version"} if self.path == "/install" else set()):
                 raise ValueError()
-            self.send(202, self.server.updater.command(self.path[1:], body.get("version")))
+            self.send(202, self.server.updater.certificate_command() if self.path == "/certificate" else self.server.updater.command(self.path[1:], body.get("version")))
         except (ValueError, TypeError):
             self.send(409, {"code": "UPDATE_REJECTED"})
 
@@ -398,6 +425,7 @@ def main():
     settings = json.loads(Path(args.config).read_text())
     updater = Updater(**settings)
     updater.recover()
+    threading.Thread(target=updater.certificate_loop, daemon=True).start()
     path = updater.target / "updater/update.sock"
     path.unlink(missing_ok=True)
     with LocalServer(str(path), API) as server:

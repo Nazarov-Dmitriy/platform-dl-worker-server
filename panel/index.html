@@ -548,6 +548,15 @@
           </section>
           <section data-panel="updates" hidden>
             <div class="card">
+              <div class="card-heading"><h2>Публичный сертификат HTTPS</h2></div>
+              <div class="card-body">
+                <p class="caption">Let’s Encrypt для IP-адреса. Домен не нужен. TCP 80 должен быть доступен извне; Worker остаётся на своём порту.</p>
+                <p class="caption">Сначала обновите Windows-приложение: прежняя сборка доверяет только локальному сертификату.</p>
+                <p id="publicCertificateStatus" class="notice-box" role="status">Проверяем сертификат…</p>
+                <div class="form-actions"><button id="enablePublicCertificate" type="button" class="button primary">Включить Let’s Encrypt</button></div>
+              </div>
+            </div>
+            <div class="card">
               <div class="card-heading"><h2>Обновление Worker</h2></div>
               <div class="card-body">
                 <div id="updateVersions" class="detail-list"></div>

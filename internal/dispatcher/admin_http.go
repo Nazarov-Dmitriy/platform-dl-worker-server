@@ -18,6 +18,8 @@ func (h *HTTP) addAdminRoutes() {
 	h.mux.HandleFunc("GET /api/v2/admin/updates", h.admin(h.adminUpdates, false))
 	h.mux.HandleFunc("POST /api/v2/admin/updates/check", h.admin(h.adminUpdateCheck, true))
 	h.mux.HandleFunc("POST /api/v2/admin/updates/install", h.admin(h.adminUpdateInstall, true))
+	h.mux.HandleFunc("GET /api/v2/admin/connection/public-certificate", h.admin(h.adminPublicCertificate, false))
+	h.mux.HandleFunc("POST /api/v2/admin/connection/public-certificate", h.admin(h.adminEnablePublicCertificate, true))
 	h.mux.HandleFunc("GET /api/v2/admin/connection", h.admin(h.adminConnection, false))
 	h.mux.HandleFunc("PUT /api/v2/admin/connection", h.admin(h.adminConnectionSet, true))
 	h.mux.HandleFunc("POST /api/v2/admin/session", h.adminLogin)

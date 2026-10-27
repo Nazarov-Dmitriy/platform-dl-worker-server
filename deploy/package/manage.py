@@ -70,7 +70,8 @@ def valid_host(host):
 
 
 def ready(target, host, port, interface):
-    context = ssl.create_default_context(cafile=str(target / "data/device-ca.crt"))
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile=str(target / "data/device-ca.crt"))
     address = "127.0.0.1" if interface == "0.0.0.0" else interface
     with socket.create_connection((address, port), timeout=10) as raw:
         with context.wrap_socket(raw, server_hostname=host) as connection:
@@ -118,9 +119,126 @@ def exported(root, target, compose, environment, output):
     print("Архив переезда: " + str(output) + "\nСтарый экземпляр остановлен. Запускайте только одну копию.")
 
 
+
+class PublicCertificate:
+    """Fixed Certbot image and root-owned paths; no commands/paths supplied by the panel."""
+    IMAGE = "certbot/certbot:v5.4.0"
+
+    def __init__(self, target, project):
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", project):
+            raise ValueError("Invalid project")
+        self.target, self.project = Path(target), project
+        self.path = self.target / "public-certificate-state.json"
+        if self.path.exists() and self.state().get("busy"):
+            self.publish(busy=False, message="Проверка сертификата была прервана; повторите проверку")
+
+    def state(self):
+        value = json.loads(self.path.read_text()) if self.path.exists() else {}
+        return dict(enabled=False, busy=False, message="Публичный сертификат пока не включён") | value
+
+    def publish(self, **values):
+        value = self.state() | values
+        write(self.path, json.dumps(value, ensure_ascii=False))
+        return value
+
+    def host(self):
+        data = self.target / "data/connection.json"
+        host = json.loads(data.read_text())["host"] if data.exists() else read_env(self.target / ".env")["DISPATCHER_HOST"]
+        address = ipaddress.ip_address(host)
+        if address.version != 4 or not address.is_global:
+            raise ValueError("Для Let’s Encrypt нужен публичный IPv4-адрес сервера")
+        return str(address)
+
+    def challenge(self, host):
+        if shutil.which("nginx"):
+            webroot = Path("/var/lib/worker-acme") / self.project
+            webroot.mkdir(parents=True, exist_ok=True, mode=0o755)
+            os.chmod(webroot.parent, 0o755)
+            os.chmod(webroot, 0o755)
+            config = Path("/etc/nginx/conf.d") / ("worker-acme-" + self.project + ".conf")
+            # An explicit IP Host routes only validation requests; other virtual hosts are unchanged.
+            content = "server {\n listen 80;\n server_name " + host + ";\n location ^~ /.well-known/acme-challenge/ { root " + str(webroot) + "; default_type text/plain; }\n location / { return 404; }\n}\n"
+            previous = config.read_bytes() if config.exists() else None
+            try:
+                write(config, content, 0o644)
+                run(["nginx", "-t"])
+                run(["systemctl", "reload", "nginx"])
+            except BaseException:
+                if previous is None: config.unlink(missing_ok=True)
+                else: write(config, previous, 0o644)
+                raise
+            return ["-v", str(webroot) + ":/webroot", self.IMAGE], ["--webroot", "--webroot-path", "/webroot"]
+        with socket.socket() as probe:
+            probe.bind(("0.0.0.0", 80))
+        return ["-p", "80:80", self.IMAGE], ["--standalone"]
+
+    def install_bundle(self, bundle):
+        # The application owns data/tls: use directory descriptors to prevent symlink/race writes as root.
+        data = os.open(self.target / "data", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            tls = os.open("tls", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=data)
+            try:
+                name = ".public-" + secrets.token_hex(12)
+                fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=tls)
+                try:
+                    os.fchown(fd, 10001, 10001)
+                    with os.fdopen(fd, "wb") as stream:
+                        stream.write(json.dumps(bundle).encode())
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    os.replace(name, "public.json", src_dir_fd=tls, dst_dir_fd=tls)
+                    os.fsync(tls)
+                finally:
+                    try: os.unlink(name, dir_fd=tls)
+                    except FileNotFoundError: pass
+            finally: os.close(tls)
+        finally: os.close(data)
+
+    def run(self, enable=False, staging=False):
+        previous = self.state()
+        if not enable and not previous.get("enabled"):
+            return previous
+        host = self.host()
+        if previous.get("host") and host != previous["host"]:
+            raise ValueError("IP изменился: сначала настройте сертификат для нового сервера")
+        self.publish(busy=True, lastAttempt=int(time.time()), message="Проверяем сертификат Let’s Encrypt…")
+        try:
+            with (self.target / ".install.lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                base = self.target / ("acme-staging" if staging else "acme")
+                base.mkdir(mode=0o700, exist_ok=True)
+                image, challenge = self.challenge(host)
+                command = ["docker", "run", "--rm", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
+                           "-v", str(base) + ":/etc/letsencrypt", *image,
+                           "certonly", "--non-interactive", "--agree-tos", "--register-unsafely-without-email",
+                           "--preferred-profile", "shortlived", "--ip-address", host,
+                           "--cert-name", "worker-ip", "--keep-until-expiring",
+                           "--logs-dir", "/etc/letsencrypt/logs", "--work-dir", "/etc/letsencrypt/work", *challenge]
+                if staging: command.append("--staging")
+                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
+                if result.returncode:
+                    raise RuntimeError("Let’s Encrypt не выдал сертификат. Проверьте доступ к TCP 80; журнал: " + str(base / "logs"))
+                live = base / "live/worker-ip"
+                if staging:
+                    return self.publish(busy=False, message="Тест Let’s Encrypt staging завершён; рабочий сертификат не изменён")
+                # Validate the full chain and IP before publishing any private key to the dispatcher.
+                run(["openssl", "verify", "-verify_ip", host, "-untrusted", str(live / "chain.pem"), str(live / "cert.pem")])
+                decoded = ssl._ssl._test_decode_cert(str(live / "cert.pem"))
+                expires = int(ssl.cert_time_to_seconds(decoded["notAfter"]))
+                if expires <= time.time() + 3600:
+                    raise ValueError("Срок нового сертификата слишком мал")
+                bundle = {"host": host, "certificate": (live / "fullchain.pem").read_text(),
+                          "privateKey": (live / "privkey.pem").read_text()}
+                self.install_bundle(bundle)
+                return self.publish(enabled=True, busy=False, host=host, expiresAt=expires,
+                                    lastSuccess=int(time.time()), message="Let’s Encrypt включён. Проверка продления каждые 12 часов.")
+        except BaseException:
+            self.publish(busy=False, message="Не удалось обновить сертификат. Прежний сертификат сохранён; проверьте TCP 80 и журнал службы.")
+            raise
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["install", "start", "stop", "status", "logs", "where", "export"], nargs="?", default="install")
+    parser.add_argument("action", choices=["install", "start", "stop", "status", "logs", "where", "export", "certificate"], nargs="?", default="install")
     parser.add_argument("output", nargs="?")
     parser.add_argument("--dir", default=str(ROOT / "instance"))
     parser.add_argument("--host")
@@ -129,6 +247,7 @@ def main():
     parser.add_argument("--login")
     parser.add_argument("--password-stdin", action="store_true")
     parser.add_argument("--image")
+    parser.add_argument("--staging", action="store_true", help="Test ACME without changing the active certificate")
     args = parser.parse_args()
     target = Path(args.dir).expanduser().resolve()
     print("Папка сервиса: " + str(target), flush=True)
@@ -147,7 +266,9 @@ def main():
     if args.action != "install":
         if not previous:
             raise ValueError("Сначала выполните worker install")
-        if args.action == "export":
+        if args.action == "certificate":
+            print(PublicCertificate(target, PROJECT).run(enable=True, staging=args.staging)["message"])
+        elif args.action == "export":
             if not args.output:
                 raise ValueError("Укажите путь архива: worker export /root/worker-move.tgz")
             with (target / ".install.lock").open("a") as lock:

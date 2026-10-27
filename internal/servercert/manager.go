@@ -36,6 +36,8 @@ type Manager struct {
 	settings    Settings
 	certificate *tls.Certificate
 	publicCA    []byte
+	publicStamp time.Time
+	public      bool
 }
 
 func ValidHost(host string) bool {
@@ -78,8 +80,14 @@ func New(dir, host string) (*Manager, error) {
 	return m, nil
 }
 func (m *Manager) Certificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.settings.Mode == "auto" {
+		if info, err := os.Stat(filepath.Join(m.dir, "tls/public.json")); err == nil && !info.ModTime().Equal(m.publicStamp) {
+			// Existing connections continue; a malformed replacement never replaces the active pair.
+			_ = m.loadPublic()
+		}
+	}
 	return m.certificate, nil
 }
 func (m *Manager) PublicCA() []byte {
@@ -90,7 +98,11 @@ func (m *Manager) PublicCA() []byte {
 func (m *Manager) View() View {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return View{m.settings.Host, m.settings.Mode, m.certificate.Leaf.NotAfter, "/device-ca.crt"}
+	mode := m.settings.Mode
+	if m.public {
+		mode = "letsencrypt"
+	}
+	return View{m.settings.Host, mode, m.certificate.Leaf.NotAfter, "/device-ca.crt"}
 }
 func (m *Manager) Refresh() error { m.mu.Lock(); defer m.mu.Unlock(); return m.refreshLocked() }
 func (m *Manager) SetHost(host string) error {
@@ -144,6 +156,7 @@ func (m *Manager) Install(certPEM, keyPEM []byte) error {
 		return e
 	}
 	m.certificate = pair
+	m.public = false
 	return nil
 }
 func (m *Manager) save() error {
@@ -171,6 +184,50 @@ func checkedPair(certPEM, keyPEM []byte, host string) (*tls.Certificate, error) 
 	pair.Leaf = leaf
 	return &pair, nil
 }
+func verifiedPublicPair(raw []byte, host string, roots *x509.CertPool) (*tls.Certificate, error) {
+	var bundle struct {
+		Host        string `json:"host"`
+		Certificate string `json:"certificate"`
+		PrivateKey  string `json:"privateKey"`
+	}
+	if json.Unmarshal(raw, &bundle) != nil || bundle.Host != host {
+		return nil, errors.New("public certificate host mismatch")
+	}
+	pair, err := checkedPair([]byte(bundle.Certificate), []byte(bundle.PrivateKey), host)
+	if err != nil {
+		return nil, err
+	}
+	intermediates := x509.NewCertPool()
+	for _, der := range pair.Certificate[1:] {
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			return nil, err
+		}
+		intermediates.AddCert(cert)
+	}
+	if _, err = pair.Leaf.Verify(x509.VerifyOptions{DNSName: host, Intermediates: intermediates, Roots: roots}); err != nil {
+		return nil, errors.New("public certificate chain is not trusted")
+	}
+	return pair, nil
+}
+func (m *Manager) loadPublic() error {
+	path := filepath.Join(m.dir, "tls/public.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	pair, err := verifiedPublicPair(raw, m.settings.Host, nil)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	m.certificate, m.publicStamp, m.public = pair, info.ModTime(), true
+	return nil
+}
+
 func (m *Manager) refreshLocked() error {
 	dir := filepath.Join(m.dir, "tls")
 	authority := filepath.Join(dir, "authority")
@@ -259,6 +316,12 @@ func (m *Manager) refreshLocked() error {
 		}
 		return e
 	}
+	if _, err := os.Stat(filepath.Join(dir, "public.json")); err == nil {
+		return m.loadPublic()
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	m.public = false
 	certFile, leafKeyFile := filepath.Join(dir, "fullchain.pem"), filepath.Join(dir, "privkey.pem")
 	cert, ce := os.ReadFile(certFile)
 	leafKey, ke := os.ReadFile(leafKeyFile)
