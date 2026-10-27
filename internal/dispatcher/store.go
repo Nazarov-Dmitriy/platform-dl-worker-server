@@ -112,10 +112,10 @@ func Open(path string, config Config) (*Store, error) {
 			return fail(e)
 		}
 	}
-	if version > 6 {
+	if version > 7 {
 		return fail(errors.New("unsupported database schema version"))
 	}
-	for i, name := range []string{"001_core.sql", "002_device_messages.sql", "003_transfers.sql", "004_models.sql", "005_admin.sql", "006_deleted_devices.sql"} {
+	for i, name := range []string{"001_core.sql", "002_device_messages.sql", "003_transfers.sql", "004_models.sql", "005_admin.sql", "006_deleted_devices.sql", "007_deleted_sites.sql"} {
 		if version >= i+1 {
 			continue
 		}
@@ -244,7 +244,7 @@ func (s *Store) SetSite(ctx context.Context, id string, enabled bool, weight int
 		}
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		r, e := tx.Exec("UPDATE sites SET enabled=?,weight=?,revision=revision+1 WHERE id=?", enabled, weight, id)
+		r, e := tx.Exec("UPDATE sites SET enabled=?,weight=?,revision=revision+1 WHERE id=? AND deleted=0", enabled, weight, id)
 		if e != nil {
 			return e
 		}
@@ -323,7 +323,7 @@ func (s *Store) IssueToken(ctx context.Context, purpose, id string) (TokenView, 
 	e := s.transaction(ctx, func(tx *sql.Tx) error {
 		var n int
 		query := "SELECT count(*) FROM " + table + " WHERE id=?"
-		if purpose == "DEVICE" {
+		if purpose == "DEVICE" || purpose == "SITE" {
 			query += " AND deleted=0"
 		}
 		if e := tx.QueryRow(query, id).Scan(&n); e != nil {
@@ -385,7 +385,7 @@ func (s *Store) Tokens(ctx context.Context) ([]TokenView, error) {
 	return out, rows.Err()
 }
 func (s *Store) Sites(ctx context.Context) ([]Site, error) {
-	rows, e := s.db.QueryContext(ctx, "SELECT id,name,enabled,weight,operations,revision FROM sites ORDER BY id")
+	rows, e := s.db.QueryContext(ctx, "SELECT id,name,enabled,weight,operations,revision FROM sites WHERE deleted=0 ORDER BY id")
 	if e != nil {
 		return nil, e
 	}

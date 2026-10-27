@@ -258,7 +258,7 @@ func (s *Store) AdminUpdateSite(ctx context.Context, a AdminActor, id, match str
 		var enabled, weight int
 		var ops string
 		var rev int64
-		e := tx.QueryRow("SELECT name,enabled,weight,operations,revision FROM sites WHERE id=?", id).Scan(&name, &enabled, &weight, &ops, &rev)
+		e := tx.QueryRow("SELECT name,enabled,weight,operations,revision FROM sites WHERE id=? AND deleted=0", id).Scan(&name, &enabled, &weight, &ops, &rev)
 		if errors.Is(e, sql.ErrNoRows) {
 			return problem(404, "NOT_FOUND", "Site not found")
 		}

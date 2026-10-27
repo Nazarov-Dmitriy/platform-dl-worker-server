@@ -212,7 +212,17 @@
               <div class="card-heading"><h2>Подключённые сайты</h2></div>
               <div id="sites"></div>
             </div>
+            <section id="siteSettings" class="card" hidden>
+              <div class="card-heading"><h2 id="siteSettingsTitle">Настройки сайта</h2><button id="closeSiteSettings" type="button" class="button quiet">Закрыть</button></div>
+              <div class="card-body">
+                <p id="siteSettingsId" class="caption"></p>
+                <div class="form-actions"><button id="issueSiteToken" type="button" class="button primary">Выдать новый токен</button><button id="deleteSite" type="button" class="button danger">Удалить сайт</button></div>
+                <div id="siteIssued" class="token-box" role="status" hidden></div>
+              </div>
+            </section>
             <div id="siteCreate">
+              <button id="showSiteCreate" class="button primary" type="button">Добавить сайт</button>
+              <div id="siteCreateForm" hidden>
               <div class="card">
                 <div class="card-heading"><h2>Добавить сайт</h2></div>
                 <div class="card-body">
@@ -258,10 +268,11 @@
                       </div>
                     </fieldset>
                     <div class="form-actions">
-                      <button class="button primary">Добавить сайт</button>
+                      <button class="button primary">Добавить сайт</button><button id="cancelSiteCreate" type="button" class="button quiet">Отмена</button>
                     </div>
                   </form>
                 </div>
+              </div>
               </div>
             </div>
           </section>

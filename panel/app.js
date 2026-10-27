@@ -170,12 +170,13 @@ async function reload() {
   if (state.sites.length)
     table(
       "sites",
-      ["Сайт", "Состояние", "Операции", "Вес"],
+      ["Сайт", "Состояние", "Операции", "Вес", "Настройки"],
       state.sites.map((s) => [
         titleCell(s.name, s.id, "globe"),
         badge(s.enabled ? "Включён" : "Отключён", s.enabled ? "good" : ""),
         s.operations.map((o) => operations[o] || o).join(", "),
         s.weight,
+        siteSettingsButton(s),
       ]),
     );
   else
@@ -341,6 +342,7 @@ on("siteForm", "submit", async (e) => {
   });
   e.target.reset();
   await reload();
+  $("siteCreateForm").hidden = true;
   message("feedback", "Сайт добавлен.");
 });
 on("deviceForm", "submit", async (e) => {
@@ -625,3 +627,57 @@ setInterval(() => {
 }, 3000);
 
 init();
+
+function siteSettingsButton(site) {
+  const button = node("button", null, "button quiet");
+  button.innerHTML = icon("settings");
+  button.type = "button";
+  button.hidden = state.role !== "OWNER" && !state.manageSites;
+  button.setAttribute("aria-label", "Настройки сайта «" + site.name + "»");
+  button.title = "Настройки сайта «" + site.name + "»";
+  button.onclick = () => {
+    state.selectedSite = site;
+    $("siteSettingsTitle").textContent = "Настройки сайта «" + site.name + "»";
+    $("siteSettingsId").textContent = "ID: " + site.id;
+    $("siteIssued").hidden = true;
+    $("siteSettings").hidden = false;
+    $("siteSettings").scrollIntoView({block:"nearest"});
+  };
+  return button;
+}
+on("showSiteCreate", "click", () => {
+  $("siteCreateForm").hidden = !$("siteCreateForm").hidden;
+  if (!$("siteCreateForm").hidden) $("siteForm").elements.name.focus();
+});
+on("cancelSiteCreate", "click", () => { $("siteCreateForm").hidden = true; });
+on("closeSiteSettings", "click", () => { $("siteSettings").hidden = true; $("siteIssued").hidden = true; });
+async function siteAction(kind) {
+  const site = state.selectedSite;
+  if (!site || state.siteActionId) return;
+  if (kind === "delete" && !confirm("Удалить сайт «" + site.name + "»?\nID: " + site.id + "\nТокены перестанут работать. История заданий сохранится.")) return;
+  state.siteActionId = site.id;
+  const controls = [...$("siteSettings").querySelectorAll("button"), ...$("sites").querySelectorAll("button")];
+  controls.forEach(b => b.disabled = true);
+  $("siteIssued").hidden = true;
+  try {
+    if (kind === "token") {
+      const issued = await api("/api/v2/admin/sites/" + site.id + "/tokens", {
+        method:"POST", mutate:true, body:JSON.stringify({requestId:crypto.randomUUID()})
+      });
+      $("siteIssued").replaceChildren(
+        node("strong", "Новый токен сайта «" + site.name + "»"),
+        node("p", "Вставьте его в настройки сервиса обработки на сайте. Токен показывается один раз. Ранее выданные токены продолжают работать.", "caption"),
+        node("code", issued.token, "code")
+      );
+      $("siteIssued").hidden = false;
+    } else {
+      await api("/api/v2/admin/sites/" + site.id, {method:"DELETE",mutate:true,headers:{"If-Match":JSON.stringify(String(site.revision))}});
+      $("siteSettings").hidden = true;
+      state.selectedSite = null;
+      await reload();
+      message("feedback", "Сайт «" + site.name + "» удалён.");
+    }
+  } finally { state.siteActionId = null; controls.forEach(b => b.disabled = false); }
+}
+on("issueSiteToken", "click", () => siteAction("token"));
+on("deleteSite", "click", () => siteAction("delete"));

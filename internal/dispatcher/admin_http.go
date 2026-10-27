@@ -25,6 +25,7 @@ func (h *HTTP) addAdminRoutes() {
 	h.mux.HandleFunc("DELETE /api/v2/admin/session", h.admin(h.adminLogout, false))
 	h.mux.HandleFunc("POST /api/v2/admin/sites", h.admin(h.adminCreateSite, true))
 	h.mux.HandleFunc("GET /api/v2/admin/sites", h.admin(h.adminListSites, false))
+	h.mux.HandleFunc("DELETE /api/v2/admin/sites/{id}", h.admin(h.adminDeleteSite, true))
 	h.mux.HandleFunc("PUT /api/v2/admin/sites/{id}", h.admin(h.adminUpdateSite, true))
 	h.mux.HandleFunc("POST /api/v2/admin/sites/{id}/tokens", h.admin(h.adminIssueSiteToken, true))
 	h.mux.HandleFunc("GET /api/v2/admin/jobs", h.admin(h.adminJobs, false))
