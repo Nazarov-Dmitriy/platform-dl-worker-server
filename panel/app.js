@@ -92,6 +92,7 @@ function selectTab(tab) {
   [$("pageTitle").textContent, $("pageSubtitle").textContent] = views[tab];
   document.title = views[tab][0] + " · Worker";
   closeMenu();
+  if (tab === "overview" && overviewReady) void refreshOverview();
 }
 $("nav").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tab]");
@@ -546,6 +547,8 @@ async function init() {
     $("app").hidden = false;
     selectTab(location.hash.slice(1));
     await reload();
+    overviewReady = true;
+    markOverviewUpdated();
   } catch (error) {
     if (error.status === 401) return;
     if ($("app").hidden) {
@@ -634,6 +637,40 @@ setInterval(() => {
     });
   }
 }, 3000);
+
+let overviewReady = false;
+let overviewRefreshing = false;
+function markOverviewUpdated() {
+  $("overviewRefresh").textContent = "Обновлено в " + new Date().toLocaleTimeString("ru-RU") + " · каждые 15 секунд";
+}
+async function refreshOverview() {
+  if (!overviewReady || overviewRefreshing || document.hidden || document.querySelector('[data-panel="overview"]').hidden) return;
+  overviewRefreshing = true;
+  const siteId = $("overviewSite").value;
+  try {
+    const [sites, devices, jobs, ops] = await Promise.all([
+      api("/api/v2/admin/sites"),
+      api("/api/v2/admin/devices"),
+      siteId ? api("/api/v2/admin/jobs?siteId=" + encodeURIComponent(siteId)) : Promise.resolve({jobs:[]}),
+      state.role === "OWNER" ? api("/api/v2/admin/ops") : Promise.resolve(null),
+    ]);
+    if (document.hidden || document.querySelector('[data-panel="overview"]').hidden || siteId !== $("overviewSite").value) return;
+    $("stat-siteCount").textContent = sites.items.length;
+    $("stat-online").textContent = devices.items.filter(d => d.online).length;
+    renderDevices("overviewDevices", devices.items);
+    renderJobs("overviewJobs", jobs.jobs, !!siteId);
+    if (ops) {
+      $("stat-queued").textContent = ops.queued ?? "—";
+      $("stat-running").textContent = ops.running ?? "—";
+    }
+    markOverviewUpdated();
+  } catch (error) {
+    if (error.status !== 401) $("overviewRefresh").textContent = "Не удалось обновить данные · повторим через 15 секунд";
+  } finally { overviewRefreshing = false; }
+}
+setInterval(() => void refreshOverview(), 15000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) void refreshOverview(); });
+window.addEventListener("focus", () => void refreshOverview());
 
 init();
 
