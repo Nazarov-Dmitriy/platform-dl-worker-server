@@ -5,6 +5,17 @@ let current = { phase: "stopped", running: 0, connected: false, paused: false },
   busy = false;
 let autostart = { supported: false, enabled: false, configured: false };
 let pendingAutostart;
+let configured = false;
+function screen(settings) {
+  $("dashboard").hidden = settings;
+  $("settingsScreen").hidden = !settings;
+  window.scrollTo(0, 0);
+}
+$("openSettings").onclick = () => screen(true);
+$("back").onclick = () => screen(false);
+$("start").onclick = () => configured
+  ? action(() => window.processor.start())
+  : screen(true);
 function notice(message) {
   $("notice").textContent = message || "";
   $("notice").hidden = !message;
@@ -59,6 +70,16 @@ function draw(status) {
   );
   $("activity").textContent = "Заданий в работе: " + status.running;
   $("detail").textContent = status.message || "";
+  $("workState").textContent = status.phase === "stopping"
+    ? "Завершаем обработку"
+    : status.running > 0
+      ? (status.paused ? "Текущие задания завершаются · новые на паузе" : "Выполняем задания")
+      : status.paused ? "Приём заданий на паузе"
+      : status.connected ? "Ожидаем задания от сервера"
+      : status.phase === "connecting" ? "Подключаемся к серверу"
+      : "Обработчик не запущен";
+  $("start").disabled = active || busy;
+  $("start").textContent = configured ? "Подключиться" : "Настроить подключение";
   form
     .querySelectorAll("input,button")
     .forEach((input) => (input.disabled = active || busy));
@@ -110,7 +131,9 @@ form.onsubmit = (event) => {
       "Токен сохранён. Оставьте поле пустым, чтобы использовать его снова.";
     $("fingerprint").textContent = "Отпечаток CA: " + settings.fingerprint;
     $("fingerprint").hidden = false;
+    configured = true;
     await window.processor.start();
+    screen(false);
   });
 };
 $("pause").onclick = () =>
@@ -122,6 +145,7 @@ window.processor.onStatus(draw);
 window.processor
   .state()
   .then(({ settings, status }) => {
+    configured = !!settings.tokenSet;
     for (const name of ["server", "deviceId", "workDir", "maxParallel"])
       if (settings[name] != null) form.elements[name].value = settings[name];
     if (settings.tokenSet)

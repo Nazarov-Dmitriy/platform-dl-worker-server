@@ -255,3 +255,8 @@ fieldset:disabled {
 .startup-card .hint {
   margin-top: 12px;
 }
+
+.screen-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.dashboard-actions { margin: 24px 0; }
+#dashboard { min-height: 360px; }
+#workState { font-size: 18px; font-weight: 600; }

@@ -20,13 +20,24 @@
       <span id="connection" class="badge">Не запущен</span>
     </header>
     <main>
-      <section class="intro">
-        <h1>Подключение к серверу</h1>
-        <p>
-          Настройте подключение и управляйте обработкой на этом компьютере.
-        </p>
-      </section>
       <div id="notice" class="notice" role="status" hidden></div>
+      <section id="dashboard">
+        <div class="screen-heading"><h1>Обработка заданий</h1><button id="openSettings" type="button">Настройки</button></div>
+        <section class="summary" aria-live="polite">
+          <h2>На этом компьютере</h2>
+          <span id="activity">Заданий в работе: 0</span>
+          <span id="workState">Обработчик не запущен</span>
+          <span id="detail">Готов к настройке подключения</span>
+        </section>
+        <p class="hint">Новые задания назначает сервер. Общая очередь доступна в панели диспетчера.</p>
+        <div class="actions dashboard-actions">
+          <button id="start" class="primary" type="button">Подключиться</button>
+          <button id="pause" type="button" disabled>Пауза</button>
+          <button id="stop" type="button" disabled>Остановить</button>
+        </div>
+      </section>
+      <section id="settingsScreen" hidden>
+        <div class="screen-heading"><h1>Настройки</h1><button id="back" type="button">К заданиям</button></div>
       <form id="settings">
         <div class="card">
           <h2>Сервер и устройство</h2>
@@ -105,8 +116,7 @@
         <div class="actions">
           <button id="connect" class="primary" type="submit">
             Сохранить и подключить</button
-          ><button id="pause" type="button" disabled>Пауза</button
-          ><button id="stop" type="button" disabled>Остановить</button>
+          >
         </div>
       </form>
       <section class="card startup-card">
@@ -120,10 +130,6 @@
         >
         <p id="autostartHint" class="hint">Сначала сохраните подключение.</p>
       </section>
-      <section class="summary" aria-label="Состояние обработки" aria-live="polite">
-        <h2>Обработка заданий</h2>
-        <span id="activity">Заданий в работе: 0</span
-        ><span id="detail">Готов к настройке подключения</span>
       </section>
       <footer class="actions window-actions">
         <button id="hide" type="button">Свернуть в трей</button>
