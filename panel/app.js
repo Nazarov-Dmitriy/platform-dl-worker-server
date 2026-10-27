@@ -489,6 +489,14 @@ on("configureForm", "submit", async (e) => {
     settings[key] = Number(fd.get(key));
   await sendCommand({ type: "CONFIGURE", settings });
 });
+function toggleAccountCreate(open) {
+  $("accountCreateForm").hidden = !open;
+  $("showAccountCreate").setAttribute("aria-expanded", String(open));
+  if (open) $("accountForm").elements.login.focus();
+  else { $("accountForm").reset(); $("showAccountCreate").focus(); }
+}
+on("showAccountCreate", "click", () => toggleAccountCreate($("accountCreateForm").hidden));
+on("cancelAccountCreate", "click", () => toggleAccountCreate(false));
 on("accountForm", "submit", async (e) => {
   const fd = new FormData(e.target);
   await api("/api/v2/admin/accounts", {
@@ -504,6 +512,7 @@ on("accountForm", "submit", async (e) => {
   });
   e.target.reset();
   await reload();
+  toggleAccountCreate(false);
   message("feedback", "Аккаунт добавлен.");
 });
 async function opsAction(method, path, body) {

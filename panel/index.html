@@ -470,7 +470,8 @@
               <div class="card-heading"><h2>Аккаунты</h2></div>
               <div id="accounts"></div>
             </div>
-            <div class="card">
+            <button id="showAccountCreate" type="button" class="button primary" aria-expanded="false" aria-controls="accountCreateForm">Добавить аккаунт</button>
+            <div id="accountCreateForm" class="card" hidden>
               <div class="card-heading"><h2>Добавить аккаунт</h2></div>
               <div class="card-body">
                 <form id="accountForm" class="stacked-form">
@@ -507,6 +508,7 @@
                   </fieldset>
                   <div class="form-actions">
                     <button class="button primary">Добавить аккаунт</button>
+                    <button id="cancelAccountCreate" type="button" class="button quiet">Отмена</button>
                   </div>
                 </form>
               </div>
