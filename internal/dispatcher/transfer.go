@@ -205,6 +205,9 @@ func (s *Store) ListTransfers(ctx context.Context, site, jobID string) (map[stri
 				return e
 			}
 			item.SourceRevision = src.String
+			if item.Kind == "UPLOAD" {
+				item.UploadPrefix = "jobs/" + r.site + "/" + r.request.ID + "/" + item.Fence.DispatcherEpoch + "/" + formatGeneration(item.Fence.Generation) + "/" + item.Fence.AssignmentID + "/"
+			}
 			if len(art) > 0 {
 				var a Artifact
 				if e = json.Unmarshal(art, &a); e != nil {

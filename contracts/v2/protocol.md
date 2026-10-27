@@ -343,3 +343,5 @@ ModelEntry может включать optional files (ModelFile): path, bytes, 
 Однофайловые записи сохраняют прежнюю семантику bytes/sha256 payload.
 
 Windows startup is a local application preference. CONFIGURE does not require autostart; legacy autostart values are accepted but ignored by processors 0.7.4+.
+
+UPLOAD transfer requests include uploadPrefix, the exact object prefix accepted by the dispatcher. Sites append the manifest-relative path unchanged.

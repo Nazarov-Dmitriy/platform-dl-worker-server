@@ -99,6 +99,10 @@ func TestSourceDownloadAndPublicationPath(t *testing.T) {
 	}
 	links := make([]Link, 0, len(art.Manifest.Files))
 	prefix := "jobs/" + site.ID + "/" + o.JobID + "/" + o.Fence.DispatcherEpoch + "/" + formatGeneration(o.Fence.Generation) + "/" + o.Fence.AssignmentID + "/"
+	if up.UploadPrefix != prefix {
+		t.Fatalf("upload prefix mismatch: %q", up.UploadPrefix)
+	}
+	prefix = up.UploadPrefix
 	for _, file := range art.Manifest.Files {
 		links = append(links, Link{
 			Path: file.Path, ObjectName: prefix + file.Path,

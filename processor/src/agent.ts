@@ -793,6 +793,7 @@ export class Agent {
       fence: r.attempt.fence,
       manifest,
     };
+    r.stage = "WAITING_UPLOAD";
     await this.durable(
       r,
       frame("job.artifact.propose", {
@@ -802,7 +803,6 @@ export class Agent {
       }),
     );
     r.progress = 0.85;
-    r.stage = "UPLOADING";
     let uploadedBytes = 0;
     const uploadBytes = files.reduce((sum, file) => sum + file.bytes, 0);
     for (const file of files) {
@@ -812,8 +812,10 @@ export class Agent {
         file.kind === "SEGMENT"
           ? join(outDir, "hls", file.path)
           : join(outDir, file.path);
-      await this.transfer(file.path, "PUT", r, (link) =>
-        uploadLink(link, disk, undefined, undefined, r.transferAbort?.signal),
+      await this.transfer(file.path, "PUT", r, (link) => {
+        r.stage = "UPLOADING";
+        return uploadLink(link, disk, undefined, undefined, r.transferAbort?.signal);
+      },
       );
       uploadedBytes += file.bytes;
       r.progress = 0.85 + 0.13 * uploadedBytes / Math.max(1, uploadBytes);

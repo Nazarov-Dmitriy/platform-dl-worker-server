@@ -11,3 +11,5 @@
 - TestLocalStorageGrantURLs: допустимые локальные имена и запрет внешнего HTTP.
 - TestLocalStorageSourceGrantReachesDevice: выдача разрешения SOURCE до PendingGrants устройства.
 - [ ] После серверного релиза повторно запустить обработку с локального сайта.
+
+2026-10-27: Worker 0.1.9 добавляет uploadPrefix для UPLOAD; тест выдачи, загрузки и публикации использует возвращённый prefix. Processor 0.7.6 отличает WAITING_UPLOAD от фактического UPLOADING. Go PASS; npm test 30 PASS, 4 SKIP. Требуется обновление backend для использования нового prefix.

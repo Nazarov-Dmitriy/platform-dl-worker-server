@@ -142,6 +142,7 @@ type TransferRequest struct {
 	Kind           string    `json:"kind"`
 	Fence          Fence     `json:"fence"`
 	SourceRevision string    `json:"sourceRevision,omitempty"`
+	UploadPrefix   string    `json:"uploadPrefix,omitempty"`
 	Artifact       *Artifact `json:"artifact,omitempty"`
 }
 type PublicationClaim struct {

@@ -818,6 +818,7 @@
             "fence": {
               "$ref": "#/$defs/Fence"
             },
+            "uploadPrefix": { "type": "string", "pattern": "^jobs/", "maxLength": 2048 },
             "artifact": {
               "$ref": "#/$defs/Artifact"
             }

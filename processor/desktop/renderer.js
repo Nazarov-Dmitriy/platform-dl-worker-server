@@ -53,6 +53,7 @@ const stages = {
   WAITING_SOURCE: "Ожидаем исходный файл", DOWNLOADING: "Скачивание исходного файла",
   TRANSCODING: "Обработка видео", TRANSCRIBING: "Распознавание речи",
   TRANSLATING: "Перевод", UPLOADING: "Загрузка результата",
+  WAITING_UPLOAD: "Ожидаем разрешение на загрузку",
   WAITING_PUBLICATION: "Подтверждение результата",
 };
 function drawJobs(jobs = []) {
