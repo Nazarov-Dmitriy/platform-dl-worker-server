@@ -277,7 +277,7 @@ type AdminActor struct {
 type DeviceSettings struct {
 	WorkDirectory          string `json:"workDirectory,omitempty"`
 	Paused                 bool   `json:"paused"`
-	Autostart              bool   `json:"autostart"`
+	Autostart              bool   `json:"autostart,omitempty"`
 	MaxParallel            int    `json:"maxParallel"`
 	CPUThresholdPercent    int    `json:"cpuThresholdPercent"`
 	MemoryThresholdPercent int    `json:"memoryThresholdPercent"`

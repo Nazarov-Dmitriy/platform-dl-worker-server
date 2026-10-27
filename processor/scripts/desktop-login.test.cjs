@@ -109,3 +109,37 @@ test("Windows path with spaces remains enabled when Electron drops returned argu
   f.block();
   assert.equal(control.state().enabled, false);
 });
+function movedFixture(approved = true) {
+  let registeredPath = "C:/Worker old/Worker Processor.exe";
+  const calls = [];
+  const app = {
+    isPackaged: true,
+    getLoginItemSettings({ path }) {
+      const match = path === registeredPath;
+      return { executableWillLaunchAtLogin: match && approved,
+        launchItems: match ? [{ name: NAME, enabled: approved }] : [] };
+    },
+    setLoginItemSettings(options) { calls.push(options); registeredPath = options.path; },
+  };
+  return { calls, control: createLoginController(app, {
+    platform: "win32", executable: "C:/Worker new/Worker Processor.exe",
+  }) };
+}
+test("approved startup follows the executable to a new release folder", () => {
+  const f = movedFixture();
+  assert.equal(f.control.restore("C:/Worker old/Worker Processor.exe").enabled, true);
+  assert.equal(f.calls[0].path, "C:/Worker new/Worker Processor.exe");
+  f.control.restore("C:/Worker old/Worker Processor.exe");
+  assert.equal(f.calls.length, 1);
+});
+test("moving release folders respects startup disabled in Windows", () => {
+  const f = movedFixture(false);
+  assert.equal(f.control.restore("C:/Worker old/Worker Processor.exe").enabled, false);
+  assert.equal(f.calls.length, 0);
+});
+test("missing startup registration never enables startup automatically", () => {
+  const f = movedFixture();
+  f.control.restore(undefined);
+  f.control.restore("C:/missing.exe");
+  assert.equal(f.calls.length, 0);
+});

@@ -711,6 +711,9 @@ test("confirmed device settings survive restart without overriding the local wor
   assert.equal(agent.config.paused, true);
   assert.equal(agent.config.maxParallel, 1);
   assert.equal(agent.config.memoryThresholdPercent, 60);
+  const startupCalls: boolean[] = [];
+  agent.config.desktopAutostart = async (enabled) => { startupCalls.push(enabled); };
+  agent.journal.state.autostart = true;
   for (const extra of [{}, { workDirectory: join(dir, "remote-must-not-create") }]) {
     await agent.runCommand({
       requestId: randomUUID(), type: "CONFIGURE",
@@ -721,6 +724,9 @@ test("confirmed device settings survive restart without overriding the local wor
     assert.equal(agent.config.maxParallel, 3);
     assert.equal(agent.config.cpuThresholdPercent, 65);
     assert.equal(agent.config.paused, false);
+    assert.equal(agent.journal.state.autostart, true);
+    assert.deepEqual(startupCalls, []);
+    assert.equal("autostart" in (agent.journal.state.appliedSettings || {}), false);
     assert.equal("workDirectory" in (agent.journal.state.appliedSettings || {}), false);
   }
   await agent.close();

@@ -1,6 +1,5 @@
 import { rootCertificates } from "node:tls";
 import { errorCode } from "./errors.js";
-import { setAutostart } from "./autostart.js";
 import { validateHlsInput } from "./hls-input.js";
 import os from "node:os";
 import WebSocket from "ws";
@@ -1223,15 +1222,13 @@ async function applyConfigure(agent: Agent, settings: any) {
     th > 80
   )
     throw new Error("INVALID_SETTINGS");
-  await setAutostart(agent.config, Boolean(settings.autostart), agent.token);
   agent.config.paused = Boolean(settings.paused);
   agent.config.maxParallel = settings.maxParallel;
   agent.config.threshold = th;
   agent.config.cpuThresholdPercent = settings.cpuThresholdPercent;
   agent.config.memoryThresholdPercent = settings.memoryThresholdPercent;
   agent.config.diskThresholdPercent = settings.diskThresholdPercent;
-  agent.journal.state.autostart = Boolean(settings.autostart);
-  const { workDirectory: ignoredRemotePath, ...remoteSettings } = settings;
+  const { workDirectory: ignoredRemotePath, autostart: ignoredRemoteAutostart, ...remoteSettings } = settings;
   agent.journal.state.appliedSettings = remoteSettings;
   agent.journal.save();
 }

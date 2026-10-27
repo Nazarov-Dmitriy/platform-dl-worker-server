@@ -341,3 +341,5 @@ ModelEntry может включать optional files (ModelFile): path, bytes, 
 Размер downloadBytes равен сумме, общий sha256 — SHA-256 JCS массива files
 в исходном порядке. Проверяется каждый файл, inference полностью offline.
 Однофайловые записи сохраняют прежнюю семантику bytes/sha256 payload.
+
+Windows startup is a local application preference. CONFIGURE does not require autostart; legacy autostart values are accepted but ignored by processors 0.7.4+.

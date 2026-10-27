@@ -9,7 +9,7 @@ const {
   nativeImage,
   safeStorage,
 } = require("electron");
-const { fork } = require("node:child_process");
+const { fork, execFileSync } = require("node:child_process");
 const {
   mkdirSync,
   readFileSync,
@@ -20,7 +20,7 @@ const {
 const { join } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { validateSettings } = require("./settings.cjs");
-const { createLoginController } = require("./login.cjs");
+const { createLoginController, NAME } = require("./login.cjs");
 app.setName("Worker Processor");
 if (process.platform === "win32")
   app.setAppUserModelId("ru.difat.workerprocessor");
@@ -64,10 +64,40 @@ function autostartState() {
       existsSync(join(directory, "credential.bin")),
   };
 }
+function saveAutostartPreference() {
+  const actual = loginController.state();
+  if (actual.supported)
+    atomic("autostart.json", JSON.stringify({ enabled: actual.enabled, executable: process.execPath }));
+}
+function restoreDesktopAutostart() {
+  if (process.platform !== "win32" || !app.isPackaged || process.argv.includes("--smoke")) return;
+  let previousExecutable;
+  // Read only our named Run entry, including releases made before autostart.json existed.
+  try {
+    const output = execFileSync(join(process.env.SystemRoot || String.raw`C:\Windows`, "System32", "reg.exe"),
+      ["query", String.raw`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", NAME],
+      { encoding: "utf8", windowsHide: true, timeout: 5000, stdio: ["ignore", "pipe", "ignore"] });
+    previousExecutable = output.match(/REG_SZ\s+"([^"]+)"\s+--background\s*$/m)?.[1];
+  } catch {}
+  if (!previousExecutable) {
+    try {
+      const preference = JSON.parse(readFileSync(join(directory, "autostart.json"), "utf8"));
+      if (preference.enabled === true && typeof preference.executable === "string")
+        previousExecutable = preference.executable;
+    } catch {}
+  }
+  try {
+    loginController.restore(previousExecutable);
+    saveAutostartPreference();
+  } catch {
+    snapshot.message = "Не удалось восстановить автозапуск. Проверьте настройку в приложении.";
+  }
+}
 function setDesktopAutostart(enabled) {
   if (enabled && !autostartState().configured)
     throw Error("Сначала сохраните подключение к серверу.");
   const actual = loginController.set(enabled);
+  saveAutostartPreference();
   emit({ autostart: autostartState() });
   if (child?.connected)
     child.send({ type: "autostart-state", enabled: actual.enabled });
@@ -210,6 +240,7 @@ else {
         );
       } catch {}
     }
+    restoreDesktopAutostart();
     window = new BrowserWindow({
       width: 960,
       height: 820,

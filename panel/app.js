@@ -480,7 +480,6 @@ on("configureForm", "submit", async (e) => {
   const fd = new FormData(e.target),
     settings = {
       paused: !!fd.get("paused"),
-      autostart: !!fd.get("autostart"),
     };
   for (const key of [
     "maxParallel",
