@@ -21,3 +21,6 @@ deploy/releases/
 instance/
 **/instance/
 **/__pycache__/
+
+# Generated desktop application bundles
+processor/desktop-release/

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Worker Processor</title>
+    <link rel="stylesheet" href="app.css" />
+    <script defer src="renderer.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="mark">W</span>
+        <div><strong>Worker</strong><small>Обработчик медиа</small></div>
+      </div>
+      <span id="connection" class="badge">Не запущен</span>
+    </header>
+    <main>
+      <section class="intro">
+        <h1>Подключение к серверу</h1>
+        <p>
+          Настройте один раз. Закрывайте окно — обработчик продолжит работать в
+          фоне.
+        </p>
+      </section>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <form id="settings">
+        <div class="card">
+          <h2>Сервер и устройство</h2>
+          <p class="hint">
+            В панели Worker откройте «Устройства», добавьте этот компьютер и
+            выдайте ему токен.
+          </p>
+          <label
+            >Адрес сервера<input
+              name="server"
+              type="url"
+              required
+              placeholder="https://194.5.79.198:8090"
+              autocomplete="off"
+          /></label>
+          <label
+            >ID устройства<input
+              name="deviceId"
+              required
+              placeholder="Скопируйте ID из панели"
+              autocomplete="off"
+              spellcheck="false"
+          /></label>
+          <label
+            >Токен устройства<input
+              name="token"
+              type="password"
+              placeholder="DEVICE-токен"
+              autocomplete="off"
+              spellcheck="false"
+            /><small id="tokenHint"
+              >Сохраняется в защищённом хранилище этого компьютера.</small
+            ></label
+          >
+          <label
+            >Сертификат сервера
+            <div class="picker">
+              <input
+                id="certificate"
+                readonly
+                placeholder="Выберите device-ca.crt"
+              /><button id="chooseCertificate" type="button">
+                Выбрать файл
+              </button>
+            </div>
+            <small
+              >Публичный сертификат скачивается в панели Worker.</small
+            ></label
+          >
+          <p id="fingerprint" class="fingerprint" hidden></p>
+        </div>
+        <div class="card">
+          <h2>Обработка</h2>
+          <label
+            >Рабочая папка
+            <div class="picker">
+              <input
+                name="workDir"
+                readonly
+                required
+                placeholder="Папка для файлов обработки"
+              /><button id="chooseDirectory" type="button">
+                Выбрать папку
+              </button>
+            </div></label
+          ><label class="parallel"
+            >Параллельные задания<input
+              name="maxParallel"
+              type="number"
+              min="1"
+              max="64"
+              value="1"
+              required
+          /></label>
+        </div>
+        <div class="actions">
+          <button id="connect" class="primary" type="submit">
+            Сохранить и подключить</button
+          ><button id="pause" type="button" disabled>Пауза</button
+          ><button id="stop" type="button" disabled>Остановить</button>
+        </div>
+      </form>
+      <section class="summary">
+        <span id="activity">Заданий в работе: 0</span
+        ><span id="detail">Готов к настройке подключения</span>
+      </section>
+      <footer>
+        Закрытие окна скрывает приложение. Для полного завершения выберите
+        «Выйти» в меню значка возле часов.
+      </footer>
+    </main>
+  </body>
+</html>

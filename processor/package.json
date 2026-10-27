@@ -10,7 +10,11 @@
     "build": "tsc && node scripts/copy-schema.mjs",
     "start": "node dist/main.js",
     "test": "npm run build && node --test dist/test/*.test.js",
-    "test:models": "npm run build && node scripts/model-smoke.mjs"
+    "test:models": "npm run build && node scripts/model-smoke.mjs",
+    "desktop": "npm run build && electron .",
+    "desktop:pack": "npm run build && electron-builder --dir",
+    "desktop:dist": "npm run build && electron-builder",
+    "desktop:test": "node scripts/desktop-smoke.cjs"
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.1",
@@ -19,9 +23,35 @@
     "ws": "8.22.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@types/node": "22.19.0",
     "@types/ws": "8.18.1",
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0",
     "prettier": "3.6.2",
     "typescript": "5.9.3"
-  }
+  },
+  "main": "desktop/main.cjs",
+  "build": {
+    "appId": "ru.difat.workerprocessor",
+    "productName": "Worker Processor",
+    "directories": {
+      "output": "desktop-release"
+    },
+    "asar": false,
+    "files": [
+      "desktop/**/*",
+      "dist/**/*",
+      "!dist/test/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.utilities"
+    }
+  },
+  "description": "Worker media processor for Windows and macOS"
 }
