@@ -139,7 +139,7 @@ function renderDevices(target, devices) {
       "Подключение",
       "CPU",
       "RAM",
-      "Приоритет",
+      "Роль",
       ...(manage ? ["Действие"] : []),
     ],
     devices.map((d) => [
@@ -150,7 +150,7 @@ function renderDevices(target, devices) {
       ),
       meter(d.online ? d.usage?.cpuPercent : null),
       meter(d.online ? d.usage?.memoryUsedPercent : null),
-      d.priority > 0 ? "Основной" : "Обычный",
+      d.priority > 0 ? "Основной" : "Помощник",
       ...(manage ? [deviceManageButton(d)] : []),
     ]),
   );

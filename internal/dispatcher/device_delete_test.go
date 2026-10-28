@@ -130,6 +130,9 @@ func TestDeviceDeletionMigrationPreservesExistingData(t *testing.T) {
 	if _, err = s.db.Exec("ALTER TABLE devices DROP COLUMN deleted"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = s.db.Exec("ALTER TABLE devices DROP COLUMN priority"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = s.db.Exec("DELETE FROM schema_migrations WHERE version>=6"); err != nil {
 		t.Fatal(err)
 	}

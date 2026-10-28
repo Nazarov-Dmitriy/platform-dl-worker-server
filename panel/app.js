@@ -246,7 +246,7 @@ async function loadDevice() {
   }
   const d = state.devices.find((d) => d.id === id);
   $("devicePriorityForm").hidden = false;
-  $("devicePriority").value = String(d.priority || 0);
+  $("devicePriority").value = d.priority > 0 ? "100" : "0";
   message("devicePriorityOut", "");
   $("selectedDeviceTitle").textContent = "Устройство: " + d.name;
   $("selectedDeviceHint").textContent = "ID: " + d.id;
@@ -428,7 +428,7 @@ on("devicePriorityForm", "submit", (event) => {
       body: JSON.stringify({name: device.name, enabled: device.enabled, priority}),
     });
     await reload();
-    message("devicePriorityOut", "Приоритет сохранён. Он применяется к новым заданиям.");
+    message("devicePriorityOut", "Роль сохранена. Она применяется к новым заданиям.");
   }).catch(report);
 });
 on("deleteDevice", "click", () =>
