@@ -818,6 +818,11 @@
             "fence": {
               "$ref": "#/$defs/Fence"
             },
+            "uploadPrefix": {
+              "type": "string",
+              "maxLength": 240,
+              "pattern": "^(?!.*(?:^|/)\\.{1,2}(?:/|$))[A-Za-z0-9_-]+(?:[./][A-Za-z0-9_-]+)*/$"
+            },
             "artifact": {
               "$ref": "#/$defs/Artifact"
             }
@@ -826,6 +831,7 @@
             "id",
             "kind",
             "fence",
+            "uploadPrefix",
             "artifact"
           ],
           "additionalProperties": false
@@ -1911,9 +1917,7 @@
                 }
               },
               "required": [
-                "workDirectory",
                 "paused",
-                "autostart",
                 "maxParallel",
                 "cpuThresholdPercent",
                 "memoryThresholdPercent",

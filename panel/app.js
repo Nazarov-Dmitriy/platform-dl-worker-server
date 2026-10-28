@@ -420,7 +420,8 @@ function selectDevice(id) {
 }
 on("devicePriorityForm", "submit", (event) => {
   event.preventDefault();
-  void deviceAction(async (device) => {
+  return deviceAction(async (device) => {
+    message("devicePriorityOut", "");
     const priority = Number($("devicePriority").value);
     await api("/api/v2/admin/devices/" + device.id, {
       method: "PUT", mutate: true,
@@ -429,7 +430,7 @@ on("devicePriorityForm", "submit", (event) => {
     });
     await reload();
     message("devicePriorityOut", "Роль сохранена. Она применяется к новым заданиям.");
-  }).catch(report);
+  });
 });
 on("deleteDevice", "click", () =>
   deviceAction(async (device) => {
