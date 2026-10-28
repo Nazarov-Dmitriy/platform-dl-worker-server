@@ -113,10 +113,10 @@ func Open(path string, config Config) (*Store, error) {
 			return fail(e)
 		}
 	}
-	if version > 7 {
+	if version > 8 {
 		return fail(errors.New("unsupported database schema version"))
 	}
-	for i, name := range []string{"001_core.sql", "002_device_messages.sql", "003_transfers.sql", "004_models.sql", "005_admin.sql", "006_deleted_devices.sql", "007_deleted_sites.sql"} {
+	for i, name := range []string{"001_core.sql", "002_device_messages.sql", "003_transfers.sql", "004_models.sql", "005_admin.sql", "006_deleted_devices.sql", "007_deleted_sites.sql", "008_device_priority.sql"} {
 		if version >= i+1 {
 			continue
 		}

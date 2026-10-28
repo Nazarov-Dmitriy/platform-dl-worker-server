@@ -818,7 +818,6 @@
             "fence": {
               "$ref": "#/$defs/Fence"
             },
-            "uploadPrefix": { "type": "string", "pattern": "^jobs/", "maxLength": 2048 },
             "artifact": {
               "$ref": "#/$defs/Artifact"
             }
@@ -1912,7 +1911,9 @@
                 }
               },
               "required": [
+                "workDirectory",
                 "paused",
+                "autostart",
                 "maxParallel",
                 "cpuThresholdPercent",
                 "memoryThresholdPercent",
@@ -3212,6 +3213,11 @@
         },
         "enabled": {
           "type": "boolean"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
         }
       },
       "required": [
@@ -3515,6 +3521,11 @@
         },
         "enabled": {
           "type": "boolean"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
         },
         "id": {
           "type": "string",

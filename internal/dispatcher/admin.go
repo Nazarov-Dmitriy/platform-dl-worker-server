@@ -338,8 +338,9 @@ func (s *Store) AdminUpdateDevice(ctx context.Context, a AdminActor, id, match s
 		return nil, e
 	}
 	var in struct {
-		Name    string `json:"name"`
-		Enabled bool   `json:"enabled"`
+		Name     string `json:"name"`
+		Enabled  bool   `json:"enabled"`
+		Priority *int   `json:"priority"`
 	}
 	if json.Unmarshal(raw, &in) != nil {
 		return nil, problem(400, "INVALID_REQUEST", "Invalid device")
@@ -347,8 +348,8 @@ func (s *Store) AdminUpdateDevice(ctx context.Context, a AdminActor, id, match s
 	e := s.transaction(ctx, func(tx *sql.Tx) error {
 		var rev int64
 		var name string
-		var enabled int
-		e := tx.QueryRow("SELECT name,enabled,revision FROM devices WHERE id=? AND deleted=0", id).Scan(&name, &enabled, &rev)
+		var enabled, priority int
+		e := tx.QueryRow("SELECT name,enabled,revision,priority FROM devices WHERE id=? AND deleted=0", id).Scan(&name, &enabled, &rev, &priority)
 		if errors.Is(e, sql.ErrNoRows) {
 			return problem(404, "NOT_FOUND", "Device not found")
 		}
@@ -358,7 +359,10 @@ func (s *Store) AdminUpdateDevice(ctx context.Context, a AdminActor, id, match s
 		if e = matchRevision(match, rev); e != nil {
 			return e
 		}
-		if _, e = tx.Exec("UPDATE devices SET name=?,enabled=?,revision=revision+1 WHERE id=?", in.Name, boolInt(in.Enabled), id); e != nil {
+		if in.Priority != nil {
+			priority = *in.Priority
+		}
+		if _, e = tx.Exec("UPDATE devices SET name=?,enabled=?,priority=?,revision=revision+1 WHERE id=?", in.Name, boolInt(in.Enabled), priority, id); e != nil {
 			return e
 		}
 		if !in.Enabled {
@@ -392,8 +396,9 @@ func (s *Store) deviceView(ctx context.Context, id string) (map[string]any, erro
 	var name string
 	var enabled, last int64
 	var rev int64
+	var priority int
 	var capsRaw, usageRaw, session string
-	e := s.db.QueryRowContext(ctx, "SELECT name,enabled,revision,capabilities,usage,last_seen,session_id FROM devices WHERE id=? AND deleted=0", id).Scan(&name, &enabled, &rev, &capsRaw, &usageRaw, &last, &session)
+	e := s.db.QueryRowContext(ctx, "SELECT name,enabled,revision,capabilities,usage,last_seen,session_id,priority FROM devices WHERE id=? AND deleted=0", id).Scan(&name, &enabled, &rev, &capsRaw, &usageRaw, &last, &session, &priority)
 	if errors.Is(e, sql.ErrNoRows) {
 		return nil, problem(404, "NOT_FOUND", "Device not found")
 	}
@@ -409,7 +414,7 @@ func (s *Store) deviceView(ctx context.Context, id string) (map[string]any, erro
 	if last > 0 {
 		lastSeen = stamp(time.UnixMilli(last))
 	}
-	view := map[string]any{"id": id, "name": name, "enabled": enabled == 1, "revision": rev, "tokenSet": set, "online": online, "lastSeenAt": lastSeen}
+	view := map[string]any{"id": id, "name": name, "enabled": enabled == 1, "revision": rev, "priority": priority, "tokenSet": set, "online": online, "lastSeenAt": lastSeen}
 	var caps []Capability
 	if json.Unmarshal([]byte(capsRaw), &caps) == nil && len(caps) > 0 {
 		view["capabilities"] = caps

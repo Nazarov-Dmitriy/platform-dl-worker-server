@@ -286,7 +286,8 @@ def build():
     d["AdminSite"] = obj({"name": TEXT, "enabled": {"type": "boolean"},
                           "operations": arr(OP, 0, 3, True),
                           "weight": {"type": "integer", "minimum": 1, "maximum": 100}})
-    d["AdminDevice"] = obj({"name": TEXT, "enabled": {"type": "boolean"}})
+    d["AdminDevice"] = obj({"name": TEXT, "enabled": {"type": "boolean"},
+                            "priority": {"type": "integer", "minimum": 0, "maximum": 100}}, ["name", "enabled"])
     d["AdminAccount"] = obj({"login": TEXT, "password": {"type": "string", "minLength": 12, "maxLength": 256},
                              "enabled": {"type": "boolean"},
                              "role": {"enum": ["OWNER", "OPERATOR"]},

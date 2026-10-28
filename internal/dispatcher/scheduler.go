@@ -267,6 +267,15 @@ func (s *Store) Offer(ctx context.Context, p Principal, session string) (*Offer,
 		if booked >= usage.AvailableSlots {
 			return nil
 		}
+
+		var priority int
+		if e := tx.QueryRow("SELECT priority FROM devices WHERE id=?", p.ID).Scan(&priority); e != nil {
+			return e
+		}
+		preferred, e := s.preferredDevices(tx, priority, now)
+		if e != nil {
+			return e
+		}
 		// FIFO within each compatible site's backlog; incompatible head entries do not block it.
 		rows, e := tx.Query("SELECT j.seq,j.site_id,j.id,j.request,s.weight FROM jobs j JOIN sites s ON s.id=j.site_id WHERE j.status='QUEUED' ORDER BY j.seq")
 		if e != nil {
@@ -284,7 +293,7 @@ func (s *Store) Offer(ctx context.Context, p Principal, session string) (*Offer,
 				rows.Close()
 				return e
 			}
-			if _, ok := candidates[c.site]; !ok && compatible(c.request, caps, true) && usage.FreeDiskBytes >= c.request.Source.Bytes && usage.FreeDiskBytes-c.request.Source.Bytes >= c.request.MaxOutputBytes {
+			if _, ok := candidates[c.site]; !ok && compatible(c.request, caps, true) && usage.FreeDiskBytes >= c.request.Source.Bytes && usage.FreeDiskBytes-c.request.Source.Bytes >= c.request.MaxOutputBytes && !preferredCanRun(preferred, c.request) {
 				copy := c
 				candidates[c.site] = &copy
 			}

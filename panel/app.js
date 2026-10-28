@@ -240,10 +240,14 @@ async function loadDevice() {
   message("issued", "");
   message("commandOut", "");
   if (!id) {
+    $("devicePriorityForm").hidden = true;
     $("deviceDetail").replaceChildren();
     return;
   }
   const d = state.devices.find((d) => d.id === id);
+  $("devicePriorityForm").hidden = false;
+  $("devicePriority").value = String(d.priority || 0);
+  message("devicePriorityOut", "");
   $("selectedDeviceTitle").textContent = "Устройство: " + d.name;
   $("selectedDeviceHint").textContent = "ID: " + d.id;
   $("deviceConnectionTitle").textContent = "Подключение: " + d.name;
@@ -386,6 +390,8 @@ async function deviceAction(callback) {
     $("deviceSelect"),
     $("deleteDevice"),
     $("issueDeviceToken"),
+    $("devicePriority"),
+    $("saveDevicePriority"),
     $("reloadAll"),
     ...document.querySelectorAll("[data-device-select]"),
   ];
@@ -412,6 +418,19 @@ function selectDevice(id) {
     )
     .catch(report);
 }
+on("devicePriorityForm", "submit", (event) => {
+  event.preventDefault();
+  void deviceAction(async (device) => {
+    const priority = Number($("devicePriority").value);
+    await api("/api/v2/admin/devices/" + device.id, {
+      method: "PUT", mutate: true,
+      headers: { "If-Match": JSON.stringify(String(device.revision)) },
+      body: JSON.stringify({name: device.name, enabled: device.enabled, priority}),
+    });
+    await reload();
+    message("devicePriorityOut", "Приоритет сохранён. Он применяется к новым заданиям.");
+  }).catch(report);
+});
 on("deleteDevice", "click", () =>
   deviceAction(async (device) => {
     if (

@@ -322,6 +322,14 @@
                   >Выберите устройство<select id="deviceSelect"></select
                 ></label>
                 <div class="actions" id="deviceDetail"></div>
+                <form id="devicePriorityForm" class="form-grid">
+                  <label class="field">Приоритет обработки<select id="devicePriority">
+                    <option value="0">Обычный</option><option value="100">Основной</option>
+                  </select></label>
+                  <p class="muted caption">Новые задания сначала получает основной компьютер. Остальные помогают, если он занят до лимита, перегружен, недоступен или не поддерживает операцию. При одинаковом приоритете устройства работают как раньше.</p>
+                  <div class="actions"><button type="submit" class="button" id="saveDevicePriority">Сохранить приоритет</button></div>
+                </form>
+                <div id="devicePriorityOut" hidden class="notice" aria-live="polite"></div>
               </div>
             </div>
             <div id="deviceControls" hidden>
