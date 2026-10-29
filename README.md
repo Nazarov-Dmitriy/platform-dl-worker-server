@@ -80,6 +80,11 @@ sudo bash worker install
 
 [Инструкция пакета](deploy/package/README.md).
 [План и статус](docs/plan/simple-vps-deployment-plan.md).
-Текущая поставка: `deploy/releases/worker-server-linux-amd64-<revision>.tgz`.
+Текущая поставка: `releases/linux/server/worker-server-linux-amd64-<revision>.tgz`.
 Дизайн панели будет дорабатываться отдельно. Старые материалы deploy/standalone
 описывают предыдущую двухконтейнерную поставку и не являются новой установкой.
+
+## Где запускать приложение Worker
+
+Постоянный путь Windows: `releases/windows/win-unpacked/Worker Processor.exe`.
+Все готовые приложения и правила сборки: [releases/README.md](releases/README.md).

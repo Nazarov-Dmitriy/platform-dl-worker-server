@@ -730,7 +730,7 @@ export class Agent {
               resolve();
             }
             if (m.type === "failed" || m.type === "executor-error")
-              reject(new Error(m.code || "EXECUTOR_FAILED"));
+              reject(new TransferError(m.code || "EXECUTOR_FAILED", "Video executor stopped", false, m.code !== "INSUFFICIENT_DISK"));
           },
           new URL("./video-child.js", import.meta.url),
           {
@@ -739,6 +739,7 @@ export class Agent {
             profile: job.params.profile,
             maxDurationSeconds: job.maxDurationSeconds,
             maxOutputBytes: job.maxOutputBytes,
+            reserveDiskBytes: this.config.reserveDiskBytes,
             videoMode: r.processing?.videoMode || this.config.videoMode || "auto",
             cpuThreads: Math.max(1, Math.floor((r.processing?.cpuThreads || this.config.cpuThreads || 2) / (r.processing?.maxParallel || this.config.maxParallel))),
             ffmpeg: this.config.ffmpeg,
@@ -774,7 +775,7 @@ export class Agent {
     }
     let total = 0;
     for (const file of files) total += file.bytes;
-    if (total > job.maxOutputBytes)
+    if (job.maxOutputBytes > 0 && total > job.maxOutputBytes)
       throw new TransferError(
         "OUTPUT_LIMIT",
         "Package exceeds maxOutputBytes",

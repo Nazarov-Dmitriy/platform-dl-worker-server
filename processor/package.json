@@ -1,6 +1,6 @@
 {
   "name": "titunki-processor",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,8 +12,8 @@
     "test": "npm run build && node --test dist/test/*.test.js",
     "test:models": "npm run build && node scripts/model-smoke.mjs",
     "desktop": "npm run build && electron .",
-    "desktop:pack": "npm run build && electron-builder --dir",
-    "desktop:dist": "npm run build && electron-builder",
+    "desktop:pack": "npm run build && node scripts/release.mjs --dir",
+    "desktop:dist": "npm run build && node scripts/release.mjs",
     "desktop:test": "node scripts/desktop-smoke.cjs"
   },
   "dependencies": {
@@ -36,7 +36,7 @@
     "appId": "ru.difat.workerprocessor",
     "productName": "Worker Processor",
     "directories": {
-      "output": "desktop-release"
+      "output": "../releases/windows"
     },
     "asar": false,
     "files": [
@@ -51,6 +51,10 @@
     "mac": {
       "target": "dmg",
       "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "AudioVideo"
     }
   },
   "description": "Worker media processor for Windows and macOS"

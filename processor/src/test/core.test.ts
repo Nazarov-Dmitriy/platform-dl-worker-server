@@ -759,3 +759,14 @@ test("system failures always become valid public error codes", async () => {
     "MODEL_NOT_INSTALLED",
   );
 });
+
+test("video offers accept zero output limit, retain legacy limits and reject negative limits", () => {
+  const fixture = JSON.parse(readFileSync(new URL("../../../contracts/fixtures/valid/job-offer.json", import.meta.url), "utf8"));
+  const offer = fixture.value;
+  offer.body.job.maxOutputBytes = 0;
+  assert.doesNotThrow(() => parseFrame(JSON.stringify(offer), "DOWN"));
+  offer.body.job.maxOutputBytes = 1073741824;
+  assert.doesNotThrow(() => parseFrame(JSON.stringify(offer), "DOWN"));
+  offer.body.job.maxOutputBytes = -1;
+  assert.throws(() => parseFrame(JSON.stringify(offer), "DOWN"), /INVALID_PROTOCOL/);
+});

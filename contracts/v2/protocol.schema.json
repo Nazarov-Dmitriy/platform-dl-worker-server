@@ -363,7 +363,7 @@
             },
             "maxOutputBytes": {
               "type": "integer",
-              "minimum": 1,
+              "minimum": 0,
               "maximum": 9007199254740991
             },
             "maxDurationSeconds": {
@@ -374,6 +374,11 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 1000
+            },
+            "processingPrefix": {
+              "type": "string",
+              "maxLength": 700,
+              "pattern": "^(?!.*\\.\\.)(?!.*//)companies/[A-Za-z0-9_-]+/(?:courses|channels)/[A-Za-z0-9_./-]+/processing/$"
             },
             "type": {
               "const": "media.transcode"
@@ -420,7 +425,7 @@
             },
             "maxOutputBytes": {
               "type": "integer",
-              "minimum": 1,
+              "minimum": 0,
               "maximum": 9007199254740991
             },
             "maxDurationSeconds": {
@@ -431,6 +436,11 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 1000
+            },
+            "processingPrefix": {
+              "type": "string",
+              "maxLength": 700,
+              "pattern": "^(?!.*\\.\\.)(?!.*//)companies/[A-Za-z0-9_-]+/(?:courses|channels)/[A-Za-z0-9_./-]+/processing/$"
             },
             "type": {
               "const": "media.transcribe"
@@ -465,7 +475,7 @@
             },
             "maxOutputBytes": {
               "type": "integer",
-              "minimum": 1,
+              "minimum": 0,
               "maximum": 9007199254740991
             },
             "maxDurationSeconds": {
@@ -476,6 +486,11 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 1000
+            },
+            "processingPrefix": {
+              "type": "string",
+              "maxLength": 700,
+              "pattern": "^(?!.*\\.\\.)(?!.*//)companies/[A-Za-z0-9_-]+/(?:courses|channels)/[A-Za-z0-9_./-]+/processing/$"
             },
             "type": {
               "const": "media.subtitles"

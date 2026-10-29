@@ -88,9 +88,11 @@ def build():
                                "targetLanguages": arr(LANG, 0, 100, True),
                                "formats": arr({"enum": ["vtt", "srt"]}, 1, 2, True)})
     base = {"protocolVersion": const(VERSION), "id": UUID, "source": ref("Source"),
-            "maxOutputBytes": {**BYTES, "minimum": 1},
+            "maxOutputBytes": {**BYTES, "minimum": 0},
             "maxDurationSeconds": {"type": "integer", "minimum": 1},
-            "clientReference": TEXT}
+            "clientReference": TEXT,
+            "processingPrefix": {"type": "string", "maxLength": 700,
+                                 "pattern": r"^(?!.*\.\.)(?!.*//)companies/[A-Za-z0-9_-]+/(?:courses|channels)/[A-Za-z0-9_./-]+/processing/$"}}
     variants = []
     for operation, params in [
         ("media.transcode", obj({"profile": ref("Profile"), "subtitles": ref("SubtitleParams")}, ["profile"])),
@@ -445,6 +447,8 @@ def build():
     grant = {"protocolVersion": VERSION, "requestId": rid, "fence": fence, "links": [link], "page": 0, "lastPage": True}
     payloads = [
         ("job-video", "JobRequest", job),
+        ("job-video-no-output-limit", "JobRequest", {**job, "maxOutputBytes": 0}),
+        ("job-video-owned-storage", "JobRequest", {**job, "processingPrefix": "companies/company/courses/course/lessons/lesson/processing/"}),
         ("job-audio", "JobRequest", {**job, "type": "media.transcribe", "params": speech,
                                     "source": {**job["source"], "role": "PUBLISHED_MEDIA", "contentType": "audio/mpeg"}}),
         ("job-subtitles", "JobRequest", {**job, "type": "media.subtitles", "params": subtitles,

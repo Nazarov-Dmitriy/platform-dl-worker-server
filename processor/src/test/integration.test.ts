@@ -440,6 +440,8 @@ test(
       ),
     ).value;
     fixture.id = randomUUID();
+    fixture.maxOutputBytes = 0; // Unbounded video output must reach publication.
+    fixture.processingPrefix = "companies/company/courses/course/lessons/lesson/processing/";
     fixture.source.bytes = bytes.length;
     fixture.source.sha256 = sha;
     delete fixture.params.subtitles;
@@ -488,18 +490,9 @@ test(
           );
         }
         if (req.kind === "UPLOAD") {
-          const prefix =
-            "jobs/" +
-            site.id +
-            "/" +
-            fixture.id +
-            "/" +
-            req.fence.dispatcherEpoch +
-            "/" +
-            req.fence.generation +
-            "/" +
-            req.fence.assignmentId +
-            "/";
+          const prefix = req.uploadPrefix;
+          assert.ok(prefix.startsWith(fixture.processingPrefix));
+          assert.ok(!prefix.startsWith("jobs/"));
           await fetch(
             base + "/api/v2/site/jobs/" + fixture.id + "/transfer-grants",
             {

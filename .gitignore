@@ -24,3 +24,11 @@ instance/
 
 # Generated desktop application bundles
 processor/desktop-release/
+
+# Ready applications; keep the release guide and platform folders.
+/releases/windows/*
+/releases/macos/*
+/releases/linux/*
+!/releases/windows/.gitkeep
+!/releases/macos/.gitkeep
+!/releases/linux/.gitkeep

@@ -37,6 +37,7 @@ type JobRequest struct {
 	MaxOutputBytes     int64           `json:"maxOutputBytes"`
 	MaxDurationSeconds int64           `json:"maxDurationSeconds"`
 	ClientReference    string          `json:"clientReference,omitempty"`
+	ProcessingPrefix   string          `json:"processingPrefix,omitempty"`
 }
 type Source struct {
 	ObjectName  string       `json:"objectName"`

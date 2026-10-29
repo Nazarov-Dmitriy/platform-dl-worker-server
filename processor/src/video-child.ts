@@ -3,7 +3,7 @@ import { setPriority, constants } from "node:os";
 import { VideoProgress } from "./video-progress.js";
 import { performance } from "node:perf_hooks";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   crfValue,
@@ -273,9 +273,14 @@ function execText(bin: string, args: string[]) {
 }
 
 setInterval(() => {
-  if (stopping || !work?.maxOutputBytes) return;
+  if (stopping || !work) return;
   try {
-    if (treeSize(work.outDir) > work.maxOutputBytes)
+    const disk = statfsSync(work.outDir);
+    if (disk.bavail * disk.bsize <= (work.reserveDiskBytes ?? 0)) {
+      process.send?.({ type: "failed", code: "INSUFFICIENT_DISK" }, undefined, undefined, () => exit(1));
+      return;
+    }
+    if (work.maxOutputBytes > 0 && treeSize(work.outDir) > work.maxOutputBytes)
       process.send?.(
         { type: "failed", code: "OUTPUT_LIMIT" },
         undefined,

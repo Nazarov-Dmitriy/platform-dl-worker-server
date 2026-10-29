@@ -1,5 +1,9 @@
 # Установка обработчиков Windows/macOS/Linux
 
+Готовое приложение Windows: `releases/windows/win-unpacked/Worker Processor.exe` от корня проекта.
+[Единое место готовых сборок](../../releases/README.md). Сборки macOS/Linux создаются на соответствующей ОС.
+
+
 Обновлено: 2026-10-13. Сервис проверен на Windows/Linux; установка автозапуска
 на свежих ОС и реальный Mac требуют приёмки.
 

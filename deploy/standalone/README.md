@@ -120,7 +120,7 @@ sudo python3 /opt/worker-server/setup.py --renew-tls --dir /opt/worker-server
 Для исходников без образов: `--image <версионированный-образ>`; latest запрещён.
 Параметр tlsCaFile обработчика необязателен; путь считается от его config.json.
 
-Готовые архивы сборки находятся в **deploy/releases/**, исходники установки —
+Готовые архивы сборки находятся в **releases/linux/server/**, исходники установки —
 в deploy/standalone/. Сборка: `bash deploy/standalone/package.sh`.
 GitHub workflow выпускает архив по тегу worker-v* или ручному запуску.
 

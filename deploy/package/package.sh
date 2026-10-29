@@ -10,7 +10,7 @@ if [ "$VERSION" != worker-v0.0.0 ]; then
   REVISION=$VERSION
 fi
 IMAGE=${DISPATCHER_IMAGE:-worker-dispatcher:$REVISION}
-OUT=${1:-$ROOT/deploy/releases}
+OUT=${1:-$ROOT/releases/linux/server}
 mkdir -p "$OUT"
 OUT=$(CDPATH='' cd -- "$OUT" && pwd)
 STAGE=$(mktemp -d)

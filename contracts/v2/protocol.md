@@ -87,8 +87,12 @@ sourceLanguage=auto запускает определение. Если confiden
 profile содержит полный снимок Settings → Media: qualities, сегмент, x264 preset/CRF,
 AAC bitrate/channels, цели битрейта всех качеств, допуск passthrough, allowUpscale=false,
 policyVersion=site-hls-2026-10-01. Инфраструктурные concurrentJobs, CPU/RAM, binary paths
-на сайт API не передаются. maxDurationSeconds/maxOutputBytes — продуктовые пределы файла,
-не право управлять ресурсами устройства.
+на сайт API не передаются. maxDurationSeconds ограничивает длительность.
+maxOutputBytes=0 отключает общий лимит результата: несколько качеств видео не
+ограничиваются размером исходника или фиксированным потолком. Положительное
+значение сохраняет явный предел для совместимости со старыми заданиями.
+Свободное место и резерв рабочего диска проверяются отдельно при допуске и во
+время кодирования. Продуктовые ограничения исходника проверяет сайт.
 
 X264_EXACT сохраняет libx264 preset/CRF (0 применяется как1) и правила сайта; для кодирования
 требует x264. HARDWARE_ALLOWED разрешает аппаратный исполнитель только при опубликованном
@@ -345,3 +349,20 @@ ModelEntry может включать optional files (ModelFile): path, bytes, 
 Windows startup is a local application preference. CONFIGURE does not require autostart; legacy autostart values are accepted but ignored by processors 0.7.4+.
 
 UPLOAD transfer requests include uploadPrefix, the exact object prefix accepted by the dispatcher. Sites append the manifest-relative path unchanged.
+
+
+### Хранение временного результата по владельцу
+
+JobRequest может содержать processingPrefix вида
+companies/<company>/courses/<course>/lessons/<lesson>/processing/ либо внутри
+companies/<company>/channels/<channel>/posts/<post>/.../processing/.
+Это неизменяемая часть запроса сайта. Внешняя попытка получает uploadPrefix:
+processingPrefix + jobId/dispatcherEpoch/generation/assignmentId/.
+Диспетчер проверяет PUT objectName именно относительно этого prefix и fence.
+Без processingPrefix сохраняется прежний jobs/siteId/jobId/... для совместимости.
+Доступны только подписанные объекты, доступ ко всему курсу не выдаётся.
+
+Сайт публикует проверенный пакет в постоянный hls-префикс владельца и после
+подтверждения PUBLISHED удаляет staging по manifest. Известные старые подтверждённые
+пакеты можно очищать без изменения постоянных URL после сверки с результатами и
+размерами постоянных файлов. Неизвестные/активные данные не удаляются по имени папки.

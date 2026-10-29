@@ -7,7 +7,7 @@
 
 ## Запуск пользователя на Windows
 
-Открыть `processor/desktop-release/win-unpacked/Worker Processor.exe`.
+Открыть `releases/windows/win-unpacked/Worker Processor.exe`.
 Всю папку `win-unpacked` сохранять вместе; один exe отдельно не переносить.
 В окне указать HTTPS-адрес диспетчера, ID и DEVICE-токен своего устройства,
 выбрать рабочую папку, нажать «Сохранить и подключить». Для Let’s Encrypt файл CA не нужен;

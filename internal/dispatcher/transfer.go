@@ -207,7 +207,7 @@ func (s *Store) ListTransfers(ctx context.Context, site, jobID string) (map[stri
 			}
 			item.SourceRevision = src.String
 			if item.Kind == "UPLOAD" {
-				item.UploadPrefix = "jobs/" + r.site + "/" + r.request.ID + "/" + item.Fence.DispatcherEpoch + "/" + formatGeneration(item.Fence.Generation) + "/" + item.Fence.AssignmentID + "/"
+				item.UploadPrefix = uploadPrefix(r.site, r.request.ID, item.Fence, r.request)
 			}
 			if len(art) > 0 {
 				var a Artifact
@@ -684,7 +684,7 @@ func requiredGrant(r jobRow, kind string, artifact []byte, fence Fence) ([]strin
 
 func validateLinks(grant TransferGrant, required []string, method, site, job string, f Fence, kind string, req JobRequest, allowPrivateHTTP ...bool) error {
 	seen := map[string]bool{}
-	prefix := "jobs/" + site + "/" + job + "/" + f.DispatcherEpoch + "/" + formatGeneration(f.Generation) + "/" + f.AssignmentID + "/"
+	prefix := uploadPrefix(site, job, f, req)
 	for _, link := range grant.Links {
 		if seen[link.Path] {
 			return problem(400, "INVALID_REQUEST", "Grant paths must be unique")
@@ -843,4 +843,14 @@ func publicationStatus(steps []Step) string {
 func cancelTransfers(tx *sql.Tx, seq int64) error {
 	_, e := tx.Exec("UPDATE transfers SET status='CANCELLED' WHERE job_seq=? AND status='OPEN'", seq)
 	return e
+}
+
+// New requests group staging with the owning course/lesson or channel/post.
+// Absent processingPrefix preserves the immutable legacy jobs namespace.
+func uploadPrefix(site, job string, f Fence, req JobRequest) string {
+	base := "jobs/" + site + "/"
+	if req.ProcessingPrefix != "" {
+		base = req.ProcessingPrefix
+	}
+	return base + job + "/" + f.DispatcherEpoch + "/" + formatGeneration(f.Generation) + "/" + f.AssignmentID + "/"
 }
