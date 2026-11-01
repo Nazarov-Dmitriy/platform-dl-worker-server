@@ -63,6 +63,12 @@ if test -f "$1/.runner"; then
 fi
 if test -f "$1/config.sh" && test -f "$1/run.sh"; then printf 'installed\\n'; fi
 if test -f "$1/.worker-ci.lock" && ! flock -n "$1/.worker-ci.lock" -c true; then printf 'running\\n'; fi
+self=$$
+for pid in /proc/[0-9]*; do
+  id=\${pid##*/}
+  test "\$id" = "\$self" && continue
+  tr '\\0' ' ' < "\$pid/cmdline" 2>/dev/null | grep -F -q -- "\$1/bin/Runner.Listener run" && { printf 'running\\n'; break; }
+done
 `;
 
 const INSTALL = `set -eu

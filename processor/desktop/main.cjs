@@ -707,7 +707,6 @@ else {
     window.loadFile(html).then(async () => {
       if (!process.argv.includes("--smoke")) {
         for (const entry of ciRepos) {
-          if (!entry.enabled) continue;
           const runner = ciRunnerFor(entry.id);
           try { await runner.start(entry); }
           catch (error) { runner.update({ phase: "stopped", connected: false, busy: false, message: error.message }); }
