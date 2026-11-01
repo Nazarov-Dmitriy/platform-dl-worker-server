@@ -9,20 +9,40 @@ const {
   nativeImage,
   safeStorage,
 } = require("electron");
-const { fork, execFileSync } = require("node:child_process");
+const { fork, execFileSync, execFile } = require("node:child_process");
 const {
   mkdirSync,
   readFileSync,
   writeFileSync,
   renameSync,
   existsSync,
+  createWriteStream,
+  readdirSync,
+  statSync,
+  cpSync,
+  rmSync,
+  mkdtempSync,
 } = require("node:fs");
 const { join } = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { pipeline } = require("node:stream/promises");
+const https = require("node:https");
 const { validateProcessing } = require("./processing.cjs");
-const { availableParallelism } = require("node:os");
+const { availableParallelism, tmpdir } = require("node:os");
 const { validateSettings } = require("./settings.cjs");
 const { createLoginController, NAME } = require("./login.cjs");
+const {
+  videoReadiness,
+  speechReadiness,
+  commandAvailable,
+  detectGpu,
+} = require("./readiness.cjs");
+const { CiRunner, validateCiSettings } = require("./ci-runner.cjs");
+const ciRunner = new CiRunner();
+let ciSettings = { repository: "Nazarov-Dmitriy/dream-breasts-server", distribution: "Worker-CI", directory: "/home/worker/worker-ci-runner", name: "worker-build", enabled: true };
+ciRunner.on("status", status => {
+  if (window && !window.isDestroyed()) window.webContents.send("processor:ci-status", status);
+});
 app.setName("Worker Processor");
 if (process.platform === "win32")
   app.setAppUserModelId("ru.difat.workerprocessor");
@@ -107,6 +127,190 @@ function setDesktopAutostart(enabled) {
 }
 function publicSettings() {
   return { ...validateProcessing(saved), ...saved, cpuCount: availableParallelism(), tokenSet: existsSync(join(directory, "credential.bin")) };
+}
+function currentWhisperCpp() {
+  if (saved.whisperCpp) return saved.whisperCpp;
+  const configPath = join(directory, "config.json");
+  if (existsSync(configPath)) {
+    try {
+      const config = JSON.parse(readFileSync(configPath, "utf8"));
+      if (typeof config.whisperCpp === "string") return config.whisperCpp;
+    } catch {}
+  }
+  return undefined;
+}
+function checkReadiness(capability) {
+  if (capability !== "video" && capability !== "speech")
+    throw Error("Неизвестная проверка готовности.");
+  const result =
+    capability === "video"
+      ? videoReadiness()
+      : speechReadiness(currentWhisperCpp());
+  const entry = { ok: result.ok, missing: result.missing, checkedAt: Date.now() };
+  if (capability === "speech" && saved.whisperBuild)
+    entry.build = saved.whisperBuild;
+  saved.readiness = { ...(saved.readiness || {}), [capability]: entry };
+  atomic("settings.json", JSON.stringify(saved, null, 2));
+  return { capability, ...entry };
+}
+function refreshWindowsPath() {
+  if (process.platform !== "win32") return;
+  try {
+    const raw = execFileSync(
+      join(process.env.SystemRoot || String.raw`C:\Windows`, "System32", "reg.exe"),
+      ["query", String.raw`HKCU\Environment`, "/v", "Path"],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 5000,
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    );
+    const match = /REG_(?:EXPAND_)?SZ\s+([^\r\n]+)/i.exec(raw);
+    if (!match) return;
+    const parts = new Set((process.env.PATH || "").split(";").filter(Boolean));
+    for (const entry of match[1].split(";")) {
+      const expanded = entry
+        .trim()
+        .replace(/%([^%]+)%/g, (_m, name) => process.env[name] || "%" + name + "%");
+      if (expanded) parts.add(expanded);
+    }
+    process.env.PATH = [...parts].join(";");
+  } catch {}
+}
+function run(command, args, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      command,
+      args,
+      { windowsHide: true, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const detail = String(stderr || error.message || "").trim();
+          reject(new Error(detail || "Не удалось выполнить установку."));
+        } else resolve(String(stdout || "").trim());
+      },
+    );
+  });
+}
+async function installVideo() {
+  if (process.platform !== "win32")
+    throw Error("Установка зависимостей доступна только на Windows.");
+  if (!commandAvailable("winget", ["--version"]))
+    throw Error(
+      "Не найден winget. Установите FFmpeg вручную: winget install Gyan.FFmpeg",
+    );
+  await run(
+    "winget",
+    [
+      "install",
+      "--id",
+      "Gyan.FFmpeg",
+      "--accept-source-agreements",
+      "--accept-package-agreements",
+      "--disable-interactivity",
+      "--silent",
+    ],
+    30 * 60 * 1000,
+  );
+  refreshWindowsPath();
+  return checkReadiness("video");
+}
+const whisperCpuZipUrl =
+  "https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip";
+const whisperCudaZipUrl =
+  "https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-cublas-12.4.0-bin-x64.zip";
+function download(url, dest) {
+  return new Promise((resolve, reject) => {
+    const request = https.get(url, (response) => {
+      const redirect = [301, 302, 303, 307, 308].includes(response.statusCode);
+      if (redirect) {
+        response.resume();
+        const location = response.headers.location;
+        if (!location) return reject(new Error("Перенаправление без адреса."));
+        return download(new URL(location, url).href, dest).then(resolve, reject);
+      }
+      if (response.statusCode !== 200) {
+        response.resume();
+        return reject(
+          new Error("Не удалось скачать whisper.cpp (HTTP " + response.statusCode + ")."),
+        );
+      }
+      pipeline(response, createWriteStream(dest, { flags: "wx", mode: 0o600 })).then(
+        resolve,
+        reject,
+      );
+    });
+    request.on("error", reject);
+    request.setTimeout(180000, () =>
+      request.destroy(new Error("Тайм-аут скачивания whisper.cpp.")),
+    );
+  });
+}
+function findWhisperCli(root) {
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) stack.push(full);
+      else if (/^whisper-cli(\.exe)?$/i.test(name)) return full;
+    }
+  }
+  return undefined;
+}
+async function installSpeech() {
+  if (process.platform !== "win32")
+    throw Error("Установка зависимостей доступна только на Windows.");
+  const gpu = detectGpu();
+  const useCuda = gpu.cuda === true;
+  const kind = useCuda ? "cuda" : "cpu";
+  const url = useCuda ? whisperCudaZipUrl : whisperCpuZipUrl;
+  const toolsDir = join(directory, "tools");
+  mkdirSync(toolsDir, { recursive: true, mode: 0o700 });
+  const destDir = join(toolsDir, "whisper-" + kind);
+  const staging = mkdtempSync(join(tmpdir(), "worker-whisper-"));
+  const zip = join(staging, "whisper.zip");
+  const extracted = join(staging, "extracted");
+  mkdirSync(extracted, { recursive: true, mode: 0o700 });
+  try {
+    await download(url, zip);
+    await run(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Expand-Archive -Path '" +
+          zip.replace(/'/g, "''") +
+          "' -DestinationPath '" +
+          extracted.replace(/'/g, "''") +
+          "' -Force",
+      ],
+      10 * 60 * 1000,
+    );
+    const found = findWhisperCli(extracted);
+    if (!found) throw Error("В архиве whisper.cpp не найден whisper-cli.exe.");
+    rmSync(destDir, { recursive: true, force: true });
+    cpSync(extracted, destDir, { recursive: true });
+    const target = findWhisperCli(destDir);
+    if (!target) throw Error("Не удалось разместить whisper-cli.exe.");
+    saved.whisperCpp = target;
+    saved.whisperBuild = kind;
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
+  atomic("settings.json", JSON.stringify(saved, null, 2));
+  const configPath = join(directory, "config.json");
+  if (existsSync(configPath)) {
+    const config = JSON.parse(readFileSync(configPath, "utf8"));
+    atomic(
+      "config.json",
+      JSON.stringify({ ...config, whisperCpp: saved.whisperCpp }, null, 2),
+    );
+  }
+  return checkReadiness("speech");
 }
 async function stop() {
   if (!child) return;
@@ -219,6 +423,8 @@ function handle(channel, callback) {
 }
 async function quit() {
   if (quitting) return;
+  try { await ciRunner.stop(); }
+  catch (error) { emit({ message: error.message }); show(); return; }
   await stop();
   if (child) {
     show();
@@ -253,6 +459,10 @@ else {
         atomic("config.json", JSON.stringify({ ...config, ...preferences, localSettings: true }, null, 2));
       } catch { snapshot.message = "Проверьте настройки обработки перед запуском."; }
     }
+    try {
+      if (existsSync(join(directory, "ci-settings.json")))
+        ciSettings = validateCiSettings(JSON.parse(readFileSync(join(directory, "ci-settings.json"), "utf8")));
+    } catch { ciSettings.enabled = false; }
     restoreDesktopAutostart();
     window = new BrowserWindow({
       width: 1160,
@@ -316,7 +526,32 @@ else {
     );
     tray.on("double-click", show);
     tray.on("click", show);
+    handle("processor:ci-state", () => ({ settings: ciSettings, status: { ...ciRunner.state } }));
+    handle("processor:ci-save", async input => {
+      const next = validateCiSettings(input);
+      if (ciRunner.child) {
+        if (next.repository !== ciSettings.repository || next.directory !== ciSettings.directory || next.distribution !== ciSettings.distribution || next.name !== ciSettings.name)
+          throw Error("Остановите сборки перед изменением подключения runner.");
+        if (!next.enabled) await ciRunner.stop();
+      }
+      if (next.enabled) await ciRunner.start(next);
+      ciSettings = next;
+      atomic("ci-settings.json", JSON.stringify(ciSettings, null, 2));
+      return { settings: ciSettings, status: { ...ciRunner.state } };
+    });
+    handle("processor:ci-check", input => ciRunner.exclusive(() => ciRunner.check(input)));
+    handle("processor:ci-install", input => ciRunner.install(input));
+    handle("processor:ci-register", (input, token) => ciRunner.register(input, token));
+    handle("processor:ci-start", () => ciRunner.start(ciSettings));
+    handle("processor:ci-stop", () => ciRunner.stop());
     handle("processor:autostart", setDesktopAutostart);
+    handle("processor:readiness", (capability) => checkReadiness(capability));
+    handle("processor:install", async (capability) => {
+      if (child) throw Error("Остановите обработчик перед установкой зависимостей.");
+      if (capability === "video") return installVideo();
+      if (capability === "speech") return installSpeech();
+      throw Error("Неизвестная зависимость.");
+    });
     handle("processor:state", () => ({
       settings: publicSettings(),
       status: snapshot,
@@ -377,6 +612,7 @@ else {
             stateDir: join(directory, "state"),
             workDir: settings.workDir,
             ...validateProcessing({ ...saved, ...input }),
+            ...(saved.whisperCpp ? { whisperCpp: saved.whisperCpp } : {}),
             paused: false,
             localSettings: true,
           },
@@ -432,6 +668,10 @@ else {
       return true;
     });
     window.loadFile(html).then(async () => {
+      if (ciSettings.enabled && !process.argv.includes("--smoke")) {
+        try { await ciRunner.start(ciSettings); }
+        catch (error) { ciRunner.update({ phase: "stopped", connected: false, busy: false, message: error.message }); }
+      }
       if (!backgroundLaunch) return;
       try {
         await start();

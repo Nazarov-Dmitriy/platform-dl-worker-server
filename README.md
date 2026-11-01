@@ -88,3 +88,9 @@ sudo bash worker install
 
 Постоянный путь Windows: `releases/windows/win-unpacked/Worker Processor.exe`.
 Все готовые приложения и правила сборки: [releases/README.md](releases/README.md).
+
+## Сборки GitHub из приложения
+
+Управление официальным runner: вкладка «Сборки GitHub» в настройках приложения.
+[Подготовка и подключение](docs/instruction/github-builds.md).
+Статус и ограничения — в [плане](docs/plan/github-builds-plan.md).

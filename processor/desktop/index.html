@@ -23,6 +23,12 @@
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="dashboard">
         <div class="screen-heading"><h1>Обработка заданий</h1><button id="openSettings" type="button">Настройки</button></div>
+        <div class="status-row">
+          <span class="status-chip"><span id="chipSite" class="ci-dot" data-phase="stopped"></span>Подключение</span>
+          <span class="status-chip"><span id="chipCi" class="ci-dot" data-phase="stopped"></span>Сборки GitHub</span>
+          <span class="status-chip"><span id="chipVideo" class="ci-dot" data-phase="stopped"></span>Видео</span>
+          <span class="status-chip"><span id="chipSpeech" class="ci-dot" data-phase="stopped"></span>Аудио</span>
+        </div>
         <section class="summary" aria-live="polite">
           <h2>На этом компьютере</h2>
           <span id="activity">Заданий в работе: 0</span>
@@ -37,6 +43,15 @@
           </table></div>
           <p id="jobsEmpty" class="hint">Активных заданий пока нет.</p>
         </section>
+        <details class="jobs-card ci-fold" id="ciDash">
+          <summary>
+            <span>Сборка GitHub</span>
+            <span id="dashCiDot" class="ci-dot" data-phase="stopped"></span>
+            <span id="dashCiSummary">Не запущены</span>
+          </summary>
+          <p id="dashCiLine" class="hint">Сборки не запущены.</p>
+          <div class="actions"><button id="dashCiStop" type="button" disabled>Остановить сборки</button></div>
+        </details>
         <p class="hint">Новые задания назначает сервер. Общая очередь доступна в панели диспетчера.</p>
         <div class="actions dashboard-actions">
           <button id="start" class="primary" type="button">Подключиться</button>
@@ -49,7 +64,47 @@
       <nav class="settings-tabs" aria-label="Раздел настроек">
         <button id="connectionTab" type="button" aria-pressed="true">Подключение</button>
         <button id="processingTab" type="button" aria-pressed="false">Обработка и ресурсы</button>
+        <button id="ciTab" type="button" aria-pressed="false">Сборки GitHub</button>
       </nav>
+      <form id="ciSettings" hidden>
+        <div class="card">
+          <h2 class="ci-heading">Сборки GitHub<span id="ciStatus" class="ci-dot" role="status" data-phase="stopped" aria-label="Сборки остановлены"></span><span id="ciStatusText" class="ci-status-text" hidden></span></h2>
+          <div class="ci-lead">
+            <label class="startup-toggle"><input name="enabled" type="checkbox"><span>Принимать сборки при запуске Worker</span></label>
+          </div>
+          <label>Репозиторий<input name="repository" required placeholder="владелец/репозиторий" autocomplete="off" spellcheck="false"></label>
+          <label>Дистрибутив WSL (Windows)<input name="distribution" required value="Worker-CI" autocomplete="off" spellcheck="false"><small>Свой дистрибутив Ubuntu. docker-desktop не подходит.</small></label>
+          <label>Папка runner внутри Linux<input name="directory" required placeholder="/home/worker/worker-ci-runner" autocomplete="off" spellcheck="false"><small>Своя папка, не каталог медиа. В пути — имя вашего пользователя Linux.</small></label>
+          <label>Имя runner<input name="name" required value="worker-build" autocomplete="off" spellcheck="false"></label>
+          <div class="actions">
+            <button id="ciCheck" type="button">Проверить окружение</button>
+            <button id="ciInstall" type="button">Установить runner</button>
+          </div>
+          <p id="ciSetupNotice" class="hint" role="status"></p>
+          <label>Временный токен регистрации GitHub<input name="registrationToken" type="password" autocomplete="off" spellcheck="false"></label>
+          <div class="actions">
+            <button id="ciRegister" type="button">Зарегистрировать runner</button>
+          </div>
+          <details class="ci-help">
+            <summary>Инструкция: полная настройка</summary>
+            <ol class="ci-help-steps">
+              <li><b>Токен GitHub (один раз).</b> Создай fine-grained PAT с правом <code>Administration → Read</code> и добавь его в репозиторий как секрет <code>RUNNER_ADMIN_TOKEN</code>: GitHub → аватар → <b>Settings → Developer settings → Fine-grained tokens</b>.</li>
+              <li><b>Репозиторий.</b> Впиши тот, который хочешь собирать на этой машине, в формате <code>владелец/репозиторий</code>. Поле подставлено по умолчанию — поменяй под свой.</li>
+              <li>Нажми «Проверить окружение» — должно показать «готово».</li>
+              <li>Если runner не установлен — нажми «Установить runner».</li>
+              <li><b>Временный токен.</b> В GitHub открой репозиторий → <b>Settings → Actions → Runners → New self-hosted runner</b> → ОС Linux, x64 → скопируй значение после <code>--token</code>.</li>
+              <li>Вставь токен в поле «Временный токен регистрации» и нажми «Зарегистрировать runner».</li>
+              <li>Нажми «Запустить сборки» — появится «Готов принимать сборки GitHub».</li>
+            </ol>
+          </details>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary">Сохранить настройки сборок</button>
+          <button id="ciStart" type="button">Запустить сборки</button>
+          <button id="ciStop" type="button">Остановить сборки</button>
+        </div>
+        <p id="ciNotice" class="hint" role="status"></p>
+      </form>
       <form id="settings">
         <div class="card">
           <h2>Сервер и устройство</h2>
@@ -115,19 +170,41 @@
           <label class="parallel">Бюджет CPU-потоков<input name="cpuThreads" type="number" min="1" value="2" required></label>
           <p id="cpuHint" class="hint"></p>
           <p class="hint">Бюджет делится между параллельными заданиями. Это ограничение потоков, а не точный процент CPU. При работе на видеокарте CPU тоже используется.</p>
-          <fieldset class="mode-options"><legend>Видео</legend><div class="mode-choices">
-            <label><input type="radio" name="videoMode" value="auto" checked>Автоматически</label>
-            <label><input type="radio" name="videoMode" value="cpu">Процессор</label>
-            <label><input type="radio" name="videoMode" value="gpu">Видеокарта</label>
-          </div><p class="hint">Авто использует NVIDIA NVENC, если он доступен. Старые задания с обязательным CPU-профилем выполняются на CPU.</p></fieldset>
-          <fieldset class="mode-options"><legend>Распознавание речи</legend><div class="mode-choices">
-            <label><input type="radio" name="audioMode" value="auto" checked>Автоматически</label>
-            <label><input type="radio" name="audioMode" value="cpu">Процессор</label>
-            <label><input type="radio" name="audioMode" value="gpu">Видеокарта</label>
-          </div><p class="hint">Авто использует ускорение установленного движка. Для GeForce нужна сборка whisper.cpp с CUDA. Подготовка аудиофайла выполняется на CPU.</p></fieldset>
+          <p class="hint apply-note">Параллельность меняется сразу. Режимы и CPU-потоки применяются к новым заданиям; текущие продолжают работу.</p>
+          <fieldset class="mode-options"><legend>Видео</legend>
+            <div class="mode-choices" id="videoModeChoices">
+              <label><input type="radio" name="videoMode" value="auto" checked>Автоматически</label>
+              <label><input type="radio" name="videoMode" value="cpu">Процессор</label>
+              <label><input type="radio" name="videoMode" value="gpu">Видеокарта</label>
+            </div>
+            <p class="hint">Авто использует NVIDIA NVENC, если он доступен. Старые задания с обязательным CPU-профилем выполняются на CPU.</p>
+            <div id="videoReadiness" class="readiness" hidden>
+              <p class="hint" id="videoReadinessMessage"></p>
+              <div class="actions">
+                <button type="button" id="checkVideo">Проверить готовность</button>
+                <button type="button" id="installVideo" class="primary" hidden>Установить нужные зависимости</button>
+                <span class="spinner" id="videoSpinner" hidden aria-label="Выполняется"></span>
+              </div>
+            </div>
+          </fieldset>
+          <fieldset class="mode-options"><legend>Распознавание речи</legend>
+            <div class="mode-choices" id="speechModeChoices">
+              <label><input type="radio" name="audioMode" value="auto" checked>Автоматически</label>
+              <label><input type="radio" name="audioMode" value="cpu">Процессор</label>
+              <label><input type="radio" name="audioMode" value="gpu">Видеокарта</label>
+            </div>
+            <p class="hint" id="speechModeHint">Авто использует ускорение установленного движка. Для GeForce нужна сборка whisper.cpp с CUDA. Подготовка аудиофайла выполняется на CPU.</p>
+            <div id="speechReadiness" class="readiness" hidden>
+              <p class="hint" id="speechReadinessMessage"></p>
+              <div class="actions">
+                <button type="button" id="checkSpeech">Проверить готовность</button>
+                <button type="button" id="installSpeech" class="primary" hidden>Установить нужные зависимости</button>
+                <span class="spinner" id="speechSpinner" hidden aria-label="Выполняется"></span>
+              </div>
+            </div>
+          </fieldset>
         </div>
         <div class="actions"><button id="applyProcessing" class="primary" type="submit">Сохранить настройки обработки</button></div>
-        <p class="hint">Параллельность меняется сразу. Режимы и CPU-потоки применяются к новым заданиям; текущие продолжают работу.</p>
         <p id="processingNotice" class="notice success" role="status" hidden></p>
       </form>
       <section class="card startup-card" id="startupCard">

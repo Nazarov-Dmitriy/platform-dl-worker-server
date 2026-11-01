@@ -7,12 +7,16 @@ let current = { phase: "stopped", running: 0, connected: false, paused: false },
 let autostart = { supported: false, enabled: false, configured: false };
 let pendingAutostart;
 let configured = false;
+let savedReadiness = {};
+let whisperBuild = undefined;
 function screen(settings) {
   $("dashboard").hidden = settings;
   $("settingsScreen").hidden = !settings;
   window.scrollTo(0, 0);
 }
 function settingsTab(processing) {
+  $("ciSettings").hidden = true;
+  $("ciTab").setAttribute("aria-pressed", "false");
   form.hidden = processing;
   processingForm.hidden = !processing;
   $("startupCard").hidden = processing;
@@ -35,6 +39,64 @@ function fillProcessing(settings) {
     processingForm.elements.cpuThreads.max = settings.cpuCount;
     $("cpuHint").textContent = "Доступно логических CPU-потоков: " + settings.cpuCount + ".";
   }
+  savedReadiness = settings.readiness || {};
+  whisperBuild = settings.whisperBuild;
+  refreshSpeechBuild();
+  drawReadiness();
+}
+function drawCapabilityReadiness(key, entry) {
+  const choices = $(key + "ModeChoices");
+  const box = $(key + "Readiness");
+  const message = $(key + "ReadinessMessage");
+  const install = $(key === "video" ? "installVideo" : "installSpeech");
+  const label = key === "video" ? "видео" : "распознавания речи";
+  if (entry && entry.ok) {
+    choices.hidden = false;
+    box.hidden = true;
+    return;
+  }
+  choices.hidden = true;
+  box.hidden = false;
+  if (!entry) {
+    message.textContent = "Сначала проверьте готовность к " + label + ".";
+    install.hidden = true;
+  } else {
+    message.textContent =
+      "Не хватает зависимостей: " + entry.missing.join(", ") + ".";
+    install.hidden = false;
+  }
+}
+function paintDot(id, phase) {
+  const dot = $(id);
+  if (dot) dot.dataset.phase = phase;
+}
+function readinessPhase(entry) {
+  if (!entry) return "stopped";
+  return entry.ok ? "idle" : "error";
+}
+function drawReadiness() {
+  drawCapabilityReadiness("video", savedReadiness.video);
+  drawCapabilityReadiness("speech", savedReadiness.speech);
+  paintDot("chipVideo", readinessPhase(savedReadiness.video));
+  paintDot("chipSpeech", readinessPhase(savedReadiness.speech));
+}
+function refreshSpeechBuild() {
+  const hint = $("speechModeHint");
+  if (!hint) return;
+  if (whisperBuild === "cuda")
+    hint.textContent =
+      "Установлен движок с CUDA. «Авто» использует видеокарту NVIDIA, «Процессор» работает на CPU.";
+  else if (whisperBuild === "cpu")
+    hint.textContent =
+      "Установлен CPU-движок. Ускорение на видеокарте недоступно — используйте «Авто» или «Процессор».";
+}
+function setCapabilityReadiness(key, entry) {
+  savedReadiness[key] = entry;
+  if (key === "speech" && entry.build) {
+    whisperBuild = entry.build;
+    refreshSpeechBuild();
+  }
+  drawReadiness();
 }
 processingForm.onsubmit = event => {
   event.preventDefault();
@@ -149,6 +211,7 @@ function draw(status) {
     status.connected && !status.paused,
   );
   $("activity").textContent = "Заданий в работе: " + status.running;
+  paintDot("chipSite", status.phase === "error" ? "error" : status.paused ? "stopped" : status.connected ? "idle" : status.phase === "connecting" ? "connecting" : "stopped");
   $("detail").textContent = status.message || "";
   $("workState").textContent = status.phase === "stopping"
     ? "Завершаем обработку"
@@ -165,6 +228,8 @@ function draw(status) {
     .forEach((input) => (input.disabled = active || busy));
   $("connect").disabled = active || busy;
   processingForm.querySelectorAll("input,button").forEach(input => input.disabled = busy);
+  const audioGpu = processingForm.querySelector('input[name="audioMode"][value="gpu"]');
+  if (audioGpu) audioGpu.disabled = busy || (whisperBuild && whisperBuild !== "cuda");
   processingForm.elements.workDir.disabled = active || busy;
   $("chooseDirectory").disabled = active || busy;
 
@@ -172,9 +237,10 @@ function draw(status) {
   $("stop").disabled = !active || busy;
   $("pause").textContent = status.paused ? "Продолжить" : "Пауза";
 }
-async function action(callback) {
+async function action(callback, spinner) {
   if (busy) return;
   busy = true;
+  if (spinner) spinner.hidden = false;
   notice("");
   draw(current);
   try {
@@ -183,6 +249,7 @@ async function action(callback) {
     notice(error.message);
   } finally {
     busy = false;
+    if (spinner) spinner.hidden = true;
     draw(current);
   }
 }
@@ -199,6 +266,26 @@ $("chooseDirectory").onclick = () =>
     const chosen = await window.processor.directory();
     if (chosen) processingForm.elements.workDir.value = chosen;
   });
+$("checkVideo").onclick = () =>
+  action(
+    async () => setCapabilityReadiness("video", await window.processor.readiness("video")),
+    $("videoSpinner"),
+  );
+$("installVideo").onclick = () =>
+  action(
+    async () => setCapabilityReadiness("video", await window.processor.install("video")),
+    $("videoSpinner"),
+  );
+$("checkSpeech").onclick = () =>
+  action(
+    async () => setCapabilityReadiness("speech", await window.processor.readiness("speech")),
+    $("speechSpinner"),
+  );
+$("installSpeech").onclick = () =>
+  action(
+    async () => setCapabilityReadiness("speech", await window.processor.install("speech")),
+    $("speechSpinner"),
+  );
 form.onsubmit = (event) => {
   event.preventDefault();
   void action(async () => {
@@ -243,3 +330,82 @@ window.processor
     draw(status);
   })
   .catch((error) => notice(error.message));
+
+const ciForm = $("ciSettings");
+let ciBusy = false;
+function ciInput() {
+  const result = {};
+  for (const key of ["repository", "distribution", "directory", "name"]) result[key] = ciForm.elements[key].value;
+  result.enabled = ciForm.elements.enabled.checked;
+  return result;
+}
+function ciFill(settings) {
+  for (const key of ["repository", "distribution", "directory", "name"]) ciForm.elements[key].value = settings[key] || "";
+  ciForm.elements.enabled.checked = settings.enabled;
+}
+function ciDraw(status) {
+  const phase = ["idle", "busy", "error", "connecting", "stopped"].includes(status.phase) ? status.phase : "stopped";
+  const label = { idle: "Принимает сборки", busy: "Идёт сборка", error: "Ошибка", connecting: "Подключение", stopped: "Не запущены" }[phase];
+  const dot = $("ciStatus");
+  dot.dataset.phase = phase;
+  dot.setAttribute("aria-label", label);
+  const text = $("ciStatusText");
+  text.hidden = phase !== "error";
+  text.textContent = phase === "error" ? (status.message || "Runner завершился с ошибкой.") : "";
+  if (phase === "stopped" && status.message && status.message !== "Сборки остановлены." && !$("ciSetupNotice").textContent)
+    $("ciSetupNotice").textContent = status.message;
+  paintDot("chipCi", phase);
+  paintDot("dashCiDot", phase);
+  $("dashCiSummary").textContent = phase === "busy" && status.step ? status.step : label;
+  $("dashCiLine").textContent = status.message || label;
+  $("dashCiStop").disabled = phase === "stopped";
+  if (phase === "busy") $("ciDash").open = true;
+}
+async function ciAction(notice, callback) {
+  if (ciBusy) return;
+  ciBusy = true;
+  ciForm.querySelectorAll("button,input").forEach(input => input.disabled = true);
+  notice.textContent = "Выполняем действие…";
+  try { await callback(); }
+  catch (error) { notice.textContent = error.message; }
+  finally { ciBusy = false; ciForm.querySelectorAll("button,input").forEach(input => input.disabled = false); }
+}
+function ciReadiness(value) {
+  $("ciSetupNotice").textContent = value.registered ? "Окружение готово, runner зарегистрирован." : value.installed ? "Runner установлен. Введите временный токен и зарегистрируйте его." : "Окружение готово. Можно установить runner.";
+}
+$("ciTab").onclick = () => {
+  form.hidden = true;
+  processingForm.hidden = true;
+  $("startupCard").hidden = true;
+  ciForm.hidden = false;
+  $("connectionTab").setAttribute("aria-pressed", "false");
+  $("processingTab").setAttribute("aria-pressed", "false");
+  $("ciTab").setAttribute("aria-pressed", "true");
+};
+const ciSetupNotice = $("ciSetupNotice");
+const ciNotice = $("ciNotice");
+ciForm.onsubmit = event => { event.preventDefault(); void ciAction(ciNotice, async () => {
+  const result = await window.processor.ciSave(ciInput()); ciFill(result.settings); ciDraw(result.status);
+  ciNotice.textContent = "Настройки сборок сохранены.";
+}); };
+$("ciCheck").onclick = () => ciAction(ciSetupNotice, async () => ciReadiness(await window.processor.ciCheck(ciInput())));
+$("ciInstall").onclick = () => ciAction(ciSetupNotice, async () => ciReadiness(await window.processor.ciInstall(ciInput())));
+$("ciRegister").onclick = () => ciAction(ciSetupNotice, async () => {
+  const token = ciForm.elements.registrationToken.value;
+  ciForm.elements.registrationToken.value = "";
+  ciReadiness(await window.processor.ciRegister(ciInput(), token));
+});
+$("ciStart").onclick = () => ciAction(ciNotice, async () => { ciDraw(await window.processor.ciStart()); ciNotice.textContent = "Запуск по сохранённым настройкам."; });
+$("ciStop").onclick = () => ciAction(ciNotice, async () => { ciDraw(await window.processor.ciStop()); ciNotice.textContent = "Runner остановлен до следующего запуска."; });
+$("dashCiStop").onclick = () => {
+  if (ciBusy) return;
+  ciBusy = true;
+  $("dashCiStop").disabled = true;
+  $("dashCiLine").textContent = "Останавливаем сборки…";
+  window.processor.ciStop()
+    .then(status => ciDraw(status))
+    .catch(error => { $("dashCiLine").textContent = error.message; $("dashCiStop").disabled = false; })
+    .finally(() => { ciBusy = false; });
+};
+window.processor.onCiStatus(ciDraw);
+window.processor.ciState().then(({ settings, status }) => { ciFill(settings); ciDraw(status); }).catch(error => { $("ciNotice").textContent = error.message; });

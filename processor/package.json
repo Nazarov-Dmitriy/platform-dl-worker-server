@@ -14,7 +14,10 @@
     "desktop": "npm run build && electron .",
     "desktop:pack": "npm run build && node scripts/release.mjs --dir",
     "desktop:dist": "npm run build && node scripts/release.mjs",
-    "desktop:test": "node scripts/desktop-smoke.cjs"
+    "desktop:test": "node scripts/desktop-smoke.cjs",
+    "ci:test": "node --test scripts/ci-runner.test.cjs scripts/desktop-settings.test.cjs scripts/desktop-processing.test.cjs scripts/desktop-login.test.cjs",
+    "ci:desktop:test": "node scripts/ci-desktop.test.cjs",
+    "ci:linux:test": "node scripts/ci-linux.test.cjs"
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.1",
