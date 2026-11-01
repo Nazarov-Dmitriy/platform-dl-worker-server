@@ -6,14 +6,14 @@ const invoke = async (channel, ...args) => {
 };
 contextBridge.exposeInMainWorld("processor", {
   ciState: () => invoke("processor:ci-state"),
-  ciSave: settings => invoke("processor:ci-save", settings),
-  ciCheck: settings => invoke("processor:ci-check", settings),
-  ciInstall: settings => invoke("processor:ci-install", settings),
-  ciRegister: (settings, token) => invoke("processor:ci-register", settings, token),
-  ciStart: () => invoke("processor:ci-start"),
-  ciStop: () => invoke("processor:ci-stop"),
+  ciSave: repos => invoke("processor:ci-save", repos),
+  ciCheck: entry => invoke("processor:ci-check", entry),
+  ciInstall: entry => invoke("processor:ci-install", entry),
+  ciRegister: (entry, token) => invoke("processor:ci-register", entry, token),
+  ciStart: id => invoke("processor:ci-start", id),
+  ciStop: id => invoke("processor:ci-stop", id),
   onCiStatus: callback => {
-    const listener = (_event, status) => callback(status);
+    const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("processor:ci-status", listener);
     return () => ipcRenderer.removeListener("processor:ci-status", listener);
   },

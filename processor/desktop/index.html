@@ -67,44 +67,56 @@
         <button id="ciTab" type="button" aria-pressed="false">Сборки GitHub</button>
       </nav>
       <form id="ciSettings" hidden>
-        <div class="card">
-          <h2 class="ci-heading">Сборки GitHub<span id="ciStatus" class="ci-dot" role="status" data-phase="stopped" aria-label="Сборки остановлены"></span><span id="ciStatusText" class="ci-status-text" hidden></span></h2>
-          <div class="ci-lead">
-            <label class="startup-toggle"><input name="enabled" type="checkbox"><span>Принимать сборки при запуске Worker</span></label>
-          </div>
-          <label>Репозиторий<input name="repository" required placeholder="владелец/репозиторий" autocomplete="off" spellcheck="false"></label>
-          <label>Дистрибутив WSL (Windows)<input name="distribution" required value="Worker-CI" autocomplete="off" spellcheck="false"><small>Свой дистрибутив Ubuntu. docker-desktop не подходит.</small></label>
-          <label>Папка runner внутри Linux<input name="directory" required placeholder="/home/worker/worker-ci-runner" autocomplete="off" spellcheck="false"><small>Своя папка, не каталог медиа. В пути — имя вашего пользователя Linux.</small></label>
-          <label>Имя runner<input name="name" required value="worker-build" autocomplete="off" spellcheck="false"></label>
-          <div class="actions">
-            <button id="ciCheck" type="button">Проверить окружение</button>
-            <button id="ciInstall" type="button">Установить runner</button>
-          </div>
-          <p id="ciSetupNotice" class="hint" role="status"></p>
-          <label>Временный токен регистрации GitHub<input name="registrationToken" type="password" autocomplete="off" spellcheck="false"></label>
-          <div class="actions">
-            <button id="ciRegister" type="button">Зарегистрировать runner</button>
-          </div>
-          <details class="ci-help">
-            <summary>Инструкция: полная настройка</summary>
-            <ol class="ci-help-steps">
-              <li><b>Токен GitHub (один раз).</b> Создай fine-grained PAT с правом <code>Administration → Read</code> и добавь его в репозиторий как секрет <code>RUNNER_ADMIN_TOKEN</code>: GitHub → аватар → <b>Settings → Developer settings → Fine-grained tokens</b>.</li>
-              <li><b>Репозиторий.</b> Впиши тот, который хочешь собирать на этой машине, в формате <code>владелец/репозиторий</code>. Поле подставлено по умолчанию — поменяй под свой.</li>
-              <li>Нажми «Проверить окружение» — должно показать «готово».</li>
-              <li>Если runner не установлен — нажми «Установить runner».</li>
-              <li><b>Временный токен.</b> В GitHub открой репозиторий → <b>Settings → Actions → Runners → New self-hosted runner</b> → ОС Linux, x64 → скопируй значение после <code>--token</code>.</li>
-              <li>Вставь токен в поле «Временный токен регистрации» и нажми «Зарегистрировать runner».</li>
-              <li>Нажми «Запустить сборки» — появится «Готов принимать сборки GitHub».</li>
-            </ol>
-          </details>
-        </div>
         <div class="actions">
-          <button type="submit" class="primary">Сохранить настройки сборок</button>
-          <button id="ciStart" type="button">Запустить сборки</button>
-          <button id="ciStop" type="button">Остановить сборки</button>
+          <button id="ciAdd" type="button">Добавить репозиторий</button>
         </div>
+        <label class="startup-toggle ci-launch"><input id="ciEnabled" type="checkbox" checked><span>Принимать сборки при запуске Worker</span></label>
+        <div id="ciList"></div>
         <p id="ciNotice" class="hint" role="status"></p>
+        <details class="ci-help">
+          <summary>Инструкция: полная настройка</summary>
+          <ol class="ci-help-steps">
+            <li><b>Токен GitHub (один раз).</b> Создай fine-grained PAT с правом <code>Administration → Read</code> и добавь его в репозиторий как секрет <code>RUNNER_ADMIN_TOKEN</code>: GitHub → аватар → <b>Settings → Developer settings → Fine-grained tokens</b>.</li>
+            <li><b>Репозиторий.</b> Впиши тот, который хочешь собирать на этой машине, в формате <code>владелец/репозиторий</code>. У каждой записи — своя папка runner и своё имя.</li>
+            <li>Нажми «Проверить окружение» — должно показать «готово».</li>
+            <li>Если runner не установлен — нажми «Установить runner».</li>
+            <li><b>Временный токен.</b> В GitHub открой репозиторий → <b>Settings → Actions → Runners → New self-hosted runner</b> → ОС Linux, x64 → скопируй значение после <code>--token</code>.</li>
+            <li>Вставь токен в поле «Временный токен регистрации» и нажми «Зарегистрировать runner».</li>
+            <li>Нажми «Сохранить», затем «Запустить сборки» — появится «Готов принимать сборки GitHub».</li>
+          </ol>
+        </details>
       </form>
+
+      <template id="ciEntryTemplate">
+        <details class="ci-entry">
+          <summary class="ci-entry-head">
+            <span class="ci-dot" data-phase="stopped"></span>
+            <span class="ci-entry-title"></span>
+            <span class="ci-entry-status"></span>
+          </summary>
+          <div class="ci-entry-body">
+            <label>Репозиторий<input name="repository" required placeholder="владелец/репозиторий" autocomplete="off" spellcheck="false"></label>
+            <label>Дистрибутив WSL (Windows)<input name="distribution" required value="Worker-CI" autocomplete="off" spellcheck="false"><small>Свой дистрибутив Ubuntu. docker-desktop не подходит.</small></label>
+            <label>Папка runner внутри Linux<input name="directory" required placeholder="/home/worker/worker-ci-runner" autocomplete="off" spellcheck="false"><small>Своя папка, не каталог медиа. В пути — имя вашего пользователя Linux.</small></label>
+            <label>Имя runner<input name="name" required value="worker-build" autocomplete="off" spellcheck="false"></label>
+            <div class="actions">
+              <button class="ci-check" type="button">Проверить окружение</button>
+              <button class="ci-install" type="button">Установить runner</button>
+            </div>
+            <p class="ci-entry-notice hint" role="status"></p>
+            <label>Временный токен регистрации GitHub<input name="registrationToken" type="password" autocomplete="off" spellcheck="false"></label>
+            <div class="actions">
+              <button class="ci-register" type="button">Зарегистрировать runner</button>
+            </div>
+            <div class="actions">
+              <button class="ci-save primary" type="button">Сохранить</button>
+              <button class="ci-start" type="button">Запустить сборки</button>
+              <button class="ci-stop" type="button">Остановить сборки</button>
+              <button class="ci-remove" type="button">Удалить</button>
+            </div>
+          </div>
+        </details>
+      </template>
       <form id="settings">
         <div class="card">
           <h2>Сервер и устройство</h2>

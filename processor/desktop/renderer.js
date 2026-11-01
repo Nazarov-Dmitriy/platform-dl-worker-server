@@ -332,46 +332,74 @@ window.processor
   .catch((error) => notice(error.message));
 
 const ciForm = $("ciSettings");
+const ciList = $("ciList");
+const ciTemplate = $("ciEntryTemplate");
+const ciNotice = $("ciNotice");
+let ciRepos = [];
 let ciBusy = false;
-function ciInput() {
-  const result = {};
-  for (const key of ["repository", "distribution", "directory", "name"]) result[key] = ciForm.elements[key].value;
-  result.enabled = ciForm.elements.enabled.checked;
+function ciEntryInput(root) {
+  const result = { id: root.dataset.id };
+  for (const key of ["repository", "distribution", "directory", "name"]) result[key] = root.querySelector(`[name="${key}"]`).value;
+  result.enabled = $("ciEnabled").checked;
   return result;
 }
-function ciFill(settings) {
-  for (const key of ["repository", "distribution", "directory", "name"]) ciForm.elements[key].value = settings[key] || "";
-  ciForm.elements.enabled.checked = settings.enabled;
+function ciPhase(status) {
+  return ["idle", "busy", "error", "connecting", "stopped"].includes(status?.phase) ? status.phase : "stopped";
 }
-function ciDraw(status) {
-  const phase = ["idle", "busy", "error", "connecting", "stopped"].includes(status.phase) ? status.phase : "stopped";
+function ciEntryTitle(root) {
+  return root.querySelector('[name="name"]').value || root.querySelector('[name="repository"]').value || "Новый репозиторий";
+}
+function ciEntryDraw(root, status) {
+  const phase = ciPhase(status);
+  root.querySelector(".ci-dot").setAttribute("data-phase", phase);
+  root.querySelector(".ci-entry-title").textContent = ciEntryTitle(root);
+  root.querySelector(".ci-entry-status").textContent = status?.message || ({ stopped: "Сборки остановлены.", connecting: "Подключение к GitHub…", idle: "Готов принимать сборки.", busy: "Выполняется сборка.", error: "Ошибка runner." })[phase] || "Состояние неизвестно.";
+}
+function ciDrawDashboard() {
+  const phases = ciRepos.map(repo => ciPhase(repo.status));
+  let phase = "stopped";
+  if (phases.includes("busy")) phase = "busy";
+  else if (phases.includes("idle")) phase = "idle";
+  else if (phases.includes("connecting")) phase = "connecting";
+  else if (phases.includes("error")) phase = "error";
   const label = { idle: "Принимает сборки", busy: "Идёт сборка", error: "Ошибка", connecting: "Подключение", stopped: "Не запущены" }[phase];
-  const dot = $("ciStatus");
-  dot.dataset.phase = phase;
-  dot.setAttribute("aria-label", label);
-  const text = $("ciStatusText");
-  text.hidden = phase !== "error";
-  text.textContent = phase === "error" ? (status.message || "Runner завершился с ошибкой.") : "";
-  if (phase === "stopped" && status.message && status.message !== "Сборки остановлены." && !$("ciSetupNotice").textContent)
-    $("ciSetupNotice").textContent = status.message;
   paintDot("chipCi", phase);
   paintDot("dashCiDot", phase);
-  $("dashCiSummary").textContent = phase === "busy" && status.step ? status.step : label;
-  $("dashCiLine").textContent = status.message || label;
-  $("dashCiStop").disabled = phase === "stopped";
+  const active = ciRepos.filter(repo => ["idle", "busy", "connecting"].includes(ciPhase(repo.status))).length;
+  $("dashCiSummary").textContent = active > 1 ? active + " репозиториев" : label;
+  $("dashCiLine").textContent = active > 1 ? "Сборки запущены для " + active + " репозиториев." : (ciRepos[0]?.status?.message || label);
+  $("dashCiStop").disabled = active === 0;
   if (phase === "busy") $("ciDash").open = true;
+}
+function ciRootFor(id) { return ciList.querySelector(`.ci-entry[data-id="${id}"]`); }
+function renderCiList() {
+  ciList.replaceChildren();
+  for (const repo of ciRepos) {
+    const node = ciTemplate.content.firstElementChild.cloneNode(true);
+    node.dataset.id = repo.id;
+    for (const key of ["repository", "distribution", "directory", "name"]) node.querySelector(`[name="${key}"]`).value = repo[key] || "";
+    node.open = true;
+    ciEntryDraw(node, repo.status);
+    ciList.appendChild(node);
+  }
+  ciDrawDashboard();
 }
 async function ciAction(notice, callback) {
   if (ciBusy) return;
   ciBusy = true;
-  ciForm.querySelectorAll("button,input").forEach(input => input.disabled = true);
+  ciList.querySelectorAll("button,input").forEach(input => input.disabled = true);
+  $("ciAdd").disabled = true;
+  $("ciEnabled").disabled = true;
   notice.textContent = "Выполняем действие…";
   try { await callback(); }
   catch (error) { notice.textContent = error.message; }
-  finally { ciBusy = false; ciForm.querySelectorAll("button,input").forEach(input => input.disabled = false); }
+  finally { ciBusy = false; ciList.querySelectorAll("button,input").forEach(input => input.disabled = false); $("ciAdd").disabled = false; $("ciEnabled").disabled = false; }
 }
-function ciReadiness(value) {
-  $("ciSetupNotice").textContent = value.registered ? "Окружение готово, runner зарегистрирован." : value.installed ? "Runner установлен. Введите временный токен и зарегистрируйте его." : "Окружение готово. Можно установить runner.";
+function ciCollect() {
+  return ciRepos.map(repo => ciEntryInput(ciRootFor(repo.id)));
+}
+function ciReadinessNotice(root, value) {
+  root.querySelector(".ci-entry-notice").textContent = value.registered ? "Окружение готово, runner зарегистрирован." : value.installed ? "Runner установлен. Введите токен и зарегистрируйте." : "Окружение готово. Можно установить runner.";
 }
 $("ciTab").onclick = () => {
   form.hidden = true;
@@ -382,30 +410,58 @@ $("ciTab").onclick = () => {
   $("processingTab").setAttribute("aria-pressed", "false");
   $("ciTab").setAttribute("aria-pressed", "true");
 };
-const ciSetupNotice = $("ciSetupNotice");
-const ciNotice = $("ciNotice");
-ciForm.onsubmit = event => { event.preventDefault(); void ciAction(ciNotice, async () => {
-  const result = await window.processor.ciSave(ciInput()); ciFill(result.settings); ciDraw(result.status);
-  ciNotice.textContent = "Настройки сборок сохранены.";
-}); };
-$("ciCheck").onclick = () => ciAction(ciSetupNotice, async () => ciReadiness(await window.processor.ciCheck(ciInput())));
-$("ciInstall").onclick = () => ciAction(ciSetupNotice, async () => ciReadiness(await window.processor.ciInstall(ciInput())));
-$("ciRegister").onclick = () => ciAction(ciSetupNotice, async () => {
-  const token = ciForm.elements.registrationToken.value;
-  ciForm.elements.registrationToken.value = "";
-  ciReadiness(await window.processor.ciRegister(ciInput(), token));
+$("ciAdd").onclick = () => {
+  const id = "repo-" + Math.random().toString(36).slice(2, 8);
+  ciRepos.push({ id, repository: "", distribution: "Worker-CI", directory: "", name: "", enabled: true, status: { phase: "stopped", connected: false, busy: false } });
+  renderCiList();
+  const node = ciRootFor(id);
+  if (node) { node.open = true; node.querySelector('[name="repository"]').focus(); }
+};
+ciList.addEventListener("click", event => {
+  const root = event.target.closest(".ci-entry");
+  if (!root) return;
+  const btn = event.target.closest("button");
+  if (!btn) return;
+  const id = root.dataset.id;
+  const entry = () => ciEntryInput(root);
+  const notice = root.querySelector(".ci-entry-notice");
+  if (btn.classList.contains("ci-check")) return ciAction(notice, async () => ciReadinessNotice(root, await window.processor.ciCheck(entry())));
+  if (btn.classList.contains("ci-install")) return ciAction(notice, async () => ciReadinessNotice(root, await window.processor.ciInstall(entry())));
+  if (btn.classList.contains("ci-register")) return ciAction(notice, async () => {
+    const token = root.querySelector('[name="registrationToken"]').value;
+    root.querySelector('[name="registrationToken"]').value = "";
+    ciReadinessNotice(root, await window.processor.ciRegister(entry(), token));
+  });
+  if (btn.classList.contains("ci-save")) return ciAction(ciNotice, async () => {
+    const result = await window.processor.ciSave(ciCollect());
+    ciRepos = result.repos;
+    renderCiList();
+    ciNotice.textContent = "Настройки сборок сохранены.";
+  });
+  if (btn.classList.contains("ci-start")) return ciAction(ciNotice, async () => { await window.processor.ciStart(id); });
+  if (btn.classList.contains("ci-stop")) return ciAction(ciNotice, async () => { await window.processor.ciStop(id); });
+  if (btn.classList.contains("ci-remove")) {
+    if (ciBusy) return;
+    ciRepos = ciRepos.filter(item => item.id !== id);
+    renderCiList();
+  }
 });
-$("ciStart").onclick = () => ciAction(ciNotice, async () => { ciDraw(await window.processor.ciStart()); ciNotice.textContent = "Запуск по сохранённым настройкам."; });
-$("ciStop").onclick = () => ciAction(ciNotice, async () => { ciDraw(await window.processor.ciStop()); ciNotice.textContent = "Runner остановлен до следующего запуска."; });
 $("dashCiStop").onclick = () => {
   if (ciBusy) return;
   ciBusy = true;
   $("dashCiStop").disabled = true;
   $("dashCiLine").textContent = "Останавливаем сборки…";
-  window.processor.ciStop()
-    .then(status => ciDraw(status))
-    .catch(error => { $("dashCiLine").textContent = error.message; $("dashCiStop").disabled = false; })
+  Promise.all(ciRepos.map(repo => window.processor.ciStop(repo.id)))
+    .then(() => { $("dashCiLine").textContent = "Сборки остановлены."; })
+    .catch(error => { $("dashCiLine").textContent = error.message; })
     .finally(() => { ciBusy = false; });
 };
-window.processor.onCiStatus(ciDraw);
-window.processor.ciState().then(({ settings, status }) => { ciFill(settings); ciDraw(status); }).catch(error => { $("ciNotice").textContent = error.message; });
+window.processor.onCiStatus(payload => {
+  const repo = ciRepos.find(item => item.id === payload.key);
+  if (!repo) return;
+  repo.status = payload.status;
+  const root = ciRootFor(payload.key);
+  if (root) ciEntryDraw(root, payload.status);
+  ciDrawDashboard();
+});
+window.processor.ciState().then(({ repos }) => { ciRepos = repos; $("ciEnabled").checked = repos.some(repo => repo.enabled !== false); renderCiList(); }).catch(error => { ciNotice.textContent = error.message; });

@@ -52,8 +52,10 @@ Docker group даёт широкие права внутри этой Linux-ср
 известной активной сборки; закрытие окна само по себе не отменяет job.
 После сна/потери сети runner переподключается; при завершении процесса повторить запуск в приложении.
 
-Текущий backend workflow пока остаётся на GitHub. Переключение и резерв описаны в
-[плане сайта](../../../serverBreasts/docs/plan/worker-ci-runner-plan.md).
+Backend и frontend `deploy.yml` выбирают машину `worker-build` или резерв GitHub.
+Регистрация runner привязана к одному репозиторию: для фронта нужна отдельная папка
+(или org-runner с той же меткой). Планы: [бэк](../../../serverBreasts/docs/plan/worker-ci-runner-plan.md),
+[фронт](../../../front/docs/plan/worker-ci-runner-plan.md).
 GitHub не переключает недоступный self-hosted job на hosted автоматически. При исчерпанном
 hosted лимите резерв также может быть заблокирован. Живой запуск и резерв ещё требуют приёмки.
 

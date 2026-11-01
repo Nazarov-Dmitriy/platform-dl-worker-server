@@ -38,11 +38,31 @@ const {
   detectGpu,
 } = require("./readiness.cjs");
 const { CiRunner, validateCiSettings } = require("./ci-runner.cjs");
-const ciRunner = new CiRunner();
-let ciSettings = { repository: "Nazarov-Dmitriy/dream-breasts-server", distribution: "Worker-CI", directory: "/home/worker/worker-ci-runner", name: "worker-build", enabled: true };
-ciRunner.on("status", status => {
-  if (window && !window.isDestroyed()) window.webContents.send("processor:ci-status", status);
-});
+let ciRepos = [{ id: "worker-build", repository: "Nazarov-Dmitriy/dream-breasts-server", distribution: "Worker-CI", directory: "/home/worker/worker-ci-runner", name: "worker-build", enabled: true }];
+const ciRunners = new Map();
+function ciRunnerFor(id) {
+  if (!ciRunners.has(id)) {
+    const runner = new CiRunner();
+    runner.on("status", status => {
+      if (window && !window.isDestroyed()) window.webContents.send("processor:ci-status", { key: id, status });
+    });
+    ciRunners.set(id, runner);
+  }
+  return ciRunners.get(id);
+}
+function validateCiRepos(input) {
+  if (!Array.isArray(input) || input.length === 0) throw Error("Добавьте хотя бы один репозиторий.");
+  const ids = new Set(), dirs = new Set(), names = new Set();
+  return input.map((item, index) => {
+    const entry = validateCiSettings(item || {});
+    const id = String(item.id || entry.name || "repo-" + (index + 1)).trim();
+    if (ids.has(id)) throw Error("Повторяющаяся запись: " + id + ".");
+    if (dirs.has(entry.directory)) throw Error("Папка " + entry.directory + " уже занята другой записью.");
+    if (names.has(entry.name)) throw Error("Имя runner " + entry.name + " уже занято другой записью.");
+    ids.add(id); dirs.add(entry.directory); names.add(entry.name);
+    return { ...entry, id };
+  });
+}
 app.setName("Worker Processor");
 if (process.platform === "win32")
   app.setAppUserModelId("ru.difat.workerprocessor");
@@ -423,8 +443,10 @@ function handle(channel, callback) {
 }
 async function quit() {
   if (quitting) return;
-  try { await ciRunner.stop(); }
-  catch (error) { emit({ message: error.message }); show(); return; }
+  for (const runner of ciRunners.values()) {
+    try { await runner.stop(); }
+    catch (error) { emit({ message: error.message }); show(); return; }
+  }
   await stop();
   if (child) {
     show();
@@ -460,9 +482,11 @@ else {
       } catch { snapshot.message = "Проверьте настройки обработки перед запуском."; }
     }
     try {
-      if (existsSync(join(directory, "ci-settings.json")))
-        ciSettings = validateCiSettings(JSON.parse(readFileSync(join(directory, "ci-settings.json"), "utf8")));
-    } catch { ciSettings.enabled = false; }
+      if (existsSync(join(directory, "ci-settings.json"))) {
+        const raw = JSON.parse(readFileSync(join(directory, "ci-settings.json"), "utf8"));
+        ciRepos = validateCiRepos(Array.isArray(raw) ? raw : [raw]);
+      }
+    } catch { /* остаёмся на записи по умолчанию */ }
     restoreDesktopAutostart();
     window = new BrowserWindow({
       width: 1160,
@@ -526,24 +550,37 @@ else {
     );
     tray.on("double-click", show);
     tray.on("click", show);
-    handle("processor:ci-state", () => ({ settings: ciSettings, status: { ...ciRunner.state } }));
+    handle("processor:ci-state", () => ({ repos: ciRepos.map(entry => ({ ...entry, status: ciRunners.get(entry.id)?.state || { phase: "stopped", connected: false, busy: false } })) }));
     handle("processor:ci-save", async input => {
-      const next = validateCiSettings(input);
-      if (ciRunner.child) {
-        if (next.repository !== ciSettings.repository || next.directory !== ciSettings.directory || next.distribution !== ciSettings.distribution || next.name !== ciSettings.name)
+      const next = validateCiRepos(input);
+      for (const entry of ciRepos) {
+        const runner = ciRunners.get(entry.id);
+        if (!runner || !runner.child) continue;
+        const target = next.find(item => item.id === entry.id);
+        if (!target) throw Error("Остановите сборки перед удалением репозитория.");
+        if (target.repository !== entry.repository || target.directory !== entry.directory || target.distribution !== entry.distribution || target.name !== entry.name)
           throw Error("Остановите сборки перед изменением подключения runner.");
-        if (!next.enabled) await ciRunner.stop();
+        if (!target.enabled) await runner.stop();
       }
-      if (next.enabled) await ciRunner.start(next);
-      ciSettings = next;
-      atomic("ci-settings.json", JSON.stringify(ciSettings, null, 2));
-      return { settings: ciSettings, status: { ...ciRunner.state } };
+      ciRepos = next;
+      atomic("ci-settings.json", JSON.stringify(ciRepos, null, 2));
+      for (const entry of ciRepos) {
+        if (!entry.enabled) continue;
+        const runner = ciRunnerFor(entry.id);
+        try { await runner.start(entry); }
+        catch (error) { runner.update({ phase: "error", connected: false, busy: false, message: error.message }); }
+      }
+      return { repos: ciRepos.map(entry => ({ ...entry, status: ciRunners.get(entry.id)?.state || { phase: "stopped", connected: false, busy: false } })) };
     });
-    handle("processor:ci-check", input => ciRunner.exclusive(() => ciRunner.check(input)));
-    handle("processor:ci-install", input => ciRunner.install(input));
-    handle("processor:ci-register", (input, token) => ciRunner.register(input, token));
-    handle("processor:ci-start", () => ciRunner.start(ciSettings));
-    handle("processor:ci-stop", () => ciRunner.stop());
+    handle("processor:ci-check", input => ciRunnerFor(input.id).check(input));
+    handle("processor:ci-install", input => ciRunnerFor(input.id).install(input));
+    handle("processor:ci-register", (input, token) => ciRunnerFor(input.id).register(input, token));
+    handle("processor:ci-start", id => {
+      const entry = ciRepos.find(item => item.id === id);
+      if (!entry) throw Error("Репозиторий не найден.");
+      return ciRunnerFor(id).start(entry);
+    });
+    handle("processor:ci-stop", id => ciRunnerFor(id).stop());
     handle("processor:autostart", setDesktopAutostart);
     handle("processor:readiness", (capability) => checkReadiness(capability));
     handle("processor:install", async (capability) => {
@@ -668,9 +705,13 @@ else {
       return true;
     });
     window.loadFile(html).then(async () => {
-      if (ciSettings.enabled && !process.argv.includes("--smoke")) {
-        try { await ciRunner.start(ciSettings); }
-        catch (error) { ciRunner.update({ phase: "stopped", connected: false, busy: false, message: error.message }); }
+      if (!process.argv.includes("--smoke")) {
+        for (const entry of ciRepos) {
+          if (!entry.enabled) continue;
+          const runner = ciRunnerFor(entry.id);
+          try { await runner.start(entry); }
+          catch (error) { runner.update({ phase: "stopped", connected: false, busy: false, message: error.message }); }
+        }
       }
       if (!backgroundLaunch) return;
       try {

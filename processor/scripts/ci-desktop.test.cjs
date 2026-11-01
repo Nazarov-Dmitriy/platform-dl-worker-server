@@ -38,25 +38,30 @@ async function main() {
     await page.locator("#ciTab").click();
     await page.locator("#ciSettings").waitFor({ state: "visible" });
     assert.equal(await page.locator("#settings").isVisible(), false);
-    await page.locator("#ciCheck").click();
-    await page.waitForFunction(() => document.getElementById('ciSetupNotice').textContent.includes('Runner установлен'));
-    await page.locator("#ciSettings [name=repository]").fill("bad/repo;echo");
-    await page.locator("#ciSettings button[type=submit]").click();
+    const first = page.locator(".ci-entry").first();
+    await first.waitFor({ state: "visible" });
+    await first.locator(".ci-check").click();
+    await page.waitForFunction(() => document.querySelector('.ci-entry .ci-entry-notice').textContent.includes('Runner установлен'));
+    await first.locator("[name=repository]").fill("bad/repo;echo");
+    await first.locator(".ci-save").click();
     await page.waitForFunction(() => document.getElementById('ciNotice').textContent.includes('формате'));
-    await page.locator("#ciSettings [name=repository]").fill("owner/repo");
-    await page.locator("#ciSettings [name=registrationToken]").fill("TEST_REGISTRATION_TOKEN");
-    await page.locator("#ciRegister").click();
-    await page.waitForFunction(() => document.getElementById('ciSetupNotice').textContent.includes('зарегистрирован'));
-    assert.equal(await page.locator("#ciSettings [name=registrationToken]").inputValue(), "");
-    await page.locator("#ciSettings [name=enabled]").check();
-    await page.locator("#ciSettings button[type=submit]").click();
+    await first.locator("[name=repository]").fill("owner/repo");
+    await first.locator("[name=registrationToken]").fill("TEST_REGISTRATION_TOKEN");
+    await first.locator(".ci-register").click();
+    await page.waitForFunction(() => document.querySelector('.ci-entry .ci-entry-notice').textContent.includes('зарегистрирован'));
+    assert.equal(await first.locator("[name=registrationToken]").inputValue(), "");
+    await page.locator("#ciEnabled").check();
+    await first.locator(".ci-save").click();
     await page.waitForFunction(() => document.getElementById('ciNotice').textContent.includes('сохранены'));
-    assert.equal(await page.locator("#ciStatus").getAttribute("data-phase"), "idle");
+    await page.waitForFunction(() => document.querySelector('.ci-entry .ci-dot').dataset.phase === 'idle');
     const saved = fs.readFileSync(path.join(profile, "ci-settings.json"), "utf8");
-    assert.equal(JSON.parse(saved).repository, "owner/repo");
+    assert.equal(Array.isArray(JSON.parse(saved)), true);
+    assert.equal(JSON.parse(saved)[0].repository, "owner/repo");
     assert.ok(!saved.includes("TEST_REGISTRATION_TOKEN"));
-    await page.locator("#ciStop").click();
-    await page.waitForFunction(() => document.getElementById('ciStatus').dataset.phase === 'stopped');
+    await page.locator("#ciAdd").click();
+    await page.waitForFunction(() => document.querySelectorAll('.ci-entry').length === 2);
+    await first.locator(".ci-stop").click();
+    await page.waitForFunction(() => document.querySelector('.ci-entry .ci-dot').dataset.phase === 'stopped');
     for (const width of [1160, 620]) {
       await app.evaluate(({BrowserWindow}, width) => BrowserWindow.getAllWindows()[0].setSize(width, 820), width);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, 'Overflow at ' + width);
@@ -65,7 +70,7 @@ async function main() {
     assert.equal(await page.locator("#ciSettings").isVisible(), false);
     assert.equal(await page.locator("#processingSettings").isVisible(), true);
     assert.deepEqual(errors, []);
-    console.log("Worker CI desktop: IPC, tabs, validation, registration, token clearing, persistence, start/stop and 1160/620px PASS");
+    console.log("Worker CI desktop: IPC, list, add, validation, registration, token clearing, persistence, start/stop and 1160/620px PASS");
   } finally { await app.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

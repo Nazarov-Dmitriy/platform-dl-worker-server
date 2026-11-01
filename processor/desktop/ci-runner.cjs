@@ -106,7 +106,10 @@ exec setsid bash -c '
 '`;
 
 const RUN = `set -eu
-exec systemd-run --user --scope --quiet --unit=worker-ci-runner --slice=app-worker-ci.slice --property=CPUQuota=400% --property=MemoryMax=6G bash -c "$2" worker-ci "$1"
+name=$2
+script=$3
+case "$name" in *[!A-Za-z0-9_.-]*|"") exit 74;; esac
+exec systemd-run --user --scope --quiet --unit="worker-ci-$name" --slice=app-worker-ci.slice --property=CPUQuota=400% --property=MemoryMax=6G bash -c "$script" worker-ci "$1"
 `;
 
 const STEP = `set -eu
@@ -233,7 +236,7 @@ class CiRunner extends EventEmitter {
         this.watch();
         return this.update({ phase: "idle", connected: true, busy: false, message: "Runner уже запущен и принимает сборки." });
       }
-      const spec = command(settings, RUN, [RUN_PROCESS], this.platform);
+      const spec = command(settings, RUN, [settings.name, RUN_PROCESS], this.platform);
       const child = this.spawnProcess(spec.executable, spec.args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
       this.child = child;
       this.update({ phase: "connecting", connected: false, busy: false, message: "Подключение к GitHub…" });
