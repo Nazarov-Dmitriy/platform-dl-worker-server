@@ -67,7 +67,10 @@ self=$$
 for pid in /proc/[0-9]*; do
   id=\${pid##*/}
   test "\$id" = "\$self" && continue
-  tr '\\0' ' ' < "\$pid/cmdline" 2>/dev/null | grep -F -q -- "\$1/bin/Runner.Listener run" && { printf 'running\\n'; break; }
+  if tr $'\\0' ' ' < "\$pid/cmdline" 2>/dev/null | grep -F -q -- "\$1/bin/Runner.Listener run"; then
+    printf 'running\\n'
+    break
+  fi
 done
 `;
 

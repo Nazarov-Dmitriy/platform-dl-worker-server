@@ -355,19 +355,42 @@ function ciEntryDraw(root, status) {
   root.querySelector(".ci-entry-title").textContent = ciEntryTitle(root);
   root.querySelector(".ci-entry-status").textContent = status?.message || ({ stopped: "Сборки остановлены.", connecting: "Подключение к GitHub…", idle: "Готов принимать сборки.", busy: "Выполняется сборка.", error: "Ошибка runner." })[phase] || "Состояние неизвестно.";
 }
+function ciRepoLine(repo) {
+  const phase = ciPhase(repo.status);
+  const status = repo.status || {};
+  const name = repo.repository || repo.name || "Репозиторий";
+  if (phase === "busy") return { phase, name, text: status.step || status.job || "Идёт сборка" };
+  const text = { idle: "Ждёт задание", connecting: "Подключение", stopped: "Не запущен", error: status.message || "Ошибка" }[phase] || "Не запущен";
+  return { phase, name, text };
+}
 function ciDrawDashboard() {
   const phases = ciRepos.map(repo => ciPhase(repo.status));
   let phase = "stopped";
   if (phases.includes("busy")) phase = "busy";
-  else if (phases.includes("idle")) phase = "idle";
-  else if (phases.includes("connecting")) phase = "connecting";
   else if (phases.includes("error")) phase = "error";
-  const label = { idle: "Принимает сборки", busy: "Идёт сборка", error: "Ошибка", connecting: "Подключение", stopped: "Не запущены" }[phase];
+  else if (phases.includes("connecting")) phase = "connecting";
+  else if (phases.includes("idle")) phase = "idle";
+  const label = { idle: "Ждут задания", busy: "Идёт сборка", error: "Ошибка", connecting: "Подключение", stopped: "Не запущены" }[phase];
   paintDot("chipCi", phase);
   paintDot("dashCiDot", phase);
+  const busyNames = ciRepos.filter(repo => ciPhase(repo.status) === "busy").map(repo => repo.repository || repo.name);
+  $("dashCiSummary").textContent = busyNames.length ? busyNames.join(", ") : label;
+  const rows = $("dashCiRows");
+  rows.replaceChildren(...ciRepos.map(repo => {
+    const line = ciRepoLine(repo);
+    const row = document.createElement("div");
+    row.className = "ci-dash-row";
+    const dot = document.createElement("span");
+    dot.className = "ci-dot";
+    dot.dataset.phase = line.phase;
+    const title = document.createElement("b");
+    title.textContent = line.name;
+    const detail = document.createElement("span");
+    detail.textContent = line.text;
+    row.append(dot, title, detail);
+    return row;
+  }));
   const active = ciRepos.filter(repo => ["idle", "busy", "connecting"].includes(ciPhase(repo.status))).length;
-  $("dashCiSummary").textContent = active > 1 ? active + " репозиториев" : label;
-  $("dashCiLine").textContent = active > 1 ? "Сборки запущены для " + active + " репозиториев." : (ciRepos[0]?.status?.message || label);
   $("dashCiStop").disabled = active === 0;
   if (phase === "busy") $("ciDash").open = true;
 }

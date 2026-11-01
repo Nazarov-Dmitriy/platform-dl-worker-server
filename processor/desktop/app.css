@@ -380,6 +380,12 @@ fieldset:disabled {
 }
 .ci-fold[open] summary::before { transform: rotate(45deg); margin-top: -3px; }
 .ci-fold .hint { margin: 16px 0 0; white-space: pre-line; }
+.ci-fold .hint:empty { display: none; }
+.ci-dash-rows { display: grid; gap: 14px; margin-top: 16px; }
+.ci-dash-row { display: grid; grid-template-columns: 10px 1fr; gap: 4px 10px; align-items: center; }
+.ci-dash-row .ci-dot { grid-row: 1 / span 2; }
+.ci-dash-row b { font-weight: 600; }
+.ci-dash-row span { color: var(--muted); font-size: 13px; }
 .ci-fold .actions { margin-top: 16px; }
 .jobs-card h2 { margin: 0 0 22px; }
 .jobs-scroll { overflow-x: auto; }

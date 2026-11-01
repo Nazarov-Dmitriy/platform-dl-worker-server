@@ -54,8 +54,8 @@ Docker group даёт широкие права внутри этой Linux-ср
 
 Backend и frontend `deploy.yml` выбирают машину `worker-build` или резерв GitHub.
 Регистрация runner привязана к одному репозиторию: для фронта нужна отдельная папка
-(или org-runner с той же меткой). Планы: [бэк](../../../serverBreasts/docs/plan/worker-ci-runner-plan.md),
-[фронт](../../../front/docs/plan/worker-ci-runner-plan.md).
+(или org-runner с той же меткой). Итоги: [бэк](../../../serverBreasts/docs/plan/archive/plans-archive.md#ci-сборка-на-машине-worker-с-резервом-github--2026-11-01),
+[фронт](../../../front/docs/archive/Plans/worker-ci-runner-plan.md).
 GitHub не переключает недоступный self-hosted job на hosted автоматически. При исчерпанном
 hosted лимите резерв также может быть заблокирован. Живой запуск и резерв ещё требуют приёмки.
 
