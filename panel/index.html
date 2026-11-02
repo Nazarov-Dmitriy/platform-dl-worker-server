@@ -428,6 +428,91 @@
               <div class="card-heading"><h2>Каталог моделей</h2></div>
               <div id="catalog"></div>
             </div>
+            <div class="card" id="catalogCard" hidden>
+              <div class="card-heading"><h2>Добавить модель</h2></div>
+              <div class="card-body">
+                <p class="muted">
+                  Модели берутся с huggingface.co. Размер и контрольная сумма
+                  считываются из репозитория, вводить их не нужно.
+                </p>
+                <form id="catalogForm" class="stacked-form">
+                  <div class="form-grid">
+                    <label class="field"
+                      >Короткое имя<input
+                        name="id"
+                        type="text"
+                        required
+                        placeholder="whisper-cpp-large-v3-turbo" /></label
+                    ><label class="field"
+                      >Репозиторий<input
+                        name="repository"
+                        type="text"
+                        required
+                        placeholder="ggerganov/whisper.cpp" /></label
+                    ><label class="field"
+                      >Ревизия<input
+                        name="revision"
+                        type="text"
+                        required
+                        placeholder="коммит или ветка" /></label
+                    ><label class="field"
+                      >Что делает<select name="purpose" id="catalogPurpose">
+                        <option value="RECOGNITION">Распознавание речи</option>
+                        <option value="TRANSLATION">Перевод</option>
+                      </select></label
+                    >
+                  </div>
+                  <div class="form-grid" id="catalogFileField">
+                    <label class="field"
+                      >Файл весов в репозитории<input
+                        name="file"
+                        type="text"
+                        placeholder="ggml-large-v3-turbo.bin"
+                    /></label>
+                  </div>
+                  <div class="form-grid" id="catalogPairFields" hidden>
+                    <label class="field"
+                      >Язык источника<input
+                        name="source"
+                        type="text"
+                        placeholder="ru" /></label
+                    ><label class="field"
+                      >Язык перевода<input
+                        name="target"
+                        type="text"
+                        placeholder="fr"
+                    /></label>
+                  </div>
+                  <fieldset class="field-group">
+                    <legend>Для каких заданий</legend>
+                    <label class="check-field"
+                      ><input
+                        type="checkbox"
+                        name="operations"
+                        value="media.transcribe"
+                      />Распознавание речи</label
+                    ><label class="check-field"
+                      ><input
+                        type="checkbox"
+                        name="operations"
+                        value="media.subtitles"
+                      />Субтитры</label
+                    >
+                  </fieldset>
+                  <label class="field"
+                    >Пояснение<input
+                      name="note"
+                      type="text"
+                      placeholder="зачем эта модель нужна"
+                  /></label>
+                  <div class="actions">
+                    <button type="submit" class="button primary">
+                      Добавить в каталог
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
             <p id="modelOut" class="notice-box" role="status" hidden></p>
           </section>
           <section data-panel="accounts" hidden>

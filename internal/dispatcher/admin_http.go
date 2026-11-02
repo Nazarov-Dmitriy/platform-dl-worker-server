@@ -48,6 +48,8 @@ func (h *HTTP) addAdminRoutes() {
 	h.mux.HandleFunc("POST /api/v2/admin/tokens/{id}/revoke", h.admin(h.adminRevokeToken, true))
 	h.mux.HandleFunc("GET /api/v2/admin/tokens", h.admin(h.adminListTokens, false))
 	h.mux.HandleFunc("GET /api/v2/admin/models", h.admin(h.adminModels, false))
+	h.mux.HandleFunc("POST /api/v2/admin/models", h.admin(h.adminAddModel, true))
+	h.mux.HandleFunc("DELETE /api/v2/admin/models/{id}/{revision}", h.admin(h.adminDeleteModel, true))
 	h.mux.HandleFunc("GET /api/v2/admin/audit", h.admin(h.adminAudit, false))
 	h.mux.HandleFunc("GET /api/v2/admin/ops", h.admin(h.adminOps, false))
 	h.mux.HandleFunc("PUT /api/v2/admin/ops", h.admin(h.adminOpsSet, true))
@@ -238,6 +240,26 @@ func (h *HTTP) adminDeviceSettings(w http.ResponseWriter, r *http.Request, a Adm
 		return
 	}
 	h.reply(w, 200, v)
+}
+func (h *HTTP) adminAddModel(w http.ResponseWriter, r *http.Request, a AdminActor) {
+	raw, e := h.body(w, r)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	v, e := h.store.AdminAddModel(r.Context(), a, raw)
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	h.reply(w, 201, v)
+}
+func (h *HTTP) adminDeleteModel(w http.ResponseWriter, r *http.Request, a AdminActor) {
+	if e := h.store.AdminDeleteModel(r.Context(), a, r.PathValue("id"), r.PathValue("revision")); e != nil {
+		h.failure(w, e)
+		return
+	}
+	w.WriteHeader(204)
 }
 func (h *HTTP) adminDeviceModels(w http.ResponseWriter, r *http.Request, a AdminActor) {
 	v, e := h.store.AdminModels(r.Context(), r.PathValue("id"))

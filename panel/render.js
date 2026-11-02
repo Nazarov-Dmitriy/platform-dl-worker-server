@@ -212,140 +212,79 @@ function modelNeeds(model) {
     );
   return parts.join(" · ");
 }
-const placementStates = {
-  ACTIVE: ["Активна", "good"],
-  INSTALLED: ["Установлена", "info"],
+const jobOperations = {
+  "media.transcode": "Обработка видео",
+  "media.transcribe": "Распознавание речи",
+  "media.subtitles": "Субтитры",
 };
-function modelActionButton(label, tone, model, device, type, confirmText) {
-  const button = node("button", label, "button " + tone);
-  button.type = "button";
-  button.disabled = !!state.modelActionKey;
-  button.addEventListener("click", () =>
-    sendModelCommand(model, device, type, confirmText),
-  );
-  return button;
+// Where the entry came from: the repository page carries the model card an
+// operator reads before adding or replacing anything.
+function modelCardLink(model) {
+  const href = modelCard(model);
+  if (!href) return null;
+  const link = node("a", "Карточка модели на huggingface.co");
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noreferrer noopener";
+  return link;
 }
-function modelDeviceRow(model, device, placement) {
-  const row = node("div", null, "model-device");
-  const title = node("div", null, "model-device-name");
-  title.append(
-    node("span", device.name),
-    node(
-      "span",
-      device.online ? "в сети" : "не в сети",
-      "cell-meta" + (device.online ? "" : " muted"),
-    ),
+function modelPurposeCell(model) {
+  const cell = node("div", null, "model-heading");
+  const tags = node("div", null, "model-tags");
+  (model.operations || []).forEach((op) =>
+    tags.append(node("span", jobOperations[op] || op, "model-tag")),
   );
-  const status = placement
-    ? badge(...placementStates[placement.state])
-    : node("span", "Не установлена", "muted");
-  const actions = node("div", null, "actions");
-  if (!placement)
-    actions.append(
-      modelActionButton("Установить", "", model, device, "MODEL_INSTALL"),
-    );
-  else {
-    if (placement.state !== "ACTIVE")
-      actions.append(
-        modelActionButton("Активировать", "", model, device, "MODEL_ACTIVATE"),
-      );
-    actions.append(
-      modelActionButton(
-        "Удалить",
-        "danger",
-        model,
-        device,
-        "MODEL_DELETE",
-        "Удалить модель «" + model.id + "» с устройства «" + device.name + "»?",
-      ),
-    );
-  }
-  row.append(title, status, actions);
-  return row;
+  if (!tags.childElementCount)
+    tags.append(node("span", "Назначение не указано", "muted"));
+  cell.append(tags, node("span", modelNeeds(model), "cell-meta"));
+  return cell;
 }
-// A device that has never connected reports no platform; it stays listed
-// rather than being hidden on a guess.
-function modelRuns(model, device) {
-  if (device.os && model.os?.length && !model.os.includes(device.os))
-    return false;
-  return !(
-    device.architecture &&
-    model.architectures?.length &&
-    !model.architectures.includes(device.architecture)
-  );
-}
-function modelBlock(model, allPlacements, allDevices) {
-  const devices = allDevices.filter((d) => modelRuns(model, d));
-  const mine = allPlacements.filter(
+function modelStateCell(model, placements) {
+  const mine = placements.filter(
     (p) => p.modelId === model.id && p.revision === model.revision,
   );
-  const block = node("details", null, "model-block");
-  if (state.openModels.has(model.id + "@" + model.revision)) block.open = true;
-  block.addEventListener("toggle", () => {
-    const key = model.id + "@" + model.revision;
-    if (block.open) state.openModels.add(key);
-    else state.openModels.delete(key);
-  });
-  const summary = node("summary", null, "model-summary");
-  const heading = node("div", null, "model-heading");
-  heading.append(
-    titleCell(model.id, model.revision, "box"),
-    node("span", purposes[model.purpose] || model.purpose, "cell-meta"),
-    node("span", modelNeeds(model), "cell-meta"),
-  );
   const active = mine.filter((p) => p.state === "ACTIVE").length;
-  summary.append(
-    heading,
-    mine.length
-      ? badge(
-          active
-            ? "Активна на " + active + " из " + devices.length
-            : "Установлена на " + mine.length + " из " + devices.length,
-          active ? "good" : "info",
-        )
-      : node("span", "Ни на одном устройстве", "muted"),
+  if (!mine.length) return node("span", "Не установлена", "muted");
+  return badge(
+    active ? "Работает на " + active : "Скачана на " + mine.length,
+    active ? "good" : "info",
   );
-  const body = node("div", null, "model-body");
-  const card = modelCard(model);
-  if (card) {
-    const link = node("a", "Открыть карточку модели на huggingface.co");
-    link.href = card;
-    link.target = "_blank";
-    link.rel = "noreferrer noopener";
-    body.append(link);
-  }
-  if (!devices.length)
-    body.append(
-      node(
-        "p",
-        allDevices.length
-          ? "Ни одно устройство не подходит этой модели по системе или архитектуре."
-          : "Подключите устройство, чтобы устанавливать модели.",
-        "muted",
-      ),
-    );
-  devices.forEach((d) =>
-    body.append(
-      modelDeviceRow(
-        model,
-        d,
-        mine.find((p) => p.deviceId === d.id),
-      ),
-    ),
-  );
-  block.append(summary, body);
-  return block;
 }
-function renderModels(target, models, placements, devices) {
+function modelRemoveCell(model) {
+  if (model.pinned) return badge("Закреплена", "info");
+  if (state.role !== "OWNER") return node("span", "", "muted");
+  const button = node("button", "Убрать", "button danger");
+  button.type = "button";
+  button.disabled = !!state.modelActionKey;
+  button.addEventListener("click", () => removeCatalogModel(model));
+  return button;
+}
+function renderModels(target, models, placements) {
   if (!models.length)
     return empty(
       target,
-      "Нет доступных моделей",
-      "Каталог появится после настройки моделей на диспетчере.",
+      "Каталог пуст",
+      "Добавьте модель, чтобы устройства могли её получить.",
     );
-  const list = node("div", null, "model-list");
-  models.forEach((m) => list.append(modelBlock(m, placements, devices)));
-  $(target).replaceChildren(list);
+  table(
+    target,
+    ["Модель", "Назначение", "Состояние", "Источник", ""],
+    models.map((m) => [
+      titleCell(m.id, m.revision, "box"),
+      modelPurposeCell(m),
+      modelStateCell(m, placements),
+      modelCardLink(m) || "—",
+      modelRemoveCell(m),
+    ]),
+  );
+  const notes = models.filter((m) => m.note);
+  if (notes.length) {
+    const list = node("div", null, "model-notes");
+    notes.forEach((m) =>
+      list.append(node("p", m.id + " — " + m.note, "cell-meta")),
+    );
+    $(target).append(list);
+  }
 }
 function details(target, pairs) {
   const list = node("div", null, "detail-list");

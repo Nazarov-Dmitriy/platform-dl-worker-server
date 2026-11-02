@@ -1965,6 +1965,173 @@
             }
           }
         ]
+      },
+      "post": {
+        "operationId": "addModel",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/CatalogModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./protocol.schema.json#/$defs/CatalogRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/models/{id}/{revision}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        {
+          "name": "revision",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "deleteModel",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Catalog entry removed"
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v2/admin/session": {

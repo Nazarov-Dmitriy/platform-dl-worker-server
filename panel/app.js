@@ -6,8 +6,6 @@ const state = {
   sites: [],
   models: [],
   placements: [],
-  // Rows the operator expanded; a reload must not collapse them.
-  openModels: new Set(),
   modelActionKey: "",
 };
 const views = {
@@ -177,7 +175,7 @@ async function reload() {
   $("stat-online").textContent = state.devices.filter((d) => d.online).length;
   renderDevices("overviewDevices", state.devices);
   renderDevices("deviceList", state.devices);
-  renderModels("catalog", state.models, state.placements, state.devices);
+  renderModels("catalog", state.models, state.placements);
   if (state.sites.length)
     table(
       "sites",
@@ -470,47 +468,79 @@ async function sendCommand(body) {
     "Команда отправлена устройству. Применение зависит от его подключения.",
   );
 }
-const modelActions = {
-  MODEL_INSTALL: "Установка запущена",
-  MODEL_ACTIVATE: "Активация запрошена",
-  MODEL_DELETE: "Удаление запрошено",
-};
-// Commands are addressed to one device; the catalog page is only where the
-// operator picks the pair. Progress is reported by the device itself.
-async function sendModelCommand(model, device, type, confirmText) {
+// The catalog is the list of models the fleet may use. Installing one is the
+// worker's job, so nothing here talks to a device.
+async function reloadCatalog() {
+  const models = await api("/api/v2/admin/models");
+  state.models = models.models;
+  state.placements = models.placements || [];
+  renderModels("catalog", state.models, state.placements);
+}
+async function removeCatalogModel(model) {
   if (state.modelActionKey) return;
-  if (confirmText && !confirm(confirmText)) return;
-  state.modelActionKey = model.id + "@" + model.revision + "/" + device.id;
-  renderModels("catalog", state.models, state.placements, state.devices);
-  $("globalError").hidden = true;
+  if (!confirm("Убрать «" + model.id + "» из каталога?")) return;
+  state.modelActionKey = model.id + "@" + model.revision;
+  renderModels("catalog", state.models, state.placements);
   try {
-    await api("/api/v2/admin/devices/" + device.id + "/commands", {
-      method: "POST",
-      mutate: true,
-      body: JSON.stringify({
-        requestId: crypto.randomUUID(),
-        type,
-        modelId: model.id,
-        modelRevision: model.revision,
-      }),
-    });
-    message(
-      "modelOut",
-      modelActions[type] +
-        ": «" +
-        model.id +
-        "» на устройстве «" +
-        device.name +
-        "». Применение зависит от его подключения.",
+    await api(
+      "/api/v2/admin/models/" +
+        encodeURIComponent(model.id) +
+        "/" +
+        encodeURIComponent(model.revision),
+      { method: "DELETE", mutate: true },
     );
+    message("modelOut", "«" + model.id + "» убрана из каталога.");
   } catch (error) {
     message("modelOut", "");
     report(error);
   } finally {
     state.modelActionKey = "";
   }
-  await reload();
+  await reloadCatalog();
 }
+function catalogPurpose() {
+  return $("catalogForm").elements.purpose.value;
+}
+// Recognition takes one weights file; translation uses the fixed
+// transformers.js layout and needs the language pair instead.
+function syncCatalogForm() {
+  const translation = catalogPurpose() === "TRANSLATION";
+  $("catalogFileField").hidden = translation;
+  $("catalogPairFields").hidden = !translation;
+}
+$("catalogPurpose").addEventListener("change", syncCatalogForm);
+syncCatalogForm();
+on("catalogForm", "submit", async (e) => {
+  const fd = new FormData(e.target);
+  const body = {
+    id: String(fd.get("id") || "").trim(),
+    repository: String(fd.get("repository") || "").trim(),
+    revision: String(fd.get("revision") || "").trim(),
+    purpose: String(fd.get("purpose") || ""),
+    note: String(fd.get("note") || "").trim(),
+    operations: fd.getAll("operations").map(String),
+  };
+  if (body.purpose === "TRANSLATION") {
+    body.source = String(fd.get("source") || "").trim();
+    body.target = String(fd.get("target") || "").trim();
+  } else body.file = String(fd.get("file") || "").trim();
+  const added = await api("/api/v2/admin/models", {
+    method: "POST",
+    mutate: true,
+    body: JSON.stringify(body),
+  });
+  message(
+    "modelOut",
+    "«" +
+      added.model.id +
+      "» добавлена: " +
+      Math.round(added.model.downloadBytes / 1024 ** 2) +
+      " МБ, хеш проверен по данным huggingface.co.",
+  );
+  e.target.reset();
+  syncCatalogForm();
+  await reloadCatalog();
+});
 on("configureForm", "submit", async (e) => {
   const fd = new FormData(e.target),
     settings = {
@@ -576,6 +606,9 @@ async function init() {
       (tab) => ($(tab + "Tab").hidden = state.role !== "OWNER"),
     );
     $("siteCreate").hidden = state.role !== "OWNER" && !state.manageSites;
+    // Only an owner may change the catalog, so an operator is not shown a form
+    // the dispatcher would refuse.
+    $("catalogCard").hidden = state.role !== "OWNER";
     $("roleLabel").textContent =
       state.role === "OWNER" ? "Владелец" : "Оператор";
     $("loading").hidden = true;

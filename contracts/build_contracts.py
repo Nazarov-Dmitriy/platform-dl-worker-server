@@ -224,6 +224,11 @@ def build():
                            "sha256": HASH, "downloadUrl": {"type": "string", "format": "uri"},
                            "license": TEXT, "descriptionSource": {"type": "string", "format": "uri"}})
     d["ModelEntry"]["properties"]["files"] = arr(ref("ModelFile"), 1, 32)
+    # Catalog metadata: which job types the model serves, and whether an
+    # operator may remove it. Absent on entries written before they existed.
+    d["ModelEntry"]["properties"]["operations"] = arr(OP, 0, 3, True)
+    d["ModelEntry"]["properties"]["pinned"] = {"type": "boolean"}
+    d["ModelEntry"]["properties"]["note"] = {"type": "string", "maxLength": 1000}
     d["AdminCommand"] = {"oneOf": [
         obj({"requestId": UUID, "type": const(kind), "modelId": TEXT, "modelRevision": TEXT})
         for kind in ["MODEL_INSTALL", "MODEL_ACTIVATE", "MODEL_DELETE"]
@@ -329,6 +334,13 @@ def build():
                                     "nextCursor": {"type": ["string", "null"]}})
     d["AdminRecordPage"] = obj({"items": arr(ref("AdminRecord"), 0, 100),
                                "nextCursor": {"type": ["string", "null"]}})
+    d["CatalogRequest"] = obj({"id": TEXT, "repository": TEXT, "revision": TEXT,
+                               "purpose": {"enum": ["RECOGNITION", "TRANSLATION"]},
+                               "file": TEXT, "operations": arr(OP, 0, 3, True),
+                               "note": {"type": "string", "maxLength": 1000},
+                               "source": LANG, "target": LANG},
+                              ["id", "repository", "revision", "purpose"])
+    d["CatalogModel"] = obj({"model": ref("ModelEntry")})
     d["ModelPlacement"] = obj({"deviceId": UUID, "deviceName": TEXT,
                                "modelId": TEXT, "revision": TEXT,
                                "state": {"enum": ["INSTALLED", "ACTIVE"]},
@@ -384,12 +396,25 @@ def build():
     paths["/api/v2/admin/tokens"] = {"get": endpoint("listTokens", None, "TokenPage", [200, 401, 403], "AdminSession")}
     paths["/api/v2/admin/devices/{id}/commands"] = {"post": endpoint("deviceCommand", "AdminCommand", "MutationAck", [202, 400, 401, 403, 409], "AdminSession")}
     paths["/api/v2/admin/devices/{id}/commands/{requestId}"] = {"get": endpoint("getDeviceCommand", None, "CommandView", [200, 401, 403, 404], "AdminSession")}
-    paths["/api/v2/admin/models"] = {"get": endpoint("listModels", None, "ModelPage", [200, 401, 403], "AdminSession")}
+    paths["/api/v2/admin/models"] = {"get": endpoint("listModels", None, "ModelPage", [200, 401, 403], "AdminSession"),
+                                     "post": endpoint("addModel", "CatalogRequest", "CatalogModel",
+                                                      [201, 400, 401, 403, 404, 409, 502], "AdminSession")}
+    # The catalog is keyed by a short name and a repository revision, not by a UUID.
+    paths["/api/v2/admin/models/{id}/{revision}"] = {
+        "parameters": [{"name": name, "in": "path", "required": True, "schema": TEXT}
+                       for name in ["id", "revision"]],
+        "delete": {"operationId": "deleteModel", "security": [{"AdminSession": []}],
+                   "responses": {"204": {"description": "Catalog entry removed"},
+                                 **{str(code): {"description": "See normative protocol.md",
+                                                "content": {"application/json": {"schema": sref("Error")}}}
+                                    for code in [401, 403, 404, 409]}}}}
     paths["/api/v2/admin/session"] = {"post": endpoint("login", "Login", "Session", [200, 401, 429], "AdminSession"),
                                       "get": endpoint("session", None, "Session", [200, 401], "AdminSession"),
                                       "delete": {"operationId": "logout", "security": [{"AdminSession": []}], "responses": {"204": {"description": "Session revoked"}}}}
     paths["/api/v2/admin/session"]["post"]["security"] = []
     for path, methods in paths.items():
+        if path.startswith("/api/v2/admin/models/"):
+            continue
         if "{id}" in path:
             methods["parameters"] = [{"name": "id", "in": "path", "required": True, "schema": UUID}]
         if "{requestId}" in path:

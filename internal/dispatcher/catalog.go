@@ -67,23 +67,25 @@ func pinnedCatalog() []ModelEntry {
 }
 
 func (s *Store) seedCatalog() error {
-	for _, old := range []struct{ id, revision, hash string }{
-		{"whisper-cpp-base", "ggml-base-v1.7.6", "60ed5e3d76e1a12f3e9afd536d6518c733dc74fa9284c3a77df5adc76cc47e27"},
-		{"whisper-cpp-small", "ggml-small-v1.7.6", "1be3a9b2063867b937e64e2ec7483364a152123cbd738e99835de1eb5394d21a"},
-	} {
-		if _, e := s.db.Exec("DELETE FROM model_catalog WHERE id=? AND revision=? AND json_extract(entry, '$.sha256')=?", old.id, old.revision, old.hash); e != nil {
-			return e
-		}
-	}
-
-	if _, e := s.db.Exec("DELETE FROM model_catalog WHERE id=? AND revision=? AND json_extract(entry, '$.sha256')=?", "nllb-200-distilled-600m-int8", "ct2-2024-01", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); e != nil {
+	// The catalog is data, not firmware: these entries are written once, on a
+	// fresh database, and are editable from then on. Re-seeding on every start
+	// would undo an operator's deletions.
+	var rows int
+	if e := s.db.QueryRow("SELECT count(*) FROM model_catalog").Scan(&rows); e != nil {
 		return e
+	}
+	if rows > 0 {
+		return nil
 	}
 	for _, m := range pinnedCatalog() {
 		if e := s.validator.Check("ModelEntry", encode(m)); e != nil {
 			return e
 		}
-		if _, e := s.db.Exec("INSERT OR IGNORE INTO model_catalog(id,revision,entry) VALUES(?,?,?)", m.ID, m.Revision, encode(m)); e != nil {
+		note := "Базовая пара перевода. Обслуживает задания «Субтитры»."
+		if m.Purpose == "RECOGNITION" {
+			note = "Базовая модель распознавания речи. Обслуживает задания «Распознавание речи» и «Субтитры»."
+		}
+		if _, e := s.db.Exec("INSERT INTO model_catalog(id,revision,entry,pinned,note) VALUES(?,?,?,1,?)", m.ID, m.Revision, encode(m), note); e != nil {
 			return e
 		}
 	}
@@ -108,8 +110,23 @@ func (s *Store) ImportCatalog(ctx context.Context, raw []byte) error {
 	})
 }
 
+// What a model is for, in the same vocabulary the panel and job requests use.
+// Entries written before the field existed are described by their purpose.
+func modelOperations(m ModelEntry) []string {
+	if len(m.Operations) > 0 {
+		return m.Operations
+	}
+	if m.Purpose == "RECOGNITION" {
+		return []string{"media.transcribe", "media.subtitles"}
+	}
+	if m.Purpose == "TRANSLATION" {
+		return []string{"media.subtitles"}
+	}
+	return []string{}
+}
+
 func (s *Store) Models(ctx context.Context) ([]ModelEntry, error) {
-	rows, e := s.db.QueryContext(ctx, "SELECT entry FROM model_catalog ORDER BY id,revision")
+	rows, e := s.db.QueryContext(ctx, "SELECT entry,pinned,note FROM model_catalog ORDER BY id,revision")
 	if e != nil {
 		return nil, e
 	}
@@ -117,13 +134,18 @@ func (s *Store) Models(ctx context.Context) ([]ModelEntry, error) {
 	out := []ModelEntry{}
 	for rows.Next() {
 		var raw []byte
+		var pinned int
+		var note string
 		var m ModelEntry
-		if e = rows.Scan(&raw); e != nil {
+		if e = rows.Scan(&raw, &pinned, &note); e != nil {
 			return nil, e
 		}
 		if e = json.Unmarshal(raw, &m); e != nil {
 			return nil, e
 		}
+		m.Operations = modelOperations(m)
+		m.Pinned = pinned == 1
+		m.Note = note
 		out = append(out, m)
 	}
 	return out, rows.Err()
