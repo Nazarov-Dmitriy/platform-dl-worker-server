@@ -37,6 +37,11 @@ function report(error) {
   $("globalError").textContent = humanError(error);
   $("globalError").hidden = false;
 }
+// A failure belongs next to the control that caused it. The banner at the top
+// of the page is for the ones with no control to stand beside.
+function reportTo(id, error) {
+  message(id, humanError(error));
+}
 function message(id, text) {
   $(id).textContent = text;
   $(id).hidden = !text;
@@ -488,8 +493,7 @@ async function removeCatalogModel(model) {
     );
     message("modelOut", "«" + model.id + "» убрана из каталога.");
   } catch (error) {
-    message("modelOut", "");
-    report(error);
+    reportTo("modelOut", error);
   } finally {
     state.modelActionKey = "";
   }
@@ -497,12 +501,24 @@ async function removeCatalogModel(model) {
 }
 // Choosing weights means picking from what the repository actually holds, so
 // the list is read from huggingface.co instead of typed from memory.
+// Nothing has been read yet, so the field offers nothing. Anything stale in it
+// would belong to a repository the form no longer describes.
+function clearRepositoryFiles(hint) {
+  const select = $("catalogFile");
+  select.replaceChildren(new Option("", ""));
+  select.disabled = false;
+  $("catalogFileHint").textContent = hint;
+}
 async function loadRepositoryFiles() {
   const form = $("catalogForm").elements;
   const repository = form.repository.value.trim();
-  if (!repository) return report(new Error("Сначала укажите репозиторий."));
+  if (!repository) {
+    clearRepositoryFiles("Сначала укажите репозиторий.");
+    message("modelOut", "Укажите репозиторий — без него читать нечего.");
+    return;
+  }
   const select = $("catalogFile");
-  select.replaceChildren(new Option("Читаем репозиторий…", ""));
+  clearRepositoryFiles("Читаем репозиторий…");
   select.disabled = true;
   let found;
   try {
@@ -513,25 +529,39 @@ async function loadRepositoryFiles() {
         encodeURIComponent(form.revision.value.trim()),
     );
   } catch (error) {
-    select.replaceChildren(new Option("Файлы не прочитаны", ""));
-    return report(error);
+    clearRepositoryFiles("Файлы репозитория не прочитаны.");
+    reportTo("modelOut", error);
+    return;
   }
   select.disabled = false;
-  select.replaceChildren(new Option("Выберите файл весов", ""));
+  select.replaceChildren(new Option("", ""));
   found.files.forEach((f) =>
-    select.append(
-      new Option(f.path + " — " + byteSize(f.bytes), f.path),
-    ),
+    select.append(new Option(f.path + " — " + byteSize(f.bytes), f.path)),
   );
-  message(
-    "modelOut",
-    catalogPurpose() === "TRANSLATION"
-      ? found.translationReady
+  if (!found.files.length) {
+    $("catalogFileHint").textContent =
+      "В репозитории нет файлов, пригодных для каталога.";
+  } else {
+    $("catalogFileHint").textContent =
+      "Выберите, какой файл скачивать на устройство. Версия: " +
+      found.revision +
+      ".";
+  }
+  if (catalogPurpose() === "TRANSLATION") {
+    message(
+      "modelOut",
+      found.translationReady
         ? "Репозиторий содержит все файлы модели перевода."
-        : "В репозитории нет полного набора файлов перевода — добавить не получится."
-      : "Найдено файлов: " + found.files.length + ", ревизия " + found.revision + ".",
-  );
+        : "В репозитории нет полного набора файлов перевода — добавить не получится.",
+    );
+  }
 }
+// A different repository or version makes the list meaningless, so it goes.
+["repository", "revision"].forEach((name) =>
+  $("catalogForm").elements[name].addEventListener("input", () =>
+    clearRepositoryFiles("Нажмите «Показать файлы репозитория»."),
+  ),
+);
 on("catalogFiles", "click", loadRepositoryFiles);
 function catalogPurpose() {
   return $("catalogForm").elements.purpose.value;
@@ -559,11 +589,17 @@ on("catalogForm", "submit", async (e) => {
     body.target = String(fd.get("target") || "").trim();
   } else body.file = String(fd.get("file") || "").trim();
   if (!body.revision) delete body.revision;
-  const added = await api("/api/v2/admin/models", {
-    method: "POST",
-    mutate: true,
-    body: JSON.stringify(body),
-  });
+  let added;
+  try {
+    added = await api("/api/v2/admin/models", {
+      method: "POST",
+      mutate: true,
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    reportTo("modelOut", error);
+    return;
+  }
   message(
     "modelOut",
     "«" +
@@ -574,6 +610,7 @@ on("catalogForm", "submit", async (e) => {
   );
   e.target.reset();
   syncCatalogForm();
+  clearRepositoryFiles("Нажмите «Показать файлы репозитория».");
   await reloadCatalog();
 });
 on("configureForm", "submit", async (e) => {

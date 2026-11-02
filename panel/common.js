@@ -47,14 +47,28 @@ const errorCopy = {
   INVALID_REQUEST: "Проверьте заполненные поля.",
   CSRF_REJECTED: "Обновите страницу и повторите действие.",
   RATE_LIMITED: "Слишком много попыток. Подождите немного.",
+  INVALID_CATALOG: "Проверьте поля формы: что-то заполнено не так.",
+  MODEL_IN_USE:
+    "Модель установлена на устройствах. Сначала удалите её оттуда.",
+  CATALOG_SOURCE_NOT_FOUND:
+    "На huggingface.co нет такого репозитория или такой версии. Проверьте имя.",
+  CATALOG_SOURCE_UNAVAILABLE:
+    "Не удалось связаться с huggingface.co. Возможно, сервер до него не достаёт.",
+  CATALOG_FILE_MISSING: "В репозитории нет такого файла.",
+  CATALOG_FILE_UNVERIFIABLE:
+    "huggingface.co не отдаёт контрольную сумму этого файла, проверить его нечем.",
 };
+// The dispatcher explains most failures in the response, and throwing that
+// away left the panel saying "something went wrong" about a cause it was
+// holding. Curated copy still wins, since part of the API answers operators in
+// English, which is why only a Russian message is shown as it arrived.
 function humanError(error) {
-  return error.status === 401
-    ? "Проверьте логин и пароль."
-    : errorCopy[error.code] ||
-        (error.name === "TypeError"
-          ? "Не удалось связаться с сервером. Проверьте подключение."
-          : "Не удалось выполнить действие. Повторите попытку.");
+  if (error.status === 401) return "Проверьте логин и пароль.";
+  if (errorCopy[error.code]) return errorCopy[error.code];
+  if (error.name === "TypeError")
+    return "Не удалось связаться с сервером. Проверьте подключение.";
+  if (error.detail && /[а-яё]/i.test(error.detail)) return error.detail;
+  return "Не удалось выполнить действие. Повторите попытку.";
 }
 async function request(path, options = {}) {
   const response = await fetch(path, {
@@ -67,6 +81,7 @@ async function request(path, options = {}) {
     const error = new Error(data?.code || String(response.status));
     error.status = response.status;
     error.code = data?.code;
+    error.detail = data?.message;
     throw error;
   }
   return data;
