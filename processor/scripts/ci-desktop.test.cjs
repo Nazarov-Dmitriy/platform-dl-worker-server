@@ -82,6 +82,11 @@ async function main() {
     await page.locator("#back").click();
     await page.locator("#openModels").click();
     await page.locator("#modelsScreen").waitFor({ state: "visible" });
+    // `input` is 100% wide across this app, so an unconstrained checkbox
+    // stretches into a band and the row stops reading as a row.
+    assert.equal(await page.locator("#taskSpeech").isChecked(), true);
+    const box = await page.locator("#taskSpeech").boundingBox();
+    assert.ok(box.width < 40, "Чекбокс растянулся на всю строку: " + box.width);
     await page.evaluate(() =>
       drawModels({
         environment: { memoryBytes: 8 * 1024 ** 3, cpuCores: 8,
@@ -100,6 +105,8 @@ async function main() {
     );
     await page.waitForFunction(
       () => document.querySelectorAll("#modelGroups .model-row").length === 2);
+    const radio = await page.locator("#modelGroups .model-row input").first().boundingBox();
+    assert.ok(radio.width < 40, "Переключатель растянулся: " + radio.width);
     assert.equal(await page.locator("#modelGroups .model-row").nth(1)
       .locator(".model-tag").textContent(), "Не встанет");
     assert.equal(await page.locator("#modelGroups .model-row").nth(1)

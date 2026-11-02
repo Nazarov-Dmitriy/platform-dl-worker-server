@@ -434,7 +434,12 @@ fieldset:disabled {
 .tasks { display: flex; flex-direction: column; gap: 4px; margin: 14px 0; }
 .task-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 9px; cursor: pointer; }
 .task-row:hover { background: var(--hover, rgba(255, 255, 255, 0.04)); }
-.task-row input { margin-top: 4px; }
+/* `input` is 100% wide across this app, which turns a checkbox into a band. */
+.task-row input,
+.model-row input {
+  width: 19px; min-width: 19px; height: 19px;
+  margin: 3px 0 0; padding: 0; accent-color: var(--accent);
+}
 .model-group + .model-group { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
 .model-group h3 { margin: 0 0 4px; font-size: 14px; }
 .model-row {
@@ -443,6 +448,7 @@ fieldset:disabled {
   border: 1px solid var(--border); border-radius: 10px;
 }
 .model-row.chosen { border-color: var(--accent, #27b6c4); }
+.model-row > span:empty { width: 0; min-width: 0; }
 .model-row .who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .model-row .nm { font-weight: 600; word-break: break-all; }
 .model-row .meta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
