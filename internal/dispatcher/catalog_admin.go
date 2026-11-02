@@ -43,7 +43,6 @@ type CatalogRequest struct {
 	Purpose    string   `json:"purpose"`
 	File       string   `json:"file"`
 	Operations []string `json:"operations"`
-	Note       string   `json:"note"`
 	Source     string   `json:"source"`
 	Target     string   `json:"target"`
 }
@@ -140,9 +139,6 @@ func (s *Store) buildCatalogEntry(ctx context.Context, req CatalogRequest) (Mode
 			return ModelEntry{}, problem(400, "INVALID_CATALOG", "Неизвестное назначение задания")
 		}
 	}
-	if len(req.Note) > 1000 {
-		return ModelEntry{}, problem(400, "INVALID_CATALOG", "Пояснение слишком длинное")
-	}
 	tree, e := s.huggingFaceTree(ctx, req.Repository, req.Revision)
 	if e != nil {
 		return ModelEntry{}, e
@@ -208,14 +204,6 @@ func (s *Store) buildCatalogEntry(ctx context.Context, req CatalogRequest) (Mode
 	return entry, nil
 }
 
-// Columns hold the catalog metadata, so the stored entry stays a plain
-// ModelEntry: what a device reads is exactly what the contract describes.
-func stripCatalogMeta(entry ModelEntry) ModelEntry {
-	entry.Pinned = false
-	entry.Note = ""
-	return entry
-}
-
 func (s *Store) AdminAddModel(ctx context.Context, a AdminActor, raw []byte) (map[string]any, error) {
 	if e := requireOwner(a); e != nil {
 		return nil, e
@@ -237,20 +225,12 @@ func (s *Store) AdminAddModel(ctx context.Context, a AdminActor, raw []byte) (ma
 	if e != nil {
 		return nil, e
 	}
-	stored := stripCatalogMeta(entry)
-	if e = s.validator.Check("ModelEntry", encode(stored)); e != nil {
+	if e = s.validator.Check("ModelEntry", encode(entry)); e != nil {
 		return nil, e
 	}
 	e = s.transaction(ctx, func(tx *sql.Tx) error {
-		var pinned int
-		switch scanErr := tx.QueryRow("SELECT pinned FROM model_catalog WHERE id=? AND revision=?", entry.ID, entry.Revision).Scan(&pinned); {
-		case scanErr == nil && pinned == 1:
-			return problem(409, "MODEL_PINNED", "Закреплённую запись нельзя заменить")
-		case scanErr != nil && !errors.Is(scanErr, sql.ErrNoRows):
-			return scanErr
-		}
-		if _, e := tx.Exec("INSERT OR REPLACE INTO model_catalog(id,revision,entry,pinned,note) VALUES(?,?,?,0,?)",
-			entry.ID, entry.Revision, encode(stored), req.Note); e != nil {
+		if _, e := tx.Exec("INSERT OR REPLACE INTO model_catalog(id,revision,entry) VALUES(?,?,?)",
+			entry.ID, entry.Revision, encode(entry)); e != nil {
 			return e
 		}
 		return audit(tx, s.now().UnixMilli(), "CATALOG_IMPORTED", "", entry.ID)
@@ -258,7 +238,6 @@ func (s *Store) AdminAddModel(ctx context.Context, a AdminActor, raw []byte) (ma
 	if e != nil {
 		return nil, e
 	}
-	entry.Note = req.Note
 	entry.Operations = modelOperations(entry)
 	return map[string]any{"model": entry}, nil
 }
@@ -268,16 +247,13 @@ func (s *Store) AdminDeleteModel(ctx context.Context, a AdminActor, id, revision
 		return e
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		var pinned int
-		e := tx.QueryRow("SELECT pinned FROM model_catalog WHERE id=? AND revision=?", id, revision).Scan(&pinned)
+		var one int
+		e := tx.QueryRow("SELECT 1 FROM model_catalog WHERE id=? AND revision=?", id, revision).Scan(&one)
 		if errors.Is(e, sql.ErrNoRows) {
 			return problem(404, "NOT_FOUND", "Модель не найдена в каталоге")
 		}
 		if e != nil {
 			return e
-		}
-		if pinned == 1 {
-			return problem(409, "MODEL_PINNED", "Закреплённую запись нельзя удалить")
 		}
 		var installed int
 		if e = tx.QueryRow("SELECT count(*) FROM device_models WHERE model_id=? AND revision=?", id, revision).Scan(&installed); e != nil {
@@ -291,32 +267,6 @@ func (s *Store) AdminDeleteModel(ctx context.Context, a AdminActor, id, revision
 		}
 		return audit(tx, s.now().UnixMilli(), "CATALOG_IMPORTED", "", id)
 	})
-}
-
-// Pinning is a lock an owner puts on, so it is one an owner can take off. A
-// catalog that cannot be unlocked is the hardcoded list this table replaced.
-func (s *Store) AdminPinModel(ctx context.Context, a AdminActor, id, revision string, pinned bool) (map[string]any, error) {
-	if e := requireOwner(a); e != nil {
-		return nil, e
-	}
-	flag := 0
-	if pinned {
-		flag = 1
-	}
-	e := s.transaction(ctx, func(tx *sql.Tx) error {
-		result, e := tx.Exec("UPDATE model_catalog SET pinned=? WHERE id=? AND revision=?", flag, id, revision)
-		if e != nil {
-			return e
-		}
-		if rows, _ := result.RowsAffected(); rows == 0 {
-			return problem(404, "NOT_FOUND", "Модель не найдена в каталоге")
-		}
-		return audit(tx, s.now().UnixMilli(), "CATALOG_IMPORTED", "", id)
-	})
-	if e != nil {
-		return nil, e
-	}
-	return map[string]any{"id": id, "revision": revision, "pinned": pinned}, nil
 }
 
 // The files an operator could choose as weights, read from the repository so

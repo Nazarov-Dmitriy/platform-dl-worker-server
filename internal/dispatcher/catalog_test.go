@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestPinnedCatalogUsesWhisperTokenizerLanguages(t *testing.T) {
+func TestBaseCatalogUsesWhisperTokenizerLanguages(t *testing.T) {
 	s, _, _ := openTest(t)
 	models, e := s.Models(testContext)
 	if e != nil {

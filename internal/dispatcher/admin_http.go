@@ -50,7 +50,6 @@ func (h *HTTP) addAdminRoutes() {
 	h.mux.HandleFunc("GET /api/v2/admin/models", h.admin(h.adminModels, false))
 	h.mux.HandleFunc("POST /api/v2/admin/models", h.admin(h.adminAddModel, true))
 	h.mux.HandleFunc("DELETE /api/v2/admin/models/{id}/{revision}", h.admin(h.adminDeleteModel, true))
-	h.mux.HandleFunc("POST /api/v2/admin/models/{id}/{revision}/pin", h.admin(h.adminPinModel, true))
 	h.mux.HandleFunc("GET /api/v2/admin/model-files", h.admin(h.adminRepositoryFiles, false))
 	h.mux.HandleFunc("GET /api/v2/admin/audit", h.admin(h.adminAudit, false))
 	h.mux.HandleFunc("GET /api/v2/admin/ops", h.admin(h.adminOps, false))
@@ -262,26 +261,6 @@ func (h *HTTP) adminDeleteModel(w http.ResponseWriter, r *http.Request, a AdminA
 		return
 	}
 	w.WriteHeader(204)
-}
-func (h *HTTP) adminPinModel(w http.ResponseWriter, r *http.Request, a AdminActor) {
-	raw, e := h.body(w, r)
-	if e != nil {
-		h.failure(w, e)
-		return
-	}
-	var req struct {
-		Pinned bool `json:"pinned"`
-	}
-	if json.Unmarshal(raw, &req) != nil {
-		h.failure(w, problem(400, "INVALID_CATALOG", "Некорректный запрос"))
-		return
-	}
-	v, e := h.store.AdminPinModel(r.Context(), a, r.PathValue("id"), r.PathValue("revision"), req.Pinned)
-	if e != nil {
-		h.failure(w, e)
-		return
-	}
-	h.reply(w, 200, v)
 }
 func (h *HTTP) adminRepositoryFiles(w http.ResponseWriter, r *http.Request, a AdminActor) {
 	v, e := h.store.AdminRepositoryFiles(r.Context(), a, r.URL.Query().Get("repository"), r.URL.Query().Get("revision"))

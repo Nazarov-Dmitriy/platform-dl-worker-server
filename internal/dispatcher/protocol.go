@@ -261,8 +261,6 @@ type ModelEntry struct {
 	// Catalog metadata, held in model_catalog columns rather than the stored
 	// entry, so an operator can change them without rewriting the model.
 	Operations []string `json:"operations,omitempty"`
-	Pinned     bool     `json:"pinned,omitempty"`
-	Note       string   `json:"note,omitempty"`
 }
 // Where a catalog model actually sits: one row per device that reported a
 // successful install or activation.

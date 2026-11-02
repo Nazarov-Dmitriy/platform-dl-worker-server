@@ -5,7 +5,6 @@ const state = {
   devices: [],
   sites: [],
   models: [],
-  placements: [],
   modelActionKey: "",
 };
 const views = {
@@ -161,7 +160,6 @@ async function reload() {
   state.sites = sites.items;
   state.devices = devices.items;
   state.models = models.models;
-  state.placements = models.placements || [];
   options("jobSite", state.sites, (s) => s.name, "Нет доступных сайтов");
   options("overviewSite", state.sites, (s) => s.name, "Нет доступных сайтов");
   $("overviewSite").value = $("jobSite").value;
@@ -175,7 +173,7 @@ async function reload() {
   $("stat-online").textContent = state.devices.filter((d) => d.online).length;
   renderDevices("overviewDevices", state.devices);
   renderDevices("deviceList", state.devices);
-  renderModels("catalog", state.models, state.placements);
+  renderModels("catalog", state.models);
   if (state.sites.length)
     table(
       "sites",
@@ -473,14 +471,13 @@ async function sendCommand(body) {
 async function reloadCatalog() {
   const models = await api("/api/v2/admin/models");
   state.models = models.models;
-  state.placements = models.placements || [];
-  renderModels("catalog", state.models, state.placements);
+  renderModels("catalog", state.models);
 }
 async function removeCatalogModel(model) {
   if (state.modelActionKey) return;
   if (!confirm("Убрать «" + model.id + "» из каталога?")) return;
   state.modelActionKey = model.id + "@" + model.revision;
-  renderModels("catalog", state.models, state.placements);
+  renderModels("catalog", state.models);
   try {
     await api(
       "/api/v2/admin/models/" +
@@ -490,33 +487,6 @@ async function removeCatalogModel(model) {
       { method: "DELETE", mutate: true },
     );
     message("modelOut", "«" + model.id + "» убрана из каталога.");
-  } catch (error) {
-    message("modelOut", "");
-    report(error);
-  } finally {
-    state.modelActionKey = "";
-  }
-  await reloadCatalog();
-}
-async function pinCatalogModel(model, pinned) {
-  if (state.modelActionKey) return;
-  state.modelActionKey = model.id + "@" + model.revision;
-  renderModels("catalog", state.models, state.placements);
-  try {
-    await api(
-      "/api/v2/admin/models/" +
-        encodeURIComponent(model.id) +
-        "/" +
-        encodeURIComponent(model.revision) +
-        "/pin",
-      { method: "POST", mutate: true, body: JSON.stringify({ pinned }) },
-    );
-    message(
-      "modelOut",
-      pinned
-        ? "«" + model.id + "» защищена от удаления."
-        : "«" + model.id + "» откреплена и теперь её можно убрать.",
-    );
   } catch (error) {
     message("modelOut", "");
     report(error);
@@ -582,7 +552,6 @@ on("catalogForm", "submit", async (e) => {
     repository: String(fd.get("repository") || "").trim(),
     revision: String(fd.get("revision") || "").trim(),
     purpose: String(fd.get("purpose") || ""),
-    note: String(fd.get("note") || "").trim(),
     operations: fd.getAll("operations").map(String),
   };
   if (body.purpose === "TRANSLATION") {

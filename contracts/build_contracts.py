@@ -224,11 +224,9 @@ def build():
                            "sha256": HASH, "downloadUrl": {"type": "string", "format": "uri"},
                            "license": TEXT, "descriptionSource": {"type": "string", "format": "uri"}})
     d["ModelEntry"]["properties"]["files"] = arr(ref("ModelFile"), 1, 32)
-    # Catalog metadata: which job types the model serves, and whether an
-    # operator may remove it. Absent on entries written before they existed.
+    # Which job types the model serves. Absent on entries written before the
+    # field existed.
     d["ModelEntry"]["properties"]["operations"] = arr(OP, 0, 3, True)
-    d["ModelEntry"]["properties"]["pinned"] = {"type": "boolean"}
-    d["ModelEntry"]["properties"]["note"] = {"type": "string", "maxLength": 1000}
     d["AdminCommand"] = {"oneOf": [
         obj({"requestId": UUID, "type": const(kind), "modelId": TEXT, "modelRevision": TEXT})
         for kind in ["MODEL_INSTALL", "MODEL_ACTIVATE", "MODEL_DELETE"]
@@ -337,12 +335,9 @@ def build():
     d["CatalogRequest"] = obj({"id": TEXT, "repository": TEXT, "revision": TEXT,
                                "purpose": {"enum": ["RECOGNITION", "TRANSLATION"]},
                                "file": TEXT, "operations": arr(OP, 0, 3, True),
-                               "note": {"type": "string", "maxLength": 1000},
                                "source": LANG, "target": LANG},
                               ["id", "repository", "purpose"])
     d["CatalogModel"] = obj({"model": ref("ModelEntry")})
-    d["CatalogPin"] = obj({"pinned": {"type": "boolean"}})
-    d["CatalogPinned"] = obj({"id": TEXT, "revision": TEXT, "pinned": {"type": "boolean"}})
     # The weights an operator may choose, so a path inside a repository never
     # has to be typed from memory.
     d["RepositoryFile"] = obj({"path": TEXT, "bytes": {"type": "integer", "minimum": 0}})
@@ -416,10 +411,6 @@ def build():
                                  **{str(code): {"description": "See normative protocol.md",
                                                 "content": {"application/json": {"schema": sref("Error")}}}
                                     for code in [401, 403, 404, 409]}}}}
-    paths["/api/v2/admin/models/{id}/{revision}/pin"] = {
-        "parameters": [{"name": name, "in": "path", "required": True, "schema": TEXT}
-                       for name in ["id", "revision"]],
-        "post": endpoint("pinModel", "CatalogPin", "CatalogPinned", [200, 400, 401, 403, 404], "AdminSession")}
     paths["/api/v2/admin/model-files"] = {
         "parameters": [{"name": "repository", "in": "query", "required": True, "schema": TEXT},
                        {"name": "revision", "in": "query", "schema": TEXT}],

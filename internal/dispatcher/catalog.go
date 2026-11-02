@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"titunki/worker-server/contracts"
+	"sort"
 )
 
 // Languages are taken from the OpenAI Whisper multilingual tokenizer, not a site locale list.
@@ -31,7 +31,75 @@ func baseWhisperLanguages() []string {
 	return out
 }
 
-func pinnedCatalog() []ModelEntry {
+// NLLB-200 translates between all of these in one model, which is why it
+// replaces the pairwise opus-mt entries: six languages needed thirty of those.
+// The value is the code NLLB itself uses; the key is the code the rest of the
+// system speaks, so the worker has one place to look the mapping up.
+var nllbCodes = map[string]string{
+	"ru": "rus_Cyrl", "en": "eng_Latn", "de": "deu_Latn", "fr": "fra_Latn",
+	"es": "spa_Latn", "it": "ita_Latn", "pt": "por_Latn", "nl": "nld_Latn",
+	"pl": "pol_Latn", "cs": "ces_Latn", "tr": "tur_Latn", "uk": "ukr_Cyrl",
+	"be": "bel_Cyrl", "kk": "kaz_Cyrl", "uz": "uzn_Latn", "az": "azj_Latn",
+	"hy": "hye_Armn", "ka": "kat_Geor", "zh": "zho_Hans", "ja": "jpn_Jpan",
+	"ko": "kor_Hang", "ar": "arb_Arab", "hi": "hin_Deva", "vi": "vie_Latn",
+}
+
+// Quantized transformers.js build of facebook/nllb-200-distilled-600M, read
+// from the repository at a fixed commit so the files cannot shift underneath.
+func nllbEntry() ModelEntry {
+	const repository = "Xenova/nllb-200-distilled-600M"
+	const revision = "261c31d1a5732c67cdd16d80e8d6088507c7ccea"
+	weights := []struct {
+		path   string
+		bytes  int64
+		sha256 string
+	}{
+		{"config.json", 873, "52f035acb54ac80e5ef7fe78d6967f8ddf8e8799f078d1a92a2c8168d8ff4a20"},
+		{"generation_config.json", 189, "1ce846259ae04c572ae1863e358534bbc376ff3d3f100b1494feda6200b51de8"},
+		{"tokenizer.json", 17331224, "8ac789ad7dabea44d41537822d48c516ba358374c51813e2cba78c006e150c94"},
+		{"tokenizer_config.json", 544, "ddf411c9f790d081e72de76bb8e8b714d74e160e61bc10c9bd8f56022dcd7fd7"},
+		{"onnx/encoder_model_quantized.onnx", 419120483, "5cde664eacba07a62f198857ec6c06e09572b1ebb77c8137f1fa99ac604a3a28"},
+		{"onnx/decoder_model_merged_quantized.onnx", 475505771, "dd66608c2a4194e78f95548fa0e64f24302303698c5b09fa8e1f9e16ec00676b"},
+	}
+	files := []ModelFile{}
+	var total int64
+	for _, w := range weights {
+		files = append(files, ModelFile{Path: w.path, Bytes: w.bytes, SHA256: w.sha256,
+			URL: "https://huggingface.co/" + repository + "/resolve/" + revision + "/" + w.path})
+		total += w.bytes
+	}
+	codes := []string{}
+	for code := range nllbCodes {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	pairs := []Pair{}
+	for _, source := range codes {
+		for _, target := range codes {
+			if source != target {
+				pairs = append(pairs, Pair{Source: source, Target: target})
+			}
+		}
+	}
+	// The package digest is computed here rather than written down, so it can
+	// never disagree with the files it is supposed to describe.
+	canonical, e := canonicalTransform(encode(files))
+	if e != nil {
+		panic(e)
+	}
+	return ModelEntry{
+		ID: "nllb-200-distilled-600m-q8", Revision: revision, Executor: "transformers-js",
+		Purpose: "TRANSLATION", OS: []string{"windows", "darwin", "linux"},
+		Architectures: []string{"amd64", "arm64"}, Accelerators: []string{"cpu"},
+		RecognitionLanguages: []string{}, TranslationDirections: pairs, Files: files,
+		DownloadBytes: total, MinimumRAMBytes: 4 << 30, MinimumVRAMBytes: 0,
+		SHA256: digest(canonical), DownloadURL: "https://huggingface.co/" + repository,
+		License: "CC-BY-NC-4.0", DescriptionSource: "https://huggingface.co/" + repository,
+		Operations: []string{"media.subtitles"},
+	}
+}
+
+func baseCatalog() []ModelEntry {
 	osAll := []string{"windows", "darwin", "linux"}
 	arch := []string{"amd64", "arm64"}
 	acc := []string{"cpu", "cuda", "metal"}
@@ -55,37 +123,28 @@ func pinnedCatalog() []ModelEntry {
 			License:     "MIT", DescriptionSource: "https://github.com/openai/whisper/blob/main/whisper/tokenizer.py",
 		},
 	}
-	raw, err := contracts.Files.ReadFile("translation-catalog.json")
-	if err != nil {
-		panic(err)
-	}
-	var translations []ModelEntry
-	if err = json.Unmarshal(raw, &translations); err != nil {
-		panic(err)
-	}
-	return append(models, translations...)
+	return append(models, nllbEntry())
 }
 
+// Each entry the build ships is offered once. catalog_seeded remembers that it
+// was offered, so an entry an operator removed stays removed, and an entry a
+// later release adds still arrives without a migration carrying its JSON.
 func (s *Store) seedCatalog() error {
-	// The catalog is data, not firmware: these entries are written once, on a
-	// fresh database, and are editable from then on. Re-seeding on every start
-	// would undo an operator's deletions.
-	var rows int
-	if e := s.db.QueryRow("SELECT count(*) FROM model_catalog").Scan(&rows); e != nil {
-		return e
-	}
-	if rows > 0 {
-		return nil
-	}
-	for _, m := range pinnedCatalog() {
+	for _, m := range baseCatalog() {
 		if e := s.validator.Check("ModelEntry", encode(m)); e != nil {
 			return e
 		}
-		note := "Базовая пара перевода. Обслуживает задания «Субтитры»."
-		if m.Purpose == "RECOGNITION" {
-			note = "Базовая модель распознавания речи. Обслуживает задания «Распознавание речи» и «Субтитры»."
+		var seen int
+		if e := s.db.QueryRow("SELECT count(*) FROM catalog_seeded WHERE id=?", m.ID).Scan(&seen); e != nil {
+			return e
 		}
-		if _, e := s.db.Exec("INSERT INTO model_catalog(id,revision,entry,pinned,note) VALUES(?,?,?,1,?)", m.ID, m.Revision, encode(m), note); e != nil {
+		if seen > 0 {
+			continue
+		}
+		if _, e := s.db.Exec("INSERT INTO model_catalog(id,revision,entry) VALUES(?,?,?)", m.ID, m.Revision, encode(m)); e != nil {
+			return e
+		}
+		if _, e := s.db.Exec("INSERT INTO catalog_seeded(id) VALUES(?)", m.ID); e != nil {
 			return e
 		}
 	}
@@ -126,7 +185,7 @@ func modelOperations(m ModelEntry) []string {
 }
 
 func (s *Store) Models(ctx context.Context) ([]ModelEntry, error) {
-	rows, e := s.db.QueryContext(ctx, "SELECT entry,pinned,note FROM model_catalog ORDER BY id,revision")
+	rows, e := s.db.QueryContext(ctx, "SELECT entry FROM model_catalog ORDER BY id,revision")
 	if e != nil {
 		return nil, e
 	}
@@ -134,18 +193,14 @@ func (s *Store) Models(ctx context.Context) ([]ModelEntry, error) {
 	out := []ModelEntry{}
 	for rows.Next() {
 		var raw []byte
-		var pinned int
-		var note string
 		var m ModelEntry
-		if e = rows.Scan(&raw, &pinned, &note); e != nil {
+		if e = rows.Scan(&raw); e != nil {
 			return nil, e
 		}
 		if e = json.Unmarshal(raw, &m); e != nil {
 			return nil, e
 		}
 		m.Operations = modelOperations(m)
-		m.Pinned = pinned == 1
-		m.Note = note
 		out = append(out, m)
 	}
 	return out, rows.Err()

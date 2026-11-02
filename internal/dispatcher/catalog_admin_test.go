@@ -2,31 +2,68 @@ package dispatcher
 
 import "testing"
 
-func TestSeededCatalogIsPinnedAndDescribed(t *testing.T) {
+func TestSeededCatalogIsRemovable(t *testing.T) {
 	s, _, _ := openTest(t)
+	owner := AdminActor{ID: "owner", Role: "OWNER"}
 	models, e := s.Models(testContext)
 	if e != nil || len(models) == 0 {
 		t.Fatal(e, len(models))
 	}
+	// Nothing the build ships is protected: the catalog is a list an owner
+	// edits, which is the whole reason it lives in a table.
 	for _, m := range models {
-		if !m.Pinned {
-			t.Fatalf("seeded model is not pinned: %s", m.ID)
-		}
-		if m.Note == "" {
-			t.Fatalf("seeded model has no note: %s", m.ID)
-		}
 		if len(m.Operations) == 0 {
 			t.Fatalf("seeded model has no operations: %s", m.ID)
 		}
+		if e = s.AdminDeleteModel(testContext, owner, m.ID, m.Revision); e != nil {
+			t.Fatalf("%s: %v", m.ID, e)
+		}
 	}
+	// A removed entry stays removed when the dispatcher starts again.
+	if e = s.seedCatalog(); e != nil {
+		t.Fatal(e)
+	}
+	models, e = s.Models(testContext)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(models) != 0 {
+		t.Fatalf("seeding resurrected %d removed entries", len(models))
+	}
+	wantError(t, s.AdminDeleteModel(testContext, owner, "nothing", "x"), "NOT_FOUND")
 }
 
-func TestPinnedCatalogEntryCannotBeDeleted(t *testing.T) {
-	s, _, _ := openTest(t)
-	owner := AdminActor{ID: "owner", Role: "OWNER"}
-	e := s.AdminDeleteModel(testContext, owner, "whisper-cpp-small", "ggml-small-hf-5359861")
-	wantError(t, e, "MODEL_PINNED")
-	wantError(t, s.AdminDeleteModel(testContext, owner, "nothing", "x"), "NOT_FOUND")
+// One multilingual model in place of a pair per direction, described by the
+// files it is actually made of.
+func TestNLLBEntryDescribesEveryDirection(t *testing.T) {
+	entry := nllbEntry()
+	if entry.Executor != "transformers-js" || entry.Purpose != "TRANSLATION" {
+		t.Fatalf("%s %s", entry.Executor, entry.Purpose)
+	}
+	languages := len(nllbCodes)
+	if want := languages * (languages - 1); len(entry.TranslationDirections) != want {
+		t.Fatalf("%d directions, want %d", len(entry.TranslationDirections), want)
+	}
+	if len(entry.Files) != len(translationFiles) {
+		t.Fatalf("%d files", len(entry.Files))
+	}
+	var total int64
+	for _, f := range entry.Files {
+		if !lfsObjectID.MatchString(f.SHA256) {
+			t.Fatalf("%s has no digest", f.Path)
+		}
+		total += f.Bytes
+	}
+	if entry.DownloadBytes != total {
+		t.Fatalf("%d bytes, files add up to %d", entry.DownloadBytes, total)
+	}
+	canonical, e := canonicalTransform(encode(entry.Files))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if entry.SHA256 != digest(canonical) {
+		t.Fatal("package digest does not describe its files")
+	}
 }
 
 func TestCatalogEntryDeletedUnlessInstalled(t *testing.T) {
@@ -165,36 +202,5 @@ func TestModelOperationsDescribeLegacyEntries(t *testing.T) {
 	stated := []string{"media.subtitles"}
 	if got := modelOperations(ModelEntry{Purpose: "RECOGNITION", Operations: stated}); len(got) != 1 {
 		t.Fatal(got)
-	}
-}
-
-// The pin protects a base entry from a careless click, not from the owner: an
-// unpinned entry is removable, which is what keeps the catalog editable.
-func TestPinnedCatalogEntryIsReleasedByOwner(t *testing.T) {
-	s, _, _ := openTest(t)
-	owner := AdminActor{ID: "owner", Role: "OWNER"}
-	const id, revision = "whisper-cpp-small", "ggml-small-hf-5359861"
-	wantError(t, s.AdminDeleteModel(testContext, owner, id, revision), "MODEL_PINNED")
-	if _, e := s.AdminPinModel(testContext, owner, id, revision, false); e != nil {
-		t.Fatal(e)
-	}
-	if e := s.AdminDeleteModel(testContext, owner, id, revision); e != nil {
-		t.Fatal(e)
-	}
-	models, e := s.Models(testContext)
-	if e != nil {
-		t.Fatal(e)
-	}
-	for _, m := range models {
-		if m.ID == id {
-			t.Fatal("unpinned entry survived removal")
-		}
-	}
-	if _, e = s.AdminPinModel(testContext, owner, id, revision, true); e == nil {
-		t.Fatal("pinned an entry that no longer exists")
-	}
-	operator := AdminActor{ID: "operator", Role: "OPERATOR"}
-	if _, e = s.AdminPinModel(testContext, operator, "whisper-cpp-base", "ggml-base-hf-5359861", false); e == nil {
-		t.Fatal("operator released a pin")
 	}
 }
