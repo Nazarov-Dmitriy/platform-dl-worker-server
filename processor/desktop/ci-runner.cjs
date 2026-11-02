@@ -190,7 +190,7 @@ async function releasePackage(fetcher = fetch) {
 class CiRunner extends EventEmitter {
   constructor({ platform = process.platform, run = execute, spawnProcess = spawn, fetcher = fetch } = {}) {
     super();
-    Object.assign(this, { platform, run, spawnProcess, fetcher, child: null, operation: false, state: { phase: "stopped", connected: false, busy: false } });
+    Object.assign(this, { platform, run, spawnProcess, fetcher, child: null, operation: false, stopping: false, state: { phase: "stopped", connected: false, busy: false } });
   }
   update(values) { Object.assign(this.state, values); this.emit("status", { ...this.state }); return { ...this.state }; }
   async exclusive(callback) {
@@ -273,6 +273,10 @@ class CiRunner extends EventEmitter {
         if (code === 73) {
           this.watch();
           this.update({ phase: "idle", connected: true, busy: false, message: "Runner уже запущен и принимает сборки." });
+        } else if (code === 0 && !this.stopping) {
+          // RUN_PROCESS detaches through setsid, so the launcher exits 0 while the
+          // listener keeps running. Ask Linux what actually happened before reporting.
+          void this.confirm();
         } else {
           this.clearWatch();
           this.update({ phase: code === 0 ? "stopped" : "error", connected: false, busy: false, message: code === 0 ? "Сборки остановлены." : "Runner завершился. Проверьте окружение и повторите запуск." });
@@ -281,22 +285,44 @@ class CiRunner extends EventEmitter {
       return { ...this.state };
     });
   }
+  async confirm() {
+    if (!this.activeSettings) return;
+    try {
+      const state = await this.check(this.activeSettings);
+      if (this.child || this.stopping) return;
+      if (state.running) {
+        this.watch();
+        this.update({ phase: this.state.busy ? "busy" : "idle", connected: true, message: this.state.busy ? this.state.message : "Готов принимать сборки GitHub." });
+      } else {
+        this.clearWatch();
+        this.update({ phase: "stopped", connected: false, busy: false, message: "Сборки остановлены." });
+      }
+    } catch (error) {
+      if (this.child || this.stopping) return;
+      this.clearWatch();
+      this.update({ phase: "error", connected: false, busy: false, message: error.message });
+    }
+  }
   async stop() {
     return this.exclusive(async () => {
       if (this.state.busy) throw Error("Дождитесь завершения текущей сборки перед остановкой или выходом из Worker.");
       if (!this.child && this.state.phase !== "idle" && this.state.phase !== "connecting") return { ...this.state };
       if (!this.activeSettings) return { ...this.state };
       const child = this.child;
-      const result = await this.run(command(this.activeSettings, STOP, [], this.platform));
-      if (!child) {
-        if (result.code !== 0) throw Error("Не удалось остановить runner.");
-        this.clearWatch();
-        return this.update({ phase: "stopped", connected: false, busy: false, message: "Сборки остановлены." });
-      }
-      if (result.code !== 0 && this.child) throw Error("Не удалось подтвердить остановку runner. Worker остаётся открытым.");
-      if (this.child) await new Promise(resolve => { const timer = setTimeout(resolve, 15000); child.once("close", () => { clearTimeout(timer); resolve(); }); });
-      if (this.child) throw Error("Runner ещё завершает работу. Повторите остановку позже.");
-      return { ...this.state };
+      // The launcher may exit on its own during a stop: keep confirm() out of the way.
+      this.stopping = true;
+      try {
+        const result = await this.run(command(this.activeSettings, STOP, [], this.platform));
+        if (!child) {
+          if (result.code !== 0) throw Error("Не удалось остановить runner.");
+        } else {
+          if (result.code !== 0 && this.child) throw Error("Не удалось подтвердить остановку runner. Worker остаётся открытым.");
+          if (this.child) await new Promise(resolve => { const timer = setTimeout(resolve, 15000); child.once("close", () => { clearTimeout(timer); resolve(); }); });
+          if (this.child) throw Error("Runner ещё завершает работу. Повторите остановку позже.");
+        }
+      } finally { this.stopping = false; }
+      this.clearWatch();
+      return this.update({ phase: "stopped", connected: false, busy: false, message: "Сборки остановлены." });
     });
   }
   clearWatch() {

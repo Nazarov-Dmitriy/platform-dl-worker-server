@@ -252,6 +252,9 @@ def build():
                                  "heartbeatSeconds": {"type": "integer", "minimum": 1, "maximum": 300},
                                  "leaseSeconds": {"type": "integer", "minimum": 10, "maximum": 3600},
                                  "stopSafetySeconds": {"type": "integer", "minimum": 1, "maximum": 60}}), "DOWN"),
+        # The catalog the device may install from. Sent once the session opens
+        # and again whenever an operator changes it, so one handler covers both.
+        "catalog.offer": (obj({"models": arr(ref("ModelEntry"), 0, 100)}), "DOWN"),
         "device.heartbeat": (obj({"usage": ref("Usage"), "capabilities": arr(ref("OperationCapability"), 0, 3)}), "UP"),
         "job.offer": (obj({**assignment, "offerExpiresAt": DATE, "job": ref("JobRequest")}), "DOWN"),
         "job.accept": (obj(assignment), "UP"),
@@ -509,6 +512,7 @@ def build():
                          "capabilities": [cap], "usage": usage, "active": []},
         "session.welcome": {"sessionId": rid, "dispatcherEpoch": epoch, "heartbeatSeconds": 15,
                             "leaseSeconds": 120, "stopSafetySeconds": 5},
+        "catalog.offer": {"models": []},
         "device.heartbeat": {"usage": usage, "capabilities": [cap]},
         "job.offer": {"jobId": jid, "fence": fence, "offerExpiresAt": "2026-10-13T09:00:10Z", "job": job},
         "job.accept": {"jobId": jid, "fence": fence},

@@ -2,7 +2,9 @@ package dispatcher
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestBaseCatalogUsesWhisperTokenizerLanguages(t *testing.T) {
@@ -198,5 +200,58 @@ func TestAdminModelsReportsPlacements(t *testing.T) {
 	}
 	if placed = page["placements"].([]ModelPlacement); len(placed) != 0 {
 		t.Fatalf("after delete: %#v", placed)
+	}
+}
+
+// A device must be told what it may install; it used to read a file placed
+// beside it at build time, which the site could not reach.
+func TestDeviceReceivesCatalogOnConnect(t *testing.T) {
+	s, _, _ := openTest(t)
+	s.now = time.Now
+	device, e := s.CreateDevice(testContext, "ws", testCaps())
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, token, e := s.IssueToken(testContext, "DEVICE", device.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	h := Handler(s).(*HTTP)
+	server := httptest.NewServer(h)
+	defer server.Close()
+	defer h.CloseDevices()
+	c := wsDial(t, server.URL, token)
+	wsHello(t, c, device.ID, nil)
+	frame := wsRead(t, c, "catalog.offer")
+	var body struct {
+		Models []ModelEntry `json:"models"`
+	}
+	if e = json.Unmarshal(frame.Body, &body); e != nil {
+		t.Fatal(e)
+	}
+	catalog, e := s.Models(testContext)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(body.Models) != len(catalog) || len(body.Models) == 0 {
+		t.Fatalf("offered %d of %d models", len(body.Models), len(catalog))
+	}
+	for _, m := range body.Models {
+		if m.DownloadURL == "" || m.SHA256 == "" {
+			t.Fatalf("%s arrived without a way to fetch or verify it", m.ID)
+		}
+	}
+	// An edit on the site reaches the device without a reconnect.
+	owner := AdminActor{ID: "owner", Role: "OWNER"}
+	if e = s.AdminDeleteModel(testContext, owner, body.Models[0].ID, body.Models[0].Revision); e != nil {
+		t.Fatal(e)
+	}
+	h.BroadcastCatalog(testContext)
+	frame = wsRead(t, c, "catalog.offer")
+	if e = json.Unmarshal(frame.Body, &body); e != nil {
+		t.Fatal(e)
+	}
+	if len(body.Models) != len(catalog)-1 {
+		t.Fatalf("after removal the device still sees %d models", len(body.Models))
 	}
 }

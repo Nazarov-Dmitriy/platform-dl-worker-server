@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  html { color-scheme: light; }
+  body { margin: 0; font: 14px system-ui, sans-serif; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>Модели в Worker Processor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* A single dark world on purpose: this is a mock of the Worker Processor
+     window, which is dark only. Every colour is stated, nothing inherited. */
+  :root {
+    color-scheme: dark;
+    --page: #0b1016;
+    --chrome: #10151c;
+    --surface: #141c25;
+    --raised: #192330;
+    --line: #253444;
+    --line-soft: #1d2834;
+    --ink: #e6edf5;
+    --ink-dim: #93a4b8;
+    --ink-faint: #63768b;
+    --accent: #27b6c4;
+    --accent-ink: #042026;
+    --good: #46c08a;
+    --warn: #e0a33c;
+    --bad: #e2686b;
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", "Cascadia Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    padding-block: 28px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+  .lede h1 { font-size: 26px; margin: 0 0 6px; text-wrap: balance; letter-spacing: -0.015em; }
+  .lede p { margin: 0; color: var(--ink-dim); max-width: 64ch; }
+
+  /* ---- the window ---- */
+  .window {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--chrome);
+    overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  }
+  .titlebar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    background: #0e131a;
+  }
+  .titlebar .mark {
+    width: 18px; height: 18px; border-radius: 4px;
+    background: var(--accent); color: var(--accent-ink);
+    font-size: 11px; font-weight: 700; display: grid; place-items: center;
+  }
+  .titlebar .name { font-size: 13px; color: var(--ink-dim); }
+  .titlebar .keys { margin-left: auto; display: flex; gap: 14px; color: var(--ink-faint); font-size: 13px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px 0; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 5px 13px; font-size: 13px; color: var(--ink-dim); background: var(--surface);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+  .dot.idle { background: var(--warn); }
+  .dot.off { background: var(--ink-faint); }
+
+  .screens { padding: 14px 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .nav { display: flex; gap: 6px; border-bottom: 1px solid var(--line-soft); }
+  .nav button {
+    appearance: none; border: 0; background: none; color: var(--ink-dim);
+    font: inherit; font-size: 14px; padding: 8px 14px; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .nav button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+
+  .card {
+    border: 1px solid var(--line-soft); border-radius: 9px;
+    background: var(--surface); padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .card > h2 { margin: 0; font-size: 15px; letter-spacing: 0.01em; }
+  .card .sub { margin: 0; color: var(--ink-dim); font-size: 13px; }
+
+  .summary { border-left: 3px solid var(--accent); }
+  .summary .big { font-size: 20px; font-weight: 600; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+  button.btn {
+    appearance: none; font: inherit; font-size: 14px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raised); color: var(--ink);
+    border-radius: 7px; padding: 8px 16px;
+  }
+  button.btn.small { padding: 5px 12px; font-size: 13px; }
+  button.btn:hover:not(:disabled) { border-color: #31485e; }
+  button.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.btn.quiet { background: none; }
+  button.btn:disabled { opacity: 0.42; cursor: default; }
+
+  /* ---- environment ---- */
+  .env { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .env div { display: flex; flex-direction: column; gap: 2px; }
+  .env .k { color: var(--ink-faint); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .env .v { font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums; }
+
+  /* ---- what to process ---- */
+  .tasks { display: flex; flex-direction: column; gap: 2px; }
+  .task {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 11px 12px; border-radius: 8px; cursor: pointer;
+  }
+  .task:hover { background: var(--raised); }
+  .task input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); }
+  .task .t { font-weight: 500; }
+  .task .d { color: var(--ink-dim); font-size: 13px; }
+
+  /* ---- model groups ---- */
+  .group { display: flex; flex-direction: column; gap: 9px; }
+  .group + .group { border-top: 1px solid var(--line-soft); padding-top: 14px; }
+  .group-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  .group-head h3 { margin: 0; font-size: 14px; }
+  .group-head span { color: var(--ink-dim); font-size: 13px; }
+
+  .models { display: flex; flex-direction: column; gap: 9px; }
+  .model {
+    border: 1px solid var(--line-soft); border-radius: 8px; background: var(--raised);
+    padding: 12px 14px; display: grid; gap: 10px;
+    grid-template-columns: auto 1fr auto; align-items: start;
+  }
+  .model.chosen { border-color: #1d5f67; background: #16242b; }
+  .model.heavy { opacity: 0.75; }
+  .model input[type="radio"] { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--accent); }
+  .model .who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .model .nm { font-weight: 600; }
+  .model .meta { font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .model .why { font-size: 13px; color: var(--ink-dim); }
+  .model .why.stop { color: var(--bad); }
+  .model .side { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+  .tag {
+    font-size: 12px; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--ink-dim); white-space: nowrap;
+  }
+  .tag.ok { color: var(--good); border-color: #255c44; }
+  .tag.run { color: var(--accent); border-color: #1d5f67; }
+  .tag.no { color: var(--bad); border-color: #5c2f31; }
+  .tag.upd { color: var(--warn); border-color: #5c4a22; }
+  .rev { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+  .bar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: #0e1620; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width 0.25s linear; }
+  .plan {
+    display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline;
+    border-top: 1px solid var(--line-soft); padding-top: 12px;
+    font-size: 13px; color: var(--ink-dim);
+  }
+  .plan b { color: var(--ink); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .note { border-left: 2px solid var(--line); padding-left: 12px; color: var(--ink-dim); font-size: 13px; }
+  .jobs-empty { color: var(--ink-faint); font-size: 13px; }
+  table.jobs { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.jobs th { text-align: left; color: var(--ink-faint); font-weight: 500; padding-bottom: 7px; border-bottom: 1px solid var(--line-soft); }
+
+  /* ---- annotations outside the window ---- */
+  .asks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .ask {
+    border: 1px solid var(--line-soft); border-radius: 9px; background: var(--surface);
+    padding: 15px 17px; display: flex; flex-direction: column; gap: 7px;
+  }
+  .ask h3 { margin: 0; font-size: 14px; }
+  .ask p { margin: 0; color: var(--ink-dim); font-size: 13.5px; }
+  .ask .mine { color: var(--accent); font-size: 13px; }
+  .foot { color: var(--ink-faint); font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+  @media (max-width: 560px) {
+    .model { grid-template-columns: auto 1fr; }
+    .model .side { grid-column: 2; align-items: flex-start; }
+  }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <div class="lede">
+    <h1>Модели в Worker Processor</h1>
+    <p>Макет того, как приложение ставит себе модели. Кнопки живые — отметьте задачи, выберите модель, нажмите «Установить». Ничего не скачивается, это только внешний вид.</p>
+  </div>
+
+  <div class="window">
+    <div class="titlebar">
+      <span class="mark">W</span>
+      <span class="name">Worker Processor</span>
+      <span class="keys">— □ ✕</span>
+    </div>
+
+    <div class="chips">
+      <span class="chip"><span class="dot"></span>Подключение</span>
+      <span class="chip"><span class="dot idle"></span>Сборки GitHub</span>
+      <span class="chip"><span class="dot"></span>Видео</span>
+      <span class="chip"><span class="dot off" id="chipSpeech"></span>Аудио</span>
+    </div>
+
+    <div class="screens">
+      <nav class="nav">
+        <button type="button" data-screen="jobs" aria-pressed="false">Задания</button>
+        <button type="button" data-screen="models" aria-pressed="true">Модели</button>
+        <button type="button" data-screen="settings" aria-pressed="false">Настройки</button>
+      </nav>
+
+      <!-- ЗАДАНИЯ -->
+      <section data-panel="jobs" hidden>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="card summary">
+            <span class="sub">На этом компьютере</span>
+            <span class="big">Заданий в работе: 0</span>
+            <span>Ожидаем задания от сервера</span>
+            <span class="sub">Подключено к серверу.</span>
+          </div>
+          <div class="actions">
+            <button class="btn primary" type="button">Подключиться</button>
+            <button class="btn" type="button" disabled>Пауза</button>
+            <button class="btn" type="button" disabled>Остановить</button>
+          </div>
+          <div class="card">
+            <h2>Задания на этом устройстве</h2>
+            <table class="jobs"><thead><tr><th>Задание</th><th>Этап</th><th>Прогресс</th></tr></thead></table>
+            <p class="jobs-empty">Активных заданий пока нет.</p>
+          </div>
+          <p class="note" id="jobsWarn">Эти задания сервер сюда не пришлёт: не хватает моделей. Откройте «Модели».</p>
+        </div>
+      </section>
+
+      <!-- МОДЕЛИ -->
+      <section data-panel="models">
+        <div style="display:flex;flex-direction:column;gap:14px">
+
+          <div class="card">
+            <h2>Этот компьютер</h2>
+            <div class="env">
+              <div><span class="k">Оперативная память</span><span class="v">8 ГБ</span></div>
+              <div><span class="k">Процессор</span><span class="v">16 ядер</span></div>
+              <div><span class="k">Видеокарта</span><span class="v">RTX 4060, CUDA</span></div>
+              <div><span class="k">Свободно на диске</span><span class="v">214 ГБ</span></div>
+            </div>
+            <p class="sub">Приложение смотрит, что здесь есть, и помечает модели, которые сюда не встанут.</p>
+          </div>
+
+          <div class="card">
+            <h2>Что обрабатывать на этом компьютере</h2>
+            <p class="sub">Отметьте задачи — приложение покажет все модели, которые для них годятся.</p>
+            <div class="tasks">
+              <label class="task">
+                <input type="checkbox" data-task="video" checked>
+                <span><span class="t">Видео</span><br><span class="d">Перекодирование и нарезка. Моделей не требует, только ffmpeg.</span></span>
+              </label>
+              <label class="task">
+                <input type="checkbox" data-task="speech" checked>
+                <span><span class="t">Распознавание речи</span><br><span class="d">Звук в текст. Нужна одна модель распознавания.</span></span>
+              </label>
+              <label class="task">
+                <input type="checkbox" data-task="subs">
+                <span><span class="t">Субтитры</span><br><span class="d">Распознавание плюс перевод. Нужны обе модели сразу.</span></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Модели для выбранных задач</h2>
+            <p class="sub" id="catalogNote">Список приходит с сайта. Выберите, какой моделью работать — остальные можно оставить на диске про запас.</p>
+            <div id="groups"></div>
+            <div class="plan" id="plan"></div>
+            <div class="actions">
+              <button class="btn primary" type="button" id="deliver">Установить</button>
+              <button class="btn quiet" type="button" id="recheck">Проверить обновления</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Уже установленные</h2>
+            <div class="models" id="installed"></div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- НАСТРОЙКИ -->
+      <section data-panel="settings" hidden>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="card">
+            <h2>Настройки</h2>
+            <p class="sub">Подключение, обработка и ресурсы, сборки GitHub — как сейчас. Модели сюда не переезжают: это не настройка, а работа, у которой есть прогресс и ошибки.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="asks">
+    <div class="ask">
+      <h3>Выбор модели — за вами</h3>
+      <p>Показаны все модели, которые пришли с сайта и годятся отмеченным задачам. Точкой отмечена рабочая.</p>
+      <p class="mine">Установить можно несколько и переключаться между ними, не скачивая заново.</p>
+    </div>
+    <div class="ask">
+      <h3>Когда модель не влезет</h3>
+      <p>В макете у компьютера 8 ГБ памяти, поэтому large-v3 помечена «Не хватит ОЗУ» и выбрать её нельзя.</p>
+      <p class="mine">Так вы не узнаете о нехватке памяти посреди задания.</p>
+    </div>
+    <div class="ask">
+      <h3>Обновления</h3>
+      <p>У каждой модели видна версия. Если в диспетчере заменили сборку, версии разойдутся и появится «Обновить».</p>
+      <p class="mine">Нажмите «Проверить обновления» — макет покажет, как это выглядит.</p>
+    </div>
+  </div>
+
+  <p class="foot">Макет, не приложение. Скажите, что переставить, и только потом трогаем Electron.</p>
+</div>
+
+<script>
+  const GB = 1024;
+  const RAM_GB = 8;
+  // Entries as they would arrive from the dispatcher's catalog, plus one the
+  // operator added there, to show what a choice of several looks like.
+  // `rev` is what the site's catalog says now; `have` is what was installed
+  // here. They drift apart when the catalog entry is replaced with a newer
+  // build, and that difference is the whole update story.
+  const catalog = [
+    { id: "whisper-cpp-base", purpose: "speech", why: "Быстрая, качество попроще",
+      mb: 141, ramGb: 1, state: "installed", rev: "ggml-base-5359861", have: "ggml-base-4f2a1c0" },
+    { id: "whisper-cpp-small", purpose: "speech", why: "Разумный баланс скорости и точности",
+      mb: 465, ramGb: 2, state: "missing", rev: "ggml-small-5359861" },
+    { id: "whisper-cpp-large-v3-turbo", purpose: "speech", why: "Самая точная, самая тяжёлая",
+      mb: 1620, ramGb: 12, state: "missing", rev: "ggml-large-v3-turbo-5359861" },
+    { id: "nllb-200-distilled-600m-q8", purpose: "translate", why: "Один файл на 24 языка",
+      mb: 871, ramGb: 4, state: "missing", rev: "261c31d1" },
+  ];
+  const stale = (m) => m.state === "installed" && m.have !== m.rev;
+  const groups = [
+    { purpose: "speech", title: "Распознавание речи", tasks: ["speech", "subs"],
+      hint: "Нужна одна. Выберите, какой работать." },
+    { purpose: "translate", title: "Перевод", tasks: ["subs"],
+      hint: "Нужна одна. Без неё субтитры не соберутся." },
+  ];
+  const chosen = { speech: "whisper-cpp-small", translate: "nllb-200-distilled-600m-q8" };
+
+  const $ = (id) => document.getElementById(id);
+  const tasksOn = () =>
+    [...document.querySelectorAll("[data-task]")].filter((c) => c.checked).map((c) => c.dataset.task);
+  const size = (mb) => (mb >= GB ? (mb / GB).toFixed(1).replace(".", ",") + " ГБ" : mb + " МБ");
+  const fits = (m) => m.ramGb <= RAM_GB;
+  const liveGroups = () => groups.filter((g) => g.tasks.some((t) => tasksOn().includes(t)));
+  const members = (g) => catalog.filter((m) => m.purpose === g.purpose);
+
+  function install(m) {
+    if (m.state === "working" || !fits(m)) return;
+    m.state = "working";
+    m.progress = 0;
+    draw();
+    const timer = setInterval(() => {
+      m.progress = Math.min(100, m.progress + 7 + Math.random() * 9);
+      if (m.progress >= 100) {
+        m.state = "installed";
+        m.have = m.rev;
+        m.progress = 0;
+        clearInterval(timer);
+      }
+      draw();
+    }, 220);
+  }
+
+  function row(m, group) {
+    const el = document.createElement("div");
+    el.className = "model";
+    const pickable = group && fits(m);
+    const isChosen = group && chosen[m.purpose] === m.id;
+    if (isChosen) el.classList.add("chosen");
+    if (group && !fits(m)) el.classList.add("heavy");
+
+    if (group) {
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "use-" + m.purpose;
+      radio.checked = isChosen;
+      radio.disabled = !pickable;
+      radio.setAttribute("aria-label", "Работать моделью " + m.id);
+      radio.onchange = () => { chosen[m.purpose] = m.id; draw(); };
+      el.append(radio);
+    } else {
+      el.append(document.createElement("span"));
+    }
+
+    const who = document.createElement("div");
+    who.className = "who";
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = m.id;
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    meta.textContent = size(m.mb) + " · ОЗУ от " + m.ramGb + " ГБ";
+    const rev = document.createElement("span");
+    rev.className = "rev";
+    rev.textContent = stale(m)
+      ? "Версия " + m.have + " → в каталоге " + m.rev
+      : "Версия " + (m.state === "installed" ? m.have : m.rev);
+    const why = document.createElement("span");
+    why.className = "why" + (fits(m) ? "" : " stop");
+    why.textContent = fits(m)
+      ? m.why
+      : "Не хватит ОЗУ: нужно " + m.ramGb + " ГБ, на этом компьютере " + RAM_GB + " ГБ";
+    who.append(nm, meta, rev, why);
+    el.append(who);
+
+    const side = document.createElement("div");
+    side.className = "side";
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    if (!fits(m)) { tag.classList.add("no"); tag.textContent = "Не встанет"; }
+    else if (m.state === "working") { tag.classList.add("run"); tag.textContent = "Скачивается"; }
+    else if (stale(m)) { tag.classList.add("upd"); tag.textContent = "Есть обновление"; }
+    else if (m.state === "installed") { tag.classList.add("ok"); tag.textContent = isChosen ? "Работает" : "Установлена"; }
+    else tag.textContent = "Не установлена";
+    side.append(tag);
+
+    if (m.state === "missing" && fits(m)) {
+      const b = document.createElement("button");
+      b.className = "btn small";
+      b.type = "button";
+      b.textContent = "Установить — " + size(m.mb);
+      b.onclick = () => install(m);
+      side.append(b);
+    }
+    if (stale(m) && fits(m)) {
+      const b = document.createElement("button");
+      b.className = "btn small";
+      b.type = "button";
+      b.textContent = "Обновить — " + size(m.mb);
+      b.onclick = () => install(m);
+      side.append(b);
+    }
+    if (m.state === "installed" && !isChosen) {
+      const b = document.createElement("button");
+      b.className = "btn small quiet";
+      b.type = "button";
+      b.textContent = "Удалить";
+      b.onclick = () => { m.state = "missing"; draw(); };
+      side.append(b);
+    }
+    el.append(side);
+
+    if (m.state === "working") {
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      bar.innerHTML = '<i style="width:' + (m.progress || 0) + '%"></i>';
+      el.append(bar);
+    }
+    return el;
+  }
+
+  function draw() {
+    const live = liveGroups();
+    const host = $("groups");
+    host.replaceChildren();
+    if (!live.length) {
+      const p = document.createElement("p");
+      p.className = "jobs-empty";
+      p.textContent = "Для отмеченных задач модели не нужны. Видео обрабатывается без них.";
+      host.append(p);
+    }
+    live.forEach((g) => {
+      const box = document.createElement("div");
+      box.className = "group";
+      const head = document.createElement("div");
+      head.className = "group-head";
+      const h = document.createElement("h3");
+      h.textContent = g.title;
+      const hint = document.createElement("span");
+      hint.textContent = g.hint;
+      head.append(h, hint);
+      const list = document.createElement("div");
+      list.className = "models";
+      members(g).forEach((m) => list.append(row(m, g)));
+      box.append(head, list);
+      host.append(box);
+    });
+
+    const have = catalog.filter((m) => m.state === "installed");
+    const done = $("installed");
+    done.replaceChildren();
+    if (!have.length) {
+      const p = document.createElement("p");
+      p.className = "jobs-empty";
+      p.textContent = "Пока ничего не установлено.";
+      done.append(p);
+    } else have.forEach((m) => done.append(row(m, null)));
+
+    const picks = live
+      .map((g) => catalog.find((m) => m.id === chosen[g.purpose]))
+      .filter(Boolean);
+    const missing = picks.filter((m) => m.state === "missing");
+    const mb = missing.reduce((s, m) => s + m.mb, 0);
+    const onDisk = catalog.filter((m) => m.state === "installed").reduce((s, m) => s + m.mb, 0);
+
+    $("plan").replaceChildren();
+    if (live.length) {
+      const old = catalog.filter(stale);
+      [["Скачать", missing.length ? size(mb) : "ничего"],
+       ["Занято на диске", size(onDisk)],
+       ["Нужно ОЗУ", (picks.length ? Math.max(...picks.map((m) => m.ramGb)) : 0) + " ГБ, есть " + RAM_GB + " ГБ"],
+       ["Обновлений", old.length ? String(old.length) : "нет"],
+      ].forEach(([k, v]) => {
+        const s = document.createElement("span");
+        s.innerHTML = k + " <b></b>";
+        s.querySelector("b").textContent = v;
+        $("plan").append(s);
+      });
+    }
+    const busy = catalog.some((m) => m.state === "working");
+    $("deliver").disabled = !missing.length || busy;
+    $("deliver").textContent = busy
+      ? "Скачиваем…"
+      : missing.length
+        ? "Установить — " + size(mb)
+        : "Всё на месте";
+    $("chipSpeech").className = "dot " + (live.length && !missing.length ? "" : "off");
+    $("jobsWarn").hidden = !missing.length;
+  }
+
+  $("deliver").onclick = () =>
+    liveGroups()
+      .map((g) => catalog.find((m) => m.id === chosen[g.purpose]))
+      .filter((m) => m && m.state === "missing")
+      .forEach(install);
+
+  // Checking means re-reading the catalog: a model whose entry was replaced on
+  // the site now differs from the copy on disk, and that is an update.
+  $("recheck").onclick = () => {
+    const fresh = catalog.filter((m) => m.state === "installed" && m.have === m.rev);
+    if (fresh.length) {
+      const m = fresh[0];
+      m.rev = m.rev.replace(/-[0-9a-f]+$/, "") + "-9b41e7d";
+      $("catalogNote").textContent =
+        "Каталог перечитан. Вышла новая сборка «" + m.id + "» — можно обновить.";
+    } else {
+      $("catalogNote").textContent =
+        "Каталог перечитан, новых сборок нет. Выберите, какой моделью работать.";
+    }
+    draw();
+  };
+
+  document.querySelectorAll("[data-task]").forEach((c) => c.addEventListener("change", draw));
+  document.querySelectorAll(".nav button").forEach((b) =>
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".nav button").forEach((o) =>
+        o.setAttribute("aria-pressed", String(o === b)));
+      document.querySelectorAll("[data-panel]").forEach((p) =>
+        (p.hidden = p.dataset.panel !== b.dataset.screen));
+    }),
+  );
+  draw();
+</script>
+
+</body>
+</html>

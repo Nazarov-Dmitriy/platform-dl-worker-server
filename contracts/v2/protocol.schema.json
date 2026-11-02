@@ -1972,6 +1972,9 @@
           "$ref": "#/$defs/Message_session_welcome"
         },
         {
+          "$ref": "#/$defs/Message_catalog_offer"
+        },
+        {
           "$ref": "#/$defs/Message_device_heartbeat"
         },
         {
@@ -2198,6 +2201,49 @@
             "heartbeatSeconds",
             "leaseSeconds",
             "stopSafetySeconds"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "messageId",
+        "type",
+        "direction",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "Message_catalog_offer": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "2.0"
+        },
+        "messageId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "const": "catalog.offer"
+        },
+        "direction": {
+          "const": "DOWN"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "models": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ModelEntry"
+              },
+              "minItems": 0,
+              "maxItems": 100
+            }
+          },
+          "required": [
+            "models"
           ],
           "additionalProperties": false
         }

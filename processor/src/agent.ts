@@ -305,6 +305,14 @@ export class Agent {
       return;
     }
     if (!this.session) throw new Error("WELCOME_REQUIRED");
+    // What the site allows this device to install. It arrives when the session
+    // opens and again whenever an operator edits the catalog, replacing what
+    // we held: an entry removed on the site must stop being installable here.
+    if (f.type === "catalog.offer") {
+      this.journal.state.catalog = (b.models ?? []) as ModelEntry[];
+      this.journal.save();
+      return;
+    }
     if (f.type === "device.command") {
       this.commandChain = this.commandChain
         .then(() => this.runCommand(b))

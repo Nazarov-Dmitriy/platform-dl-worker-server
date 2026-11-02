@@ -428,7 +428,10 @@ function ciDrawDashboard() {
   }));
   const active = ciRepos.filter(repo => ["idle", "busy", "connecting"].includes(ciPhase(repo.status))).length;
   $("dashCiStop").disabled = active === 0;
-  if (phase === "busy") $("ciDash").open = true;
+  // A failed autostart must be readable without unfolding the card.
+  const failed = ciRepos.find(repo => ciPhase(repo.status) === "error");
+  $("dashCiLine").textContent = failed ? (failed.repository || failed.name) + ": " + (failed.status.message || "Ошибка runner.") : "";
+  if (phase === "busy" || phase === "error") $("ciDash").open = true;
 }
 function ciRootFor(id) { return ciList.querySelector(`.ci-entry[data-id="${id}"]`); }
 function renderCiList() {

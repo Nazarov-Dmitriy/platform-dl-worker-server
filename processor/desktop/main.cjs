@@ -76,6 +76,28 @@ function validateLaunch(input) {
   }
   return result;
 }
+async function startCiRepos({ attempts = 4, delayMs = 15000 } = {}) {
+  for (const entry of ciRepos) {
+    if (entry.enabled === false) continue;
+    const runner = ciRunnerFor(entry.id);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await runner.start(entry);
+        break;
+      } catch (error) {
+        // Right after a Windows login WSL is often not up yet: retry before giving up.
+        if (attempt >= attempts) {
+          runner.update({ phase: "error", connected: false, busy: false,
+            message: error.message + " Сборки можно запустить вручную на вкладке «Сборки GitHub»." });
+          break;
+        }
+        runner.update({ phase: "connecting", connected: false, busy: false,
+          message: "Готовим Linux-окружение, попытка " + attempt + " из " + (attempts - 1) + ": " + error.message });
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+}
 app.setName("Worker Processor");
 if (process.platform === "win32")
   app.setAppUserModelId("ru.difat.workerprocessor");
@@ -729,15 +751,7 @@ else {
     });
     window.loadFile(html).then(async () => {
       if (process.argv.includes("--smoke")) return;
-      if (launch.ciAutoStart) {
-        for (const entry of ciRepos) {
-          if (entry.enabled === false) continue;
-          const runner = ciRunnerFor(entry.id);
-          try { await runner.start(entry); }
-          // An error here is the usual reason builds stay stopped: show it instead of a silent "stopped".
-          catch (error) { runner.update({ phase: "error", connected: false, busy: false, message: error.message }); }
-        }
-      }
+      if (launch.ciAutoStart) void startCiRepos();
       if (!backgroundLaunch && !(launch.autoConnect && autostartState().configured)) return;
       try {
         await start();

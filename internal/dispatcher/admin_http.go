@@ -254,6 +254,7 @@ func (h *HTTP) adminAddModel(w http.ResponseWriter, r *http.Request, a AdminActo
 		return
 	}
 	h.reply(w, 201, v)
+	h.BroadcastCatalog(r.Context())
 }
 func (h *HTTP) adminDeleteModel(w http.ResponseWriter, r *http.Request, a AdminActor) {
 	if e := h.store.AdminDeleteModel(r.Context(), a, r.PathValue("id"), r.PathValue("revision")); e != nil {
@@ -261,6 +262,7 @@ func (h *HTTP) adminDeleteModel(w http.ResponseWriter, r *http.Request, a AdminA
 		return
 	}
 	w.WriteHeader(204)
+	h.BroadcastCatalog(r.Context())
 }
 func (h *HTTP) adminRepositoryFiles(w http.ResponseWriter, r *http.Request, a AdminActor) {
 	v, e := h.store.AdminRepositoryFiles(r.Context(), a, r.URL.Query().Get("repository"), r.URL.Query().Get("revision"))

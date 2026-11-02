@@ -75,6 +75,34 @@ func (h *HTTP) deviceWrite(ctx context.Context, c *websocket.Conn, kind string, 
 	defer cancel()
 	return c.Write(ctx, websocket.MessageText, encode(frame))
 }
+// What this device is allowed to install. The worker used to read a file
+// placed beside it at build time, which left the site's catalog and the
+// device's idea of it with no way to agree.
+func (h *HTTP) offerCatalog(ctx context.Context, c *websocket.Conn) error {
+	models, e := h.store.Models(ctx)
+	if e != nil {
+		return e
+	}
+	if models == nil {
+		models = []ModelEntry{}
+	}
+	return h.deviceWrite(ctx, c, "catalog.offer", map[string]any{"models": models})
+}
+
+// Sent to every connected device when an operator edits the catalog, so a
+// model added on the site appears in the app without a reconnect.
+func (h *HTTP) BroadcastCatalog(ctx context.Context) {
+	h.hub.Lock()
+	connections := make([]*websocket.Conn, 0, len(h.hub.connections))
+	for _, c := range h.hub.connections {
+		connections = append(connections, c)
+	}
+	h.hub.Unlock()
+	for _, c := range connections {
+		_ = h.offerCatalog(ctx, c)
+	}
+}
+
 func (h *HTTP) deviceConnect(w http.ResponseWriter, r *http.Request) {
 	p, e := h.store.Authenticate(r.Context(), bearer(r), "DEVICE")
 	if e != nil {
@@ -136,6 +164,9 @@ func (h *HTTP) deviceConnect(w http.ResponseWriter, r *http.Request) {
 	}()
 	cfg := h.store.config
 	if h.deviceWrite(ctx, c, "session.welcome", map[string]any{"sessionId": session, "dispatcherEpoch": h.store.epoch, "heartbeatSeconds": int(cfg.HeartbeatInterval / time.Second), "leaseSeconds": int(cfg.LeaseTTL / time.Second), "stopSafetySeconds": int(cfg.StopSafety / time.Second)}) != nil {
+		return
+	}
+	if h.offerCatalog(ctx, c) != nil {
 		return
 	}
 	for _, item := range body.Active {

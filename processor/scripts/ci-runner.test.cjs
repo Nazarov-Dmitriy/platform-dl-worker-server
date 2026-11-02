@@ -87,6 +87,26 @@ test("a runner that already holds the folder lock is shown as running", async ()
   assert.equal(second.state.phase, "idle");
   assert.match(second.state.message, /уже запущен/);
 });
+test("a launcher that detaches and exits 0 is confirmed as running, not reported as stopped", async () => {
+  const newline = String.fromCharCode(10);
+  const child = fakeChild();
+  let running = false;
+  const runner = new CiRunner({ platform: "win32", spawnProcess: () => child,
+    run: async () => ({ code: 0, output: ready.output + (running ? "running" + newline : "") }) });
+  await runner.start(input);
+  assert.equal(runner.state.phase, "connecting");
+  // setsid detaches the listener, so the launcher exits 0 while the runner keeps working.
+  running = true;
+  child.emit("close", 0);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(runner.state.phase, "idle");
+  assert.equal(runner.state.connected, true);
+  const gone = new CiRunner({ platform: "win32", spawnProcess: () => fakeChild(), run: async () => ready });
+  await gone.start(input);
+  gone.child.emit("close", 0);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(gone.state.phase, "stopped");
+});
 test("runner operation lock prevents simultaneous registration or installation", async () => {
   const runner = new CiRunner();
   runner.operation = true;
