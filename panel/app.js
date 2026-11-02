@@ -498,6 +498,71 @@ async function removeCatalogModel(model) {
   }
   await reloadCatalog();
 }
+async function pinCatalogModel(model, pinned) {
+  if (state.modelActionKey) return;
+  state.modelActionKey = model.id + "@" + model.revision;
+  renderModels("catalog", state.models, state.placements);
+  try {
+    await api(
+      "/api/v2/admin/models/" +
+        encodeURIComponent(model.id) +
+        "/" +
+        encodeURIComponent(model.revision) +
+        "/pin",
+      { method: "POST", mutate: true, body: JSON.stringify({ pinned }) },
+    );
+    message(
+      "modelOut",
+      pinned
+        ? "«" + model.id + "» защищена от удаления."
+        : "«" + model.id + "» откреплена и теперь её можно убрать.",
+    );
+  } catch (error) {
+    message("modelOut", "");
+    report(error);
+  } finally {
+    state.modelActionKey = "";
+  }
+  await reloadCatalog();
+}
+// Choosing weights means picking from what the repository actually holds, so
+// the list is read from huggingface.co instead of typed from memory.
+async function loadRepositoryFiles() {
+  const form = $("catalogForm").elements;
+  const repository = form.repository.value.trim();
+  if (!repository) return report(new Error("Сначала укажите репозиторий."));
+  const select = $("catalogFile");
+  select.replaceChildren(new Option("Читаем репозиторий…", ""));
+  select.disabled = true;
+  let found;
+  try {
+    found = await api(
+      "/api/v2/admin/model-files?repository=" +
+        encodeURIComponent(repository) +
+        "&revision=" +
+        encodeURIComponent(form.revision.value.trim()),
+    );
+  } catch (error) {
+    select.replaceChildren(new Option("Файлы не прочитаны", ""));
+    return report(error);
+  }
+  select.disabled = false;
+  select.replaceChildren(new Option("Выберите файл весов", ""));
+  found.files.forEach((f) =>
+    select.append(
+      new Option(f.path + " — " + byteSize(f.bytes), f.path),
+    ),
+  );
+  message(
+    "modelOut",
+    catalogPurpose() === "TRANSLATION"
+      ? found.translationReady
+        ? "Репозиторий содержит все файлы модели перевода."
+        : "В репозитории нет полного набора файлов перевода — добавить не получится."
+      : "Найдено файлов: " + found.files.length + ", ревизия " + found.revision + ".",
+  );
+}
+on("catalogFiles", "click", loadRepositoryFiles);
 function catalogPurpose() {
   return $("catalogForm").elements.purpose.value;
 }
@@ -524,6 +589,7 @@ on("catalogForm", "submit", async (e) => {
     body.source = String(fd.get("source") || "").trim();
     body.target = String(fd.get("target") || "").trim();
   } else body.file = String(fd.get("file") || "").trim();
+  if (!body.revision) delete body.revision;
   const added = await api("/api/v2/admin/models", {
     method: "POST",
     mutate: true,

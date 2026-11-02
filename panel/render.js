@@ -250,14 +250,28 @@ function modelStateCell(model, placements) {
     active ? "good" : "info",
   );
 }
-function modelRemoveCell(model) {
-  if (model.pinned) return badge("Закреплена", "info");
+function modelActionCell(model) {
   if (state.role !== "OWNER") return node("span", "", "muted");
-  const button = node("button", "Убрать", "button danger");
-  button.type = "button";
-  button.disabled = !!state.modelActionKey;
-  button.addEventListener("click", () => removeCatalogModel(model));
-  return button;
+  const cell = node("div", null, "row-actions");
+  const busy = !!state.modelActionKey;
+  const lock = node("button", model.pinned ? "Открепить" : "Закрепить", "button quiet");
+  lock.type = "button";
+  lock.disabled = busy;
+  lock.title = model.pinned
+    ? "Снять защиту, чтобы запись можно было удалить"
+    : "Защитить запись от удаления";
+  lock.addEventListener("click", () => pinCatalogModel(model, !model.pinned));
+  cell.append(lock);
+  // A pinned entry keeps its remove button out of reach until the lock is off,
+  // so the two clicks say plainly that removal was a deliberate choice.
+  if (!model.pinned) {
+    const remove = node("button", "Убрать", "button danger");
+    remove.type = "button";
+    remove.disabled = busy;
+    remove.addEventListener("click", () => removeCatalogModel(model));
+    cell.append(remove);
+  }
+  return cell;
 }
 function renderModels(target, models, placements) {
   if (!models.length)
@@ -270,21 +284,21 @@ function renderModels(target, models, placements) {
     target,
     ["Модель", "Назначение", "Состояние", "Источник", ""],
     models.map((m) => [
-      titleCell(m.id, m.revision, "box"),
+      modelTitleCell(m),
       modelPurposeCell(m),
       modelStateCell(m, placements),
       modelCardLink(m) || "—",
-      modelRemoveCell(m),
+      modelActionCell(m),
     ]),
   );
-  const notes = models.filter((m) => m.note);
-  if (notes.length) {
-    const list = node("div", null, "model-notes");
-    notes.forEach((m) =>
-      list.append(node("p", m.id + " — " + m.note, "cell-meta")),
-    );
-    $(target).append(list);
-  }
+}
+// The note answers one question: what stops working if this entry goes away. It
+// belongs next to the name, not in a list under the table.
+function modelTitleCell(model) {
+  const cell = node("div", null, "model-heading");
+  cell.append(titleCell(model.id, model.revision, "box"));
+  if (model.note) cell.append(node("p", model.note, "cell-meta"));
+  return cell;
 }
 function details(target, pairs) {
   const list = node("div", null, "detail-list");

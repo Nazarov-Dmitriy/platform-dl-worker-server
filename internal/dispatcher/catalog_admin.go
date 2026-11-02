@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -15,6 +16,10 @@ import (
 // Models come from huggingface.co and nowhere else. A single host keeps the
 // catalog from becoming a way to push an arbitrary binary to every device.
 const modelHost = "huggingface.co"
+
+// Nobody should have to look up a commit to add a model, so the branch stands
+// in until an operator pins one deliberately.
+const defaultRevision = "main"
 
 var (
 	repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$`)
@@ -225,6 +230,9 @@ func (s *Store) AdminAddModel(ctx context.Context, a AdminActor, raw []byte) (ma
 	req.File = strings.TrimSpace(req.File)
 	req.Source = strings.TrimSpace(req.Source)
 	req.Target = strings.TrimSpace(req.Target)
+	if req.Revision == "" {
+		req.Revision = defaultRevision
+	}
 	entry, e := s.buildCatalogEntry(ctx, req)
 	if e != nil {
 		return nil, e
@@ -283,4 +291,75 @@ func (s *Store) AdminDeleteModel(ctx context.Context, a AdminActor, id, revision
 		}
 		return audit(tx, s.now().UnixMilli(), "CATALOG_IMPORTED", "", id)
 	})
+}
+
+// Pinning is a lock an owner puts on, so it is one an owner can take off. A
+// catalog that cannot be unlocked is the hardcoded list this table replaced.
+func (s *Store) AdminPinModel(ctx context.Context, a AdminActor, id, revision string, pinned bool) (map[string]any, error) {
+	if e := requireOwner(a); e != nil {
+		return nil, e
+	}
+	flag := 0
+	if pinned {
+		flag = 1
+	}
+	e := s.transaction(ctx, func(tx *sql.Tx) error {
+		result, e := tx.Exec("UPDATE model_catalog SET pinned=? WHERE id=? AND revision=?", flag, id, revision)
+		if e != nil {
+			return e
+		}
+		if rows, _ := result.RowsAffected(); rows == 0 {
+			return problem(404, "NOT_FOUND", "Модель не найдена в каталоге")
+		}
+		return audit(tx, s.now().UnixMilli(), "CATALOG_IMPORTED", "", id)
+	})
+	if e != nil {
+		return nil, e
+	}
+	return map[string]any{"id": id, "revision": revision, "pinned": pinned}, nil
+}
+
+// The files an operator could choose as weights, read from the repository so
+// nobody has to know what a path inside it looks like. Only LFS-backed files
+// appear: the rest carry no SHA-256 and would be refused anyway.
+func (s *Store) AdminRepositoryFiles(ctx context.Context, a AdminActor, repository, revision string) (map[string]any, error) {
+	if e := requireOwner(a); e != nil {
+		return nil, e
+	}
+	repository = strings.TrimSpace(repository)
+	revision = strings.TrimSpace(revision)
+	if revision == "" {
+		revision = defaultRevision
+	}
+	if !repositoryPattern.MatchString(repository) {
+		return nil, problem(400, "INVALID_CATALOG", "Укажите репозиторий в виде владелец/название")
+	}
+	if !revisionPattern.MatchString(revision) {
+		return nil, problem(400, "INVALID_CATALOG", "Укажите ревизию репозитория")
+	}
+	tree, e := s.huggingFaceTree(ctx, repository, revision)
+	if e != nil {
+		return nil, e
+	}
+	files := []map[string]any{}
+	for path, item := range tree {
+		if item.LFS == nil || !lfsObjectID.MatchString(item.LFS.OID) {
+			continue
+		}
+		files = append(files, map[string]any{"path": path, "bytes": item.LFS.Size})
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i]["path"].(string) < files[j]["path"].(string) })
+	if len(files) > 500 {
+		files = files[:500]
+	}
+	// A translation package is the fixed six-file layout, so the answer is
+	// whether this repository has it, not which file to pick.
+	complete := true
+	for _, path := range translationFiles {
+		if _, ok := tree[path]; !ok {
+			complete = false
+		}
+	}
+	return map[string]any{"repository": repository, "revision": revision,
+		"files": files, "translationReady": complete}, nil
 }

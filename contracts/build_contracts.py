@@ -339,8 +339,16 @@ def build():
                                "file": TEXT, "operations": arr(OP, 0, 3, True),
                                "note": {"type": "string", "maxLength": 1000},
                                "source": LANG, "target": LANG},
-                              ["id", "repository", "revision", "purpose"])
+                              ["id", "repository", "purpose"])
     d["CatalogModel"] = obj({"model": ref("ModelEntry")})
+    d["CatalogPin"] = obj({"pinned": {"type": "boolean"}})
+    d["CatalogPinned"] = obj({"id": TEXT, "revision": TEXT, "pinned": {"type": "boolean"}})
+    # The weights an operator may choose, so a path inside a repository never
+    # has to be typed from memory.
+    d["RepositoryFile"] = obj({"path": TEXT, "bytes": {"type": "integer", "minimum": 0}})
+    d["RepositoryFiles"] = obj({"repository": TEXT, "revision": TEXT,
+                                "files": arr(ref("RepositoryFile"), 0, 500),
+                                "translationReady": {"type": "boolean"}})
     d["ModelPlacement"] = obj({"deviceId": UUID, "deviceName": TEXT,
                                "modelId": TEXT, "revision": TEXT,
                                "state": {"enum": ["INSTALLED", "ACTIVE"]},
@@ -408,6 +416,14 @@ def build():
                                  **{str(code): {"description": "See normative protocol.md",
                                                 "content": {"application/json": {"schema": sref("Error")}}}
                                     for code in [401, 403, 404, 409]}}}}
+    paths["/api/v2/admin/models/{id}/{revision}/pin"] = {
+        "parameters": [{"name": name, "in": "path", "required": True, "schema": TEXT}
+                       for name in ["id", "revision"]],
+        "post": endpoint("pinModel", "CatalogPin", "CatalogPinned", [200, 400, 401, 403, 404], "AdminSession")}
+    paths["/api/v2/admin/model-files"] = {
+        "parameters": [{"name": "repository", "in": "query", "required": True, "schema": TEXT},
+                       {"name": "revision", "in": "query", "schema": TEXT}],
+        "get": endpoint("repositoryFiles", None, "RepositoryFiles", [200, 400, 401, 403, 404, 502], "AdminSession")}
     paths["/api/v2/admin/session"] = {"post": endpoint("login", "Login", "Session", [200, 401, 429], "AdminSession"),
                                       "get": endpoint("session", None, "Session", [200, 401], "AdminSession"),
                                       "delete": {"operationId": "logout", "security": [{"AdminSession": []}], "responses": {"204": {"description": "Session revoked"}}}}

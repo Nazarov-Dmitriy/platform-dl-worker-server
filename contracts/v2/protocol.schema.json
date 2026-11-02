@@ -3816,7 +3816,6 @@
       "required": [
         "id",
         "repository",
-        "revision",
         "purpose"
       ],
       "additionalProperties": false
@@ -3830,6 +3829,94 @@
       },
       "required": [
         "model"
+      ],
+      "additionalProperties": false
+    },
+    "CatalogPin": {
+      "type": "object",
+      "properties": {
+        "pinned": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pinned"
+      ],
+      "additionalProperties": false
+    },
+    "CatalogPinned": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "pinned": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "pinned"
+      ],
+      "additionalProperties": false
+    },
+    "RepositoryFile": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "path",
+        "bytes"
+      ],
+      "additionalProperties": false
+    },
+    "RepositoryFiles": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RepositoryFile"
+          },
+          "minItems": 0,
+          "maxItems": 500
+        },
+        "translationReady": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "repository",
+        "revision",
+        "files",
+        "translationReady"
       ],
       "additionalProperties": false
     },

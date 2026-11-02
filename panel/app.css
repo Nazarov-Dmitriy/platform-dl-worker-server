@@ -1009,6 +1009,7 @@ tr:last-child td {
 .model-heading { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .model-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .model-tag { font-size: 12px; border-radius: 6px; padding: 3px 8px; background: var(--soft); color: var(--muted); white-space: nowrap; }
-.model-notes { padding: 14px 22px 18px; border-top: 1px solid var(--border); display: grid; gap: 6px; }
+.hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .field-group { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 14px; display: flex; flex-wrap: wrap; gap: 18px; }
 .field-group legend { color: var(--muted); font-size: 12px; padding: 0 6px; }

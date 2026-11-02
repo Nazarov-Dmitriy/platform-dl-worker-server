@@ -167,3 +167,34 @@ func TestModelOperationsDescribeLegacyEntries(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// The pin protects a base entry from a careless click, not from the owner: an
+// unpinned entry is removable, which is what keeps the catalog editable.
+func TestPinnedCatalogEntryIsReleasedByOwner(t *testing.T) {
+	s, _, _ := openTest(t)
+	owner := AdminActor{ID: "owner", Role: "OWNER"}
+	const id, revision = "whisper-cpp-small", "ggml-small-hf-5359861"
+	wantError(t, s.AdminDeleteModel(testContext, owner, id, revision), "MODEL_PINNED")
+	if _, e := s.AdminPinModel(testContext, owner, id, revision, false); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.AdminDeleteModel(testContext, owner, id, revision); e != nil {
+		t.Fatal(e)
+	}
+	models, e := s.Models(testContext)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, m := range models {
+		if m.ID == id {
+			t.Fatal("unpinned entry survived removal")
+		}
+	}
+	if _, e = s.AdminPinModel(testContext, owner, id, revision, true); e == nil {
+		t.Fatal("pinned an entry that no longer exists")
+	}
+	operator := AdminActor{ID: "operator", Role: "OPERATOR"}
+	if _, e = s.AdminPinModel(testContext, operator, "whisper-cpp-base", "ggml-base-hf-5359861", false); e == nil {
+		t.Fatal("operator released a pin")
+	}
+}

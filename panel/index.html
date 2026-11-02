@@ -432,8 +432,17 @@
               <div class="card-heading"><h2>Добавить модель</h2></div>
               <div class="card-body">
                 <p class="muted">
-                  Модели берутся с huggingface.co. Размер и контрольная сумма
-                  считываются из репозитория, вводить их не нужно.
+                  Модели берутся с
+                  <a
+                    href="https://huggingface.co/models"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    >huggingface.co/models</a
+                  >. Найдите модель там и скопируйте имя репозитория из адресной
+                  строки — например
+                  <code>huggingface.co/ggerganov/whisper.cpp</code> даёт
+                  <code>ggerganov/whisper.cpp</code>. Размер и контрольная сумма
+                  считываются сами, вводить их не нужно.
                 </p>
                 <form id="catalogForm" class="stacked-form">
                   <div class="form-grid">
@@ -450,11 +459,13 @@
                         required
                         placeholder="ggerganov/whisper.cpp" /></label
                     ><label class="field"
-                      >Ревизия<input
+                      >Версия репозитория<input
                         name="revision"
                         type="text"
-                        required
-                        placeholder="коммит или ветка" /></label
+                        placeholder="main — последняя" /><span class="hint"
+                        >Оставьте пустым, если не нужна конкретная
+                        версия.</span
+                      ></label
                     ><label class="field"
                       >Что делает<select name="purpose" id="catalogPurpose">
                         <option value="RECOGNITION">Распознавание речи</option>
@@ -464,11 +475,15 @@
                   </div>
                   <div class="form-grid" id="catalogFileField">
                     <label class="field"
-                      >Файл весов в репозитории<input
-                        name="file"
-                        type="text"
-                        placeholder="ggml-large-v3-turbo.bin"
-                    /></label>
+                      >Файл модели<select name="file" id="catalogFile">
+                        <option value="">
+                          Нажмите «Показать файлы репозитория»
+                        </option></select
+                      ><span class="hint"
+                        >Какой из файлов репозитория скачивать на
+                        устройство.</span
+                      ></label
+                    >
                   </div>
                   <div class="form-grid" id="catalogPairFields" hidden>
                     <label class="field"
@@ -506,6 +521,9 @@
                       placeholder="зачем эта модель нужна"
                   /></label>
                   <div class="actions">
+                    <button type="button" class="button" id="catalogFiles">
+                      Показать файлы репозитория
+                    </button>
                     <button type="submit" class="button primary">
                       Добавить в каталог
                     </button>
