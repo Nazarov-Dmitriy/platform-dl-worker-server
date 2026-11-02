@@ -317,7 +317,9 @@ def build():
     d["AdminDeviceView"] = obj({**d["AdminDevice"]["properties"], **d["AdminRecord"]["properties"],
                                 "tokenSet": {"type": "boolean"},
                                 "online": {"type": "boolean"}, "lastSeenAt": {"type": ["string", "null"], "format": "date-time"},
-                                "usage": ref("Usage"), "capabilities": arr(ref("OperationCapability"), 0, 3)},
+                                "usage": ref("Usage"), "capabilities": arr(ref("OperationCapability"), 0, 3),
+                                "os": {"enum": ["windows", "darwin", "linux"]},
+                                "architecture": {"enum": ["amd64", "arm64"]}},
                                ["id", "name", "enabled", "revision", "tokenSet", "online", "lastSeenAt"])
     d["AdminAccountView"] = obj({**d["AdminRecord"]["properties"], "login": TEXT,
                                  "enabled": {"type": "boolean"},
@@ -327,8 +329,14 @@ def build():
                                     "nextCursor": {"type": ["string", "null"]}})
     d["AdminRecordPage"] = obj({"items": arr(ref("AdminRecord"), 0, 100),
                                "nextCursor": {"type": ["string", "null"]}})
+    d["ModelPlacement"] = obj({"deviceId": UUID, "deviceName": TEXT,
+                               "modelId": TEXT, "revision": TEXT,
+                               "state": {"enum": ["INSTALLED", "ACTIVE"]},
+                               "online": {"type": "boolean"}})
     d["ModelPage"] = obj({"models": arr(ref("ModelEntry"), 0, 100),
                          "nextCursor": {"type": ["string", "null"]}})
+    # Optional: absent on the per-device listing, present on the fleet catalog.
+    d["ModelPage"]["properties"]["placements"] = arr(ref("ModelPlacement"), 0, 10000)
     schema = {"$schema": "https://json-schema.org/draft/2020-12/schema",
               "$id": "https://worker.invalid/contracts/2.0/protocol.schema.json",
               "title": "Media worker protocol 2.0 (design contract)", "$defs": d}

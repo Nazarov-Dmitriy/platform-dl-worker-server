@@ -259,6 +259,17 @@ type ModelEntry struct {
 	License               string      `json:"license"`
 	DescriptionSource     string      `json:"descriptionSource"`
 }
+// Where a catalog model actually sits: one row per device that reported a
+// successful install or activation.
+type ModelPlacement struct {
+	DeviceID   string `json:"deviceId"`
+	DeviceName string `json:"deviceName"`
+	ModelID    string `json:"modelId"`
+	Revision   string `json:"revision"`
+	State      string `json:"state"`
+	Online     bool   `json:"online"`
+}
+
 type CommandView struct {
 	RequestID string    `json:"requestId"`
 	Status    string    `json:"status"`

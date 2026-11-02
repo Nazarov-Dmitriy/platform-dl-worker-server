@@ -4,6 +4,11 @@ const state = {
   manageSites: false,
   devices: [],
   sites: [],
+  models: [],
+  placements: [],
+  // Rows the operator expanded; a reload must not collapse them.
+  openModels: new Set(),
+  modelActionKey: "",
 };
 const views = {
   overview: ["Обзор", "Состояние обработки и подключённых устройств"],
@@ -157,6 +162,8 @@ async function reload() {
   ]);
   state.sites = sites.items;
   state.devices = devices.items;
+  state.models = models.models;
+  state.placements = models.placements || [];
   options("jobSite", state.sites, (s) => s.name, "Нет доступных сайтов");
   options("overviewSite", state.sites, (s) => s.name, "Нет доступных сайтов");
   $("overviewSite").value = $("jobSite").value;
@@ -170,7 +177,7 @@ async function reload() {
   $("stat-online").textContent = state.devices.filter((d) => d.online).length;
   renderDevices("overviewDevices", state.devices);
   renderDevices("deviceList", state.devices);
-  renderModels("catalog", models.models);
+  renderModels("catalog", state.models, state.placements, state.devices);
   if (state.sites.length)
     table(
       "sites",
@@ -261,10 +268,7 @@ async function loadDevice() {
     ["Подключение", d.online ? "В сети" : "Не в сети"],
     ["Последняя связь", date(d.lastSeenAt)],
   ]);
-  const [settings, models] = await Promise.all([
-    api("/api/v2/admin/devices/" + id + "/settings"),
-    api("/api/v2/admin/devices/" + id + "/models"),
-  ]);
+  const settings = await api("/api/v2/admin/devices/" + id + "/settings");
   if (version !== deviceVersion) return;
   details("settings", [
     [
@@ -292,7 +296,6 @@ async function loadDevice() {
         else input.value = value;
       }
     });
-  renderModels("compat", models.models);
 }
 on("reloadAll", "click", reload);
 on("reloadJobs", "click", loadJobs);
@@ -467,27 +470,47 @@ async function sendCommand(body) {
     "Команда отправлена устройству. Применение зависит от его подключения.",
   );
 }
-for (const [id, type] of [
-  ["installModel", "MODEL_INSTALL"],
-  ["activateModel", "MODEL_ACTIVATE"],
-  ["deleteModel", "MODEL_DELETE"],
-])
-  on(id, "click", async () => {
-    if (!$("modelId").value.trim() || !$("modelRev").value.trim()) {
-      message("commandOut", "Укажите идентификатор и версию модели.");
-      return;
-    }
-    if (
-      type === "MODEL_DELETE" &&
-      !confirm("Удалить выбранную модель с устройства?")
-    )
-      return;
-    await sendCommand({
-      type,
-      modelId: $("modelId").value.trim(),
-      modelRevision: $("modelRev").value.trim(),
+const modelActions = {
+  MODEL_INSTALL: "Установка запущена",
+  MODEL_ACTIVATE: "Активация запрошена",
+  MODEL_DELETE: "Удаление запрошено",
+};
+// Commands are addressed to one device; the catalog page is only where the
+// operator picks the pair. Progress is reported by the device itself.
+async function sendModelCommand(model, device, type, confirmText) {
+  if (state.modelActionKey) return;
+  if (confirmText && !confirm(confirmText)) return;
+  state.modelActionKey = model.id + "@" + model.revision + "/" + device.id;
+  renderModels("catalog", state.models, state.placements, state.devices);
+  $("globalError").hidden = true;
+  try {
+    await api("/api/v2/admin/devices/" + device.id + "/commands", {
+      method: "POST",
+      mutate: true,
+      body: JSON.stringify({
+        requestId: crypto.randomUUID(),
+        type,
+        modelId: model.id,
+        modelRevision: model.revision,
+      }),
     });
-  });
+    message(
+      "modelOut",
+      modelActions[type] +
+        ": «" +
+        model.id +
+        "» на устройстве «" +
+        device.name +
+        "». Применение зависит от его подключения.",
+    );
+  } catch (error) {
+    message("modelOut", "");
+    report(error);
+  } finally {
+    state.modelActionKey = "";
+  }
+  await reload();
+}
 on("configureForm", "submit", async (e) => {
   const fd = new FormData(e.target),
     settings = {

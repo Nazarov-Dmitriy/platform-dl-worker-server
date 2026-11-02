@@ -3577,6 +3577,19 @@
           },
           "minItems": 0,
           "maxItems": 3
+        },
+        "os": {
+          "enum": [
+            "windows",
+            "darwin",
+            "linux"
+          ]
+        },
+        "architecture": {
+          "enum": [
+            "amd64",
+            "arm64"
+          ]
         }
       },
       "required": [
@@ -3725,6 +3738,48 @@
       ],
       "additionalProperties": false
     },
+    "ModelPlacement": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "deviceName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "state": {
+          "enum": [
+            "INSTALLED",
+            "ACTIVE"
+          ]
+        },
+        "online": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "deviceId",
+        "deviceName",
+        "modelId",
+        "revision",
+        "state",
+        "online"
+      ],
+      "additionalProperties": false
+    },
     "ModelPage": {
       "type": "object",
       "properties": {
@@ -3741,6 +3796,14 @@
             "string",
             "null"
           ]
+        },
+        "placements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelPlacement"
+          },
+          "minItems": 0,
+          "maxItems": 10000
         }
       },
       "required": [

@@ -1006,3 +1006,15 @@ tr:last-child td {
 .error-details p { margin-top: 10px; line-height: 1.6; }
 .error-details code { display: block; margin-top: 10px; overflow-wrap: anywhere; }
 .audit-job { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.model-block { border-bottom: 1px solid var(--border); }
+.model-block:last-child { border-bottom: 0; }
+.model-summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 22px; cursor: pointer; }
+.model-summary::-webkit-details-marker { display: none; }
+.model-summary:hover { background: var(--soft); }
+.model-heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.model-body { padding: 4px 22px 18px; border-top: 1px solid var(--border); }
+.model-body > a { display: inline-block; margin: 14px 0 4px; color: var(--accent); font-size: 13px; }
+.model-device { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.model-device:last-child { border-bottom: 0; }
+.model-device-name { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.model-device .actions { margin-top: 0; }

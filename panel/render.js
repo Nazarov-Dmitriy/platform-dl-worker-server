@@ -167,22 +167,185 @@ function deviceManageButton(device) {
   button.addEventListener("click", () => selectDevice(device.id));
   return button;
 }
-function renderModels(target, models) {
+const purposes = {
+  RECOGNITION: "Распознавание речи",
+  TRANSLATION: "Перевод",
+};
+function byteSize(bytes) {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0)
+    return "—";
+  const gb = bytes / 1024 ** 3;
+  return gb >= 1
+    ? gb.toFixed(1).replace(".", ",") + " ГБ"
+    : Math.round(bytes / 1024 ** 2) + " МБ";
+}
+// Every catalog entry is a file on huggingface.co; the repository page is the
+// model card, which is what an operator needs in order to read about it.
+function modelCard(model) {
+  const source = model.downloadUrl || model.files?.[0]?.url;
+  if (!source) return null;
+  try {
+    const parts = new URL(source).pathname.split("/").filter(Boolean);
+    const cut = parts.indexOf("resolve");
+    const repo = (cut > 0 ? parts.slice(0, cut) : parts.slice(0, 2)).join("/");
+    return repo ? new URL("/" + repo, source).href : null;
+  } catch {
+    return null;
+  }
+}
+// What the model asks of a device, in the operator's terms rather than the
+// raw catalog fields.
+function modelNeeds(model) {
+  const parts = [byteSize(model.downloadBytes)];
+  if (model.minimumRamBytes)
+    parts.push("ОЗУ от " + byteSize(model.minimumRamBytes));
+  if (model.purpose === "RECOGNITION" && model.recognitionLanguages?.length)
+    parts.push(model.recognitionLanguages.length + " языков");
+  // A pairwise model lists its few directions; a multilingual one holds
+  // thousands, so it gets a count instead.
+  const directions = model.translationDirections || [];
+  if (model.purpose === "TRANSLATION" && directions.length)
+    parts.push(
+      directions.length <= 4
+        ? directions.map((d) => d.source + " → " + d.target).join(", ")
+        : directions.length + " направлений перевода",
+    );
+  return parts.join(" · ");
+}
+const placementStates = {
+  ACTIVE: ["Активна", "good"],
+  INSTALLED: ["Установлена", "info"],
+};
+function modelActionButton(label, tone, model, device, type, confirmText) {
+  const button = node("button", label, "button " + tone);
+  button.type = "button";
+  button.disabled = !!state.modelActionKey;
+  button.addEventListener("click", () =>
+    sendModelCommand(model, device, type, confirmText),
+  );
+  return button;
+}
+function modelDeviceRow(model, device, placement) {
+  const row = node("div", null, "model-device");
+  const title = node("div", null, "model-device-name");
+  title.append(
+    node("span", device.name),
+    node(
+      "span",
+      device.online ? "в сети" : "не в сети",
+      "cell-meta" + (device.online ? "" : " muted"),
+    ),
+  );
+  const status = placement
+    ? badge(...placementStates[placement.state])
+    : node("span", "Не установлена", "muted");
+  const actions = node("div", null, "actions");
+  if (!placement)
+    actions.append(
+      modelActionButton("Установить", "", model, device, "MODEL_INSTALL"),
+    );
+  else {
+    if (placement.state !== "ACTIVE")
+      actions.append(
+        modelActionButton("Активировать", "", model, device, "MODEL_ACTIVATE"),
+      );
+    actions.append(
+      modelActionButton(
+        "Удалить",
+        "danger",
+        model,
+        device,
+        "MODEL_DELETE",
+        "Удалить модель «" + model.id + "» с устройства «" + device.name + "»?",
+      ),
+    );
+  }
+  row.append(title, status, actions);
+  return row;
+}
+// A device that has never connected reports no platform; it stays listed
+// rather than being hidden on a guess.
+function modelRuns(model, device) {
+  if (device.os && model.os?.length && !model.os.includes(device.os))
+    return false;
+  return !(
+    device.architecture &&
+    model.architectures?.length &&
+    !model.architectures.includes(device.architecture)
+  );
+}
+function modelBlock(model, allPlacements, allDevices) {
+  const devices = allDevices.filter((d) => modelRuns(model, d));
+  const mine = allPlacements.filter(
+    (p) => p.modelId === model.id && p.revision === model.revision,
+  );
+  const block = node("details", null, "model-block");
+  if (state.openModels.has(model.id + "@" + model.revision)) block.open = true;
+  block.addEventListener("toggle", () => {
+    const key = model.id + "@" + model.revision;
+    if (block.open) state.openModels.add(key);
+    else state.openModels.delete(key);
+  });
+  const summary = node("summary", null, "model-summary");
+  const heading = node("div", null, "model-heading");
+  heading.append(
+    titleCell(model.id, model.revision, "box"),
+    node("span", purposes[model.purpose] || model.purpose, "cell-meta"),
+    node("span", modelNeeds(model), "cell-meta"),
+  );
+  const active = mine.filter((p) => p.state === "ACTIVE").length;
+  summary.append(
+    heading,
+    mine.length
+      ? badge(
+          active
+            ? "Активна на " + active + " из " + devices.length
+            : "Установлена на " + mine.length + " из " + devices.length,
+          active ? "good" : "info",
+        )
+      : node("span", "Ни на одном устройстве", "muted"),
+  );
+  const body = node("div", null, "model-body");
+  const card = modelCard(model);
+  if (card) {
+    const link = node("a", "Открыть карточку модели на huggingface.co");
+    link.href = card;
+    link.target = "_blank";
+    link.rel = "noreferrer noopener";
+    body.append(link);
+  }
+  if (!devices.length)
+    body.append(
+      node(
+        "p",
+        allDevices.length
+          ? "Ни одно устройство не подходит этой модели по системе или архитектуре."
+          : "Подключите устройство, чтобы устанавливать модели.",
+        "muted",
+      ),
+    );
+  devices.forEach((d) =>
+    body.append(
+      modelDeviceRow(
+        model,
+        d,
+        mine.find((p) => p.deviceId === d.id),
+      ),
+    ),
+  );
+  block.append(summary, body);
+  return block;
+}
+function renderModels(target, models, placements, devices) {
   if (!models.length)
     return empty(
       target,
       "Нет доступных моделей",
       "Каталог появится после настройки моделей на диспетчере.",
     );
-  table(
-    target,
-    ["Модель", "Версия", "Назначение"],
-    models.map((m) => [
-      titleCell(m.id, null, "box"),
-      m.revision,
-      operations[m.purpose] || m.purpose,
-    ]),
-  );
+  const list = node("div", null, "model-list");
+  models.forEach((m) => list.append(modelBlock(m, placements, devices)));
+  $(target).replaceChildren(list);
 }
 function details(target, pairs) {
   const list = node("div", null, "detail-list");

@@ -361,40 +361,6 @@
                 </div>
               </div>
               <div class="card">
-                <div class="card-heading"><h2>Модели устройства</h2></div>
-                <div class="card-body">
-                  <div id="compat"></div>
-                  <div class="form-grid">
-                    <label class="field"
-                      >Идентификатор модели<input
-                        name="modelId"
-                        type="text"
-                        id="modelId"
-                        placeholder="modelId" /></label
-                    ><label class="field"
-                      >Версия модели<input
-                        name="modelRev"
-                        type="text"
-                        id="modelRev"
-                        placeholder="revision"
-                    /></label>
-                  </div>
-                  <div class="actions">
-                    <button type="button" class="button" id="installModel">
-                      Установить</button
-                    ><button type="button" class="button" id="activateModel">
-                      Активировать</button
-                    ><button
-                      type="button"
-                      class="button danger"
-                      id="deleteModel"
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div class="card">
                 <div class="card-heading">
                   <h2 id="deviceSettingsTitle">Настройки устройства</h2>
                 </div>
@@ -462,6 +428,7 @@
               <div class="card-heading"><h2>Каталог моделей</h2></div>
               <div id="catalog"></div>
             </div>
+            <p id="modelOut" class="notice-box" role="status" hidden></p>
           </section>
           <section data-panel="accounts" hidden>
             <div class="card">

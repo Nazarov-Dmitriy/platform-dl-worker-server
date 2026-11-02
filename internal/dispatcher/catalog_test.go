@@ -121,3 +121,82 @@ func TestCatalogImportAndDeviceCommandQueue(t *testing.T) {
 		wantError(t, e, "NOT_FOUND")
 	}
 }
+
+func TestAdminModelsReportsPlacements(t *testing.T) {
+	s, _, _ := openTest(t)
+	p, session := testDevice(t, s)
+	entry := ModelEntry{
+		ID: "catalog-test-placed", Revision: "test-1", Executor: "catalog-test",
+		Purpose: "RECOGNITION", OS: []string{"windows", "darwin", "linux"},
+		Architectures: []string{"amd64", "arm64"}, Accelerators: []string{"cpu"},
+		RecognitionLanguages: []string{"en"}, TranslationDirections: []Pair{},
+		DownloadBytes: 12, MinimumRAMBytes: 1, MinimumVRAMBytes: 0,
+		SHA256:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		DownloadURL: "http://127.0.0.1:9/speech.json", License: "MIT",
+		DescriptionSource: "http://127.0.0.1:9/speech.json",
+	}
+	if e := s.ImportCatalog(testContext, encode([]ModelEntry{entry})); e != nil {
+		t.Fatal(e)
+	}
+	// Nothing is installed yet, so the fleet catalog carries an empty list
+	// rather than omitting the field.
+	page, e := s.AdminModels(testContext, "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	placed, ok := page["placements"].([]ModelPlacement)
+	if !ok || len(placed) != 0 {
+		t.Fatalf("placements before install: %#v", page["placements"])
+	}
+	// A per-device listing stays a compatibility filter and omits the field.
+	if one, e := s.AdminModels(testContext, p.ID); e != nil {
+		t.Fatal(e)
+	} else if _, present := one["placements"]; present {
+		t.Fatal("per-device listing must not carry placements")
+	}
+	run := func(kind string) {
+		t.Helper()
+		cmd := AdminCommand{RequestID: UUID(), Type: kind, ModelID: entry.ID, ModelRevision: entry.Revision}
+		if _, e := s.EnqueueCommand(testContext, p.ID, encode(cmd)); e != nil {
+			t.Fatal(e)
+		}
+		pending, e := s.PendingCommands(testContext, p, session)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = s.MarkCommandsNotified(testContext, p, session, pending); e != nil {
+			t.Fatal(e)
+		}
+		if e = s.CommandResult(testContext, p, session, cmd.RequestID, "SUCCEEDED", nil, nil); e != nil {
+			t.Fatal(e)
+		}
+	}
+	run("MODEL_INSTALL")
+	page, e = s.AdminModels(testContext, "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	placed = page["placements"].([]ModelPlacement)
+	if len(placed) != 1 || placed[0].State != "INSTALLED" ||
+		placed[0].DeviceID != p.ID || placed[0].ModelID != entry.ID ||
+		placed[0].Revision != entry.Revision {
+		t.Fatalf("after install: %#v", placed)
+	}
+	run("MODEL_ACTIVATE")
+	page, e = s.AdminModels(testContext, "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	placed = page["placements"].([]ModelPlacement)
+	if len(placed) != 1 || placed[0].State != "ACTIVE" {
+		t.Fatalf("after activate: %#v", placed)
+	}
+	run("MODEL_DELETE")
+	page, e = s.AdminModels(testContext, "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if placed = page["placements"].([]ModelPlacement); len(placed) != 0 {
+		t.Fatalf("after delete: %#v", placed)
+	}
+}

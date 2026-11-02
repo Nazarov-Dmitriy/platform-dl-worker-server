@@ -415,6 +415,17 @@ func (s *Store) deviceView(ctx context.Context, id string) (map[string]any, erro
 		lastSeen = stamp(time.UnixMilli(last))
 	}
 	view := map[string]any{"id": id, "name": name, "enabled": enabled == 1, "revision": rev, "priority": priority, "tokenSet": set, "online": online, "lastSeenAt": lastSeen}
+	// Reported on first connection; the catalog page needs it to hide models
+	// the device cannot run.
+	var identityOS, identityArch string
+	if s.db.QueryRowContext(ctx, "SELECT os,architecture FROM device_identity WHERE device_id=?", id).Scan(&identityOS, &identityArch) == nil {
+		if identityOS != "" {
+			view["os"] = identityOS
+		}
+		if identityArch != "" {
+			view["architecture"] = identityArch
+		}
+	}
 	var caps []Capability
 	if json.Unmarshal([]byte(capsRaw), &caps) == nil && len(caps) > 0 {
 		view["capabilities"] = caps
@@ -641,7 +652,41 @@ func (s *Store) AdminModels(ctx context.Context, device string) (map[string]any,
 	if len(models) > 100 {
 		models = models[:100]
 	}
-	return map[string]any{"models": models, "nextCursor": nil}, nil
+	page := map[string]any{"models": models, "nextCursor": nil}
+	// The fleet catalog carries placements; a per-device listing stays a plain
+	// compatibility filter and leaves the field out.
+	if device == "" {
+		placements, e := s.placements(ctx)
+		if e != nil {
+			return nil, e
+		}
+		page["placements"] = placements
+	}
+	return page, nil
+}
+
+// Reports what device_models records: the outcome of commands the dispatcher
+// saw succeed, not a live check of the files on disk.
+func (s *Store) placements(ctx context.Context) ([]ModelPlacement, error) {
+	rows, e := s.db.QueryContext(ctx, `SELECT dm.device_id,d.name,dm.model_id,dm.revision,dm.state,d.last_seen,d.session_id
+ FROM device_models dm JOIN devices d ON d.id=dm.device_id
+ WHERE d.deleted=0 ORDER BY d.name,dm.model_id,dm.revision`)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []ModelPlacement{}
+	for rows.Next() {
+		var p ModelPlacement
+		var last int64
+		var session string
+		if e = rows.Scan(&p.DeviceID, &p.DeviceName, &p.ModelID, &p.Revision, &p.State, &last, &session); e != nil {
+			return nil, e
+		}
+		p.Online = session != "" && last > 0 && s.now().UnixMilli()-last <= s.config.OnlineTTL.Milliseconds()
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) AdminJobs(ctx context.Context, site string, after int64, limit int) (map[string]any, error) {
