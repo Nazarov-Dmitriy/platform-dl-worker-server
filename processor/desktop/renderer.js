@@ -5,7 +5,9 @@ let current = { phase: "stopped", running: 0, connected: false, paused: false },
   caPath = "",
   busy = false;
 let autostart = { supported: false, enabled: false, configured: false };
+let launch = { autoConnect: false, ciAutoStart: true };
 let pendingAutostart;
+let pendingLaunch = {};
 let configured = false;
 let savedReadiness = {};
 let whisperBuild = undefined;
@@ -134,6 +136,38 @@ function drawAutostart(value) {
             ? "Включено. После входа в Windows обработчик подключится сам. Папку приложения не перемещайте."
             : "Выключено. Приложение запускается вручную.";
 }
+function drawLaunch(value) {
+  if (value) launch = value;
+  for (const key of ["autoConnect", "ciAutoStart"]) {
+    $(key).checked = pendingLaunch[key] ?? launch[key];
+    $(key).disabled = busy;
+  }
+  $("autoConnect").disabled = busy || !autostart.configured;
+  $("autoConnectHint").textContent = pendingLaunch.autoConnect !== undefined
+    ? "Сохраняем настройку…"
+    : !autostart.configured
+      ? "Сначала сохраните подключение."
+      : launch.autoConnect
+        ? "Включено. Worker подключается к серверу сразу после открытия."
+        : "Выключено. Подключение запускается кнопкой «Подключиться».";
+  $("ciAutoStartHint").textContent = pendingLaunch.ciAutoStart !== undefined
+    ? "Сохраняем настройку…"
+    : launch.ciAutoStart
+      ? "Включено. Runner разрешённых репозиториев стартует вместе с Worker."
+      : "Выключено. Сборки запускаются вручную на вкладке «Сборки GitHub».";
+}
+function changeLaunch(key) {
+  pendingLaunch[key] = $(key).checked;
+  void action(async () => {
+    try {
+      drawLaunch((await window.processor.launch({ [key]: pendingLaunch[key] })).launch);
+    } finally {
+      delete pendingLaunch[key];
+    }
+  });
+}
+$("autoConnect").onchange = () => changeLaunch("autoConnect");
+$("ciAutoStart").onchange = () => changeLaunch("ciAutoStart");
 $("autostart").onchange = () => {
   const enabled = $("autostart").checked;
   pendingAutostart = enabled;
@@ -194,6 +228,7 @@ function draw(status) {
   current = status;
   drawJobs(status.jobs);
   drawAutostart(status.autostart);
+  drawLaunch(status.launch);
   const active = !["stopped", "error"].includes(status.phase);
   $("connection").textContent = status.paused
     ? "На паузе"
@@ -316,6 +351,7 @@ window.processor
   .state()
   .then(({ settings, status }) => {
     configured = !!settings.tokenSet;
+    if (settings.launch) launch = settings.launch;
     fillProcessing(settings);
     for (const name of ["server", "deviceId"])
       if (settings[name] != null) form.elements[name].value = settings[name];
@@ -424,7 +460,30 @@ function ciCollect() {
 function ciReadinessNotice(root, value) {
   root.querySelector(".ci-entry-notice").textContent = value.registered ? "Окружение готово, runner зарегистрирован." : value.installed ? "Runner установлен. Введите токен и зарегистрируйте." : "Окружение готово. Можно установить runner.";
 }
+// A status push can be missed while the page is still loading: pull the live state as well,
+// otherwise running builds keep showing as stopped.
+async function ciSync() {
+  if (ciBusy) return;
+  const { repos } = await window.processor.ciState();
+  if (ciBusy) return;
+  const known = new Set(ciRepos.map(repo => repo.id));
+  if (repos.some(repo => !known.has(repo.id))) {
+    ciRepos = repos;
+    renderCiList();
+    return;
+  }
+  for (const repo of repos) {
+    const local = ciRepos.find(item => item.id === repo.id);
+    if (!local) continue;
+    local.status = repo.status;
+    local.enabled = repo.enabled;
+    const root = ciRootFor(repo.id);
+    if (root) ciEntryDraw(root, repo.status);
+  }
+  ciDrawDashboard();
+}
 $("ciTab").onclick = () => {
+  void ciSync().catch(() => {});
   form.hidden = true;
   processingForm.hidden = true;
   $("startupCard").hidden = true;
@@ -488,3 +547,4 @@ window.processor.onCiStatus(payload => {
   ciDrawDashboard();
 });
 window.processor.ciState().then(({ repos }) => { ciRepos = repos; $("ciEnabled").checked = repos.some(repo => repo.enabled !== false); renderCiList(); }).catch(error => { ciNotice.textContent = error.message; });
+setInterval(() => void ciSync().catch(() => {}), 5000);

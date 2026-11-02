@@ -63,6 +63,19 @@ function validateCiRepos(input) {
     return { ...entry, id };
   });
 }
+const launchDefaults = { autoConnect: false, ciAutoStart: true };
+let launch = { ...launchDefaults };
+function validateLaunch(input) {
+  if (!input || typeof input !== "object") throw Error("Некорректные настройки запуска.");
+  const result = {};
+  for (const key of Object.keys(launchDefaults)) {
+    const value = input[key] ?? launchDefaults[key];
+    if (typeof value !== "boolean")
+      throw Error("Настройки запуска принимают только «включено» или «выключено».");
+    result[key] = value;
+  }
+  return result;
+}
 app.setName("Worker Processor");
 if (process.platform === "win32")
   app.setAppUserModelId("ru.difat.workerprocessor");
@@ -146,7 +159,7 @@ function setDesktopAutostart(enabled) {
   return autostartState();
 }
 function publicSettings() {
-  return { ...validateProcessing(saved), ...saved, cpuCount: availableParallelism(), tokenSet: existsSync(join(directory, "credential.bin")) };
+  return { ...validateProcessing(saved), ...saved, launch, cpuCount: availableParallelism(), tokenSet: existsSync(join(directory, "credential.bin")) };
 }
 function currentWhisperCpp() {
   if (saved.whisperCpp) return saved.whisperCpp;
@@ -470,6 +483,7 @@ else {
         );
       } catch {}
     }
+    try { launch = validateLaunch(saved.launch || {}); } catch { launch = { ...launchDefaults }; }
     // Migrate previous releases once so the visible preferences match the runtime config.
     const processingConfig = join(directory, "config.json");
     if (existsSync(processingConfig)) {
@@ -505,6 +519,7 @@ else {
       },
     });
     snapshot.autostart = autostartState();
+    snapshot.launch = launch;
     window.on("focus", () => emit({ autostart: autostartState() }));
     window.removeMenu();
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -581,6 +596,13 @@ else {
       return ciRunnerFor(id).start(entry);
     });
     handle("processor:ci-stop", id => ciRunnerFor(id).stop());
+    handle("processor:launch", (input) => {
+      launch = validateLaunch({ ...launch, ...input });
+      saved = { ...saved, launch };
+      atomic("settings.json", JSON.stringify(saved, null, 2));
+      emit({ launch });
+      return publicSettings();
+    });
     handle("processor:autostart", setDesktopAutostart);
     handle("processor:readiness", (capability) => checkReadiness(capability));
     handle("processor:install", async (capability) => {
@@ -636,6 +658,7 @@ else {
         workDir: settings.workDir,
         ...validateProcessing({ ...saved, ...input }),
         fingerprint: settings.fingerprint,
+        launch,
       };
       atomic(
         "config.json",
@@ -705,14 +728,17 @@ else {
       return true;
     });
     window.loadFile(html).then(async () => {
-      if (!process.argv.includes("--smoke")) {
+      if (process.argv.includes("--smoke")) return;
+      if (launch.ciAutoStart) {
         for (const entry of ciRepos) {
+          if (entry.enabled === false) continue;
           const runner = ciRunnerFor(entry.id);
           try { await runner.start(entry); }
-          catch (error) { runner.update({ phase: "stopped", connected: false, busy: false, message: error.message }); }
+          // An error here is the usual reason builds stay stopped: show it instead of a silent "stopped".
+          catch (error) { runner.update({ phase: "error", connected: false, busy: false, message: error.message }); }
         }
       }
-      if (!backgroundLaunch) return;
+      if (!backgroundLaunch && !(launch.autoConnect && autostartState().configured)) return;
       try {
         await start();
       } catch (error) {

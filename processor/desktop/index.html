@@ -71,7 +71,7 @@
         <div class="actions">
           <button id="ciAdd" type="button">Добавить репозиторий</button>
         </div>
-        <label class="startup-toggle ci-launch"><input id="ciEnabled" type="checkbox" checked><span>Принимать сборки при запуске Worker</span></label>
+        <label class="startup-toggle ci-launch"><input id="ciEnabled" type="checkbox" checked><span>Разрешить приём сборок для этих репозиториев</span></label>
         <div id="ciList"></div>
         <p id="ciNotice" class="hint" role="status"></p>
         <details class="ci-help">
@@ -230,6 +230,24 @@
           ></label
         >
         <p id="autostartHint" class="hint">Сначала сохраните подключение.</p>
+        <label class="startup-toggle"
+          ><input id="autoConnect" type="checkbox" /><span
+            ><strong>Подключаться к серверу автоматически</strong
+            ><small
+              >При каждом открытии Worker подключение к сайту поднимается само.</small
+            ></span
+          ></label
+        >
+        <p id="autoConnectHint" class="hint"></p>
+        <label class="startup-toggle"
+          ><input id="ciAutoStart" type="checkbox" /><span
+            ><strong>Включать сборки GitHub автоматически</strong
+            ><small
+              >Запускать runner включённых репозиториев при старте Worker.</small
+            ></span
+          ></label
+        >
+        <p id="ciAutoStartHint" class="hint"></p>
       </section>
       </section>
       <footer class="actions window-actions">

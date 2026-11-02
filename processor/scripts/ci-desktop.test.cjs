@@ -69,8 +69,16 @@ async function main() {
     await page.locator("#processingTab").click();
     assert.equal(await page.locator("#ciSettings").isVisible(), false);
     assert.equal(await page.locator("#processingSettings").isVisible(), true);
+    await page.locator("#connectionTab").click();
+    await page.locator("#startupCard").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#autoConnect").isDisabled(), true, "Автоподключение недоступно без сохранённого подключения");
+    assert.equal(await page.locator("#ciAutoStart").isChecked(), true);
+    await page.locator("#ciAutoStart").uncheck();
+    await page.waitForFunction(() => document.getElementById('ciAutoStartHint').textContent.includes('вручную'));
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(profile, "settings.json"), "utf8")).launch,
+      { autoConnect: false, ciAutoStart: false });
     assert.deepEqual(errors, []);
-    console.log("Worker CI desktop: IPC, list, add, validation, registration, token clearing, persistence, start/stop and 1160/620px PASS");
+    console.log("Worker CI desktop: IPC, list, add, validation, registration, token clearing, persistence, start/stop, launch toggles and 1160/620px PASS");
   } finally { await app.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
