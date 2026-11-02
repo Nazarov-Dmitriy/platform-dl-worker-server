@@ -22,7 +22,7 @@
     <main>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="dashboard">
-        <div class="screen-heading"><h1>Обработка заданий</h1><button id="openSettings" type="button">Настройки</button></div>
+        <div class="screen-heading"><h1>Обработка заданий</h1><div class="heading-actions"><button id="openModels" type="button">Модели</button><button id="openSettings" type="button">Настройки</button></div></div>
         <div class="status-row">
           <span class="status-chip"><span id="chipSite" class="ci-dot" data-phase="stopped"></span>Подключение</span>
           <span class="status-chip"><span id="chipCi" class="ci-dot" data-phase="stopped"></span>Сборки GitHub</span>
@@ -48,6 +48,7 @@
           </table></div>
           <p id="jobsEmpty" class="hint">Активных заданий пока нет.</p>
           <p class="hint">Новые задания назначает сервер. Общая очередь доступна в панели диспетчера.</p>
+        <p class="hint" id="modelsWarn" hidden></p>
         </section>
         <details class="jobs-card ci-fold" id="ciDash">
           <summary>
@@ -59,6 +60,32 @@
           <p id="dashCiLine" class="hint"></p>
           <div class="actions"><button id="dashCiStop" type="button" disabled>Остановить сборки</button></div>
         </details>
+      </section>
+      <section id="modelsScreen" hidden>
+        <div class="screen-heading"><h1>Модели</h1><button id="modelsBack" type="button">К заданиям</button></div>
+        <div class="card">
+          <h2>Этот компьютер</h2>
+          <div class="env-grid" id="envGrid"></div>
+          <p class="hint" id="envHint">Запустите обработчик, чтобы приложение увидело железо и список моделей.</p>
+        </div>
+        <div class="card">
+          <h2>Что обрабатывать на этом компьютере</h2>
+          <p class="hint">Отметьте задачи — ниже останутся только подходящие модели.</p>
+          <div class="tasks">
+            <label class="task-row"><input type="checkbox" id="taskSpeech" checked><span><b>Распознавание речи</b><br><span class="hint">Звук в текст. Нужна одна модель распознавания.</span></span></label>
+            <label class="task-row"><input type="checkbox" id="taskSubs"><span><b>Субтитры</b><br><span class="hint">Распознавание плюс перевод. Нужны обе модели сразу.</span></span></label>
+          </div>
+          <p class="hint">Видео обрабатывается без моделей, одним ffmpeg.</p>
+        </div>
+        <div class="card">
+          <h2>Модели для выбранных задач</h2>
+          <div id="modelGroups"></div>
+          <p class="hint" id="modelPlan"></p>
+        </div>
+        <div class="card">
+          <h2>Уже установленные</h2>
+          <div id="modelsInstalled"></div>
+        </div>
       </section>
       <section id="settingsScreen" hidden>
         <div class="screen-heading"><h1>Настройки</h1><button id="back" type="button">К заданиям</button></div>

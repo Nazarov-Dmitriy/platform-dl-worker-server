@@ -77,8 +77,41 @@ async function main() {
     await page.waitForFunction(() => document.getElementById('ciAutoStartHint').textContent.includes('вручную'));
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(profile, "settings.json"), "utf8")).launch,
       { autoConnect: false, ciAutoStart: false });
+    // Models screen: what the worker reported is what the screen shows, and a
+    // model the machine cannot hold is refused here instead of mid-job.
+    await page.locator("#back").click();
+    await page.locator("#openModels").click();
+    await page.locator("#modelsScreen").waitFor({ state: "visible" });
+    await page.evaluate(() =>
+      drawModels({
+        environment: { memoryBytes: 8 * 1024 ** 3, cpuCores: 8,
+          freeDiskBytes: 200 * 1024 ** 3, workDir: "C:\work", diskReady: true },
+        catalog: [
+          { id: "whisper-cpp-small", revision: "r1", purpose: "RECOGNITION",
+            operations: [], downloadBytes: 487601967, minimumRamBytes: 2 * 1024 ** 3,
+            languages: 99, directions: 0 },
+          { id: "whisper-cpp-huge", revision: "r1", purpose: "RECOGNITION",
+            operations: [], downloadBytes: 1024 ** 3, minimumRamBytes: 32 * 1024 ** 3,
+            languages: 99, directions: 0 },
+        ],
+        installed: [],
+        fetching: undefined,
+      }),
+    );
+    await page.waitForFunction(
+      () => document.querySelectorAll("#modelGroups .model-row").length === 2);
+    assert.equal(await page.locator("#modelGroups .model-row").nth(1)
+      .locator(".model-tag").textContent(), "Не встанет");
+    assert.equal(await page.locator("#modelGroups .model-row").nth(1)
+      .locator("button").count(), 0, "Модель, которая не влезет, не предлагает установку");
+    assert.equal(await page.locator("#modelsInstalled").textContent(),
+      "Пока ничего не установлено.");
+    for (const width of [1160, 620]) {
+      await app.evaluate(({BrowserWindow}, width) => BrowserWindow.getAllWindows()[0].setSize(width, 820), width);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, 'Модели: переполнение на ' + width);
+    }
     assert.deepEqual(errors, []);
-    console.log("Worker CI desktop: IPC, list, add, validation, registration, token clearing, persistence, start/stop, launch toggles and 1160/620px PASS");
+    console.log("Worker CI desktop: IPC, list, add, validation, registration, token clearing, persistence, start/stop, launch toggles, models screen and 1160/620px PASS");
   } finally { await app.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

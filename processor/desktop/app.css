@@ -422,3 +422,38 @@ fieldset:disabled {
 #processingNotice { margin-top: 18px; }
 
 .notice.success { color: #a9eac4; background: #173c30; border: 1px solid #285c47; }
+
+/* Models screen. Rows carry their own state and buttons, so each is a small
+   card rather than a table row that has to keep columns aligned. */
+.heading-actions { display: flex; gap: 10px; }
+#modelsScreen .card { margin-bottom: 20px; }
+.env-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
+.env-grid div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.env-grid .k { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.env-grid .v { font-variant-numeric: tabular-nums; word-break: break-all; }
+.tasks { display: flex; flex-direction: column; gap: 4px; margin: 14px 0; }
+.task-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 9px; cursor: pointer; }
+.task-row:hover { background: var(--hover, rgba(255, 255, 255, 0.04)); }
+.task-row input { margin-top: 4px; }
+.model-group + .model-group { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.model-group h3 { margin: 0 0 4px; font-size: 14px; }
+.model-row {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start;
+  padding: 13px 15px; margin-top: 10px;
+  border: 1px solid var(--border); border-radius: 10px;
+}
+.model-row.chosen { border-color: var(--accent, #27b6c4); }
+.model-row .who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.model-row .nm { font-weight: 600; word-break: break-all; }
+.model-row .meta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.model-row .side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.model-row .side button { white-space: nowrap; }
+.model-tag { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.model-tag.ok { color: #a9eac4; border-color: #285c47; }
+.model-tag.no { color: #f0a7a9; border-color: #5c2f31; }
+.model-bar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.model-bar i { display: block; height: 100%; background: var(--accent, #27b6c4); }
+@media (max-width: 620px) {
+  .model-row { grid-template-columns: auto 1fr; }
+  .model-row .side { grid-column: 2; align-items: flex-start; }
+}

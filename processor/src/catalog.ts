@@ -24,6 +24,9 @@ export type ModelEntry = {
   downloadUrl: string;
   license: string;
   descriptionSource: string;
+  // Which job types the entry serves. Absent on entries written before the
+  // dispatcher described them.
+  operations?: string[];
 };
 
 // Languages from the OpenAI Whisper multilingual tokenizer, not a site locale list.

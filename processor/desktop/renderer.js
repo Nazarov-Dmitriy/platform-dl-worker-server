@@ -11,9 +11,12 @@ let pendingLaunch = {};
 let configured = false;
 let savedReadiness = {};
 let whisperBuild = undefined;
-function screen(settings) {
-  $("dashboard").hidden = settings;
-  $("settingsScreen").hidden = !settings;
+// Three screens now, so the switch names one instead of toggling a flag.
+function screen(name) {
+  const which = name === true ? "settings" : name === false ? "dashboard" : name;
+  $("dashboard").hidden = which !== "dashboard";
+  $("settingsScreen").hidden = which !== "settings";
+  $("modelsScreen").hidden = which !== "models";
   window.scrollTo(0, 0);
 }
 function settingsTab(processing) {
@@ -109,8 +112,12 @@ processingForm.onsubmit = event => {
     $("processingNotice").hidden = false;
   });
 };
-$("openSettings").onclick = () => screen(true);
-$("back").onclick = () => screen(false);
+$("openSettings").onclick = () => screen("settings");
+$("back").onclick = () => screen("dashboard");
+$("openModels").onclick = () => screen("models");
+$("modelsBack").onclick = () => screen("dashboard");
+$("taskSpeech").onchange = () => drawModels(current.models);
+$("taskSubs").onchange = () => drawModels(current.models);
 $("start").onclick = () => configured
   ? action(() => window.processor.start())
   : screen(true);
@@ -271,6 +278,227 @@ function draw(status) {
   $("pause").disabled = !active || busy;
   $("stop").disabled = !active || busy;
   $("pause").textContent = status.paused ? "Продолжить" : "Пауза";
+  drawModels(status.models);
+  warnAboutModels(status.models);
+}
+
+// Without an active recognition model the server simply never sends speech or
+// subtitle work here, and nothing on this screen would say why.
+function warnAboutModels(view) {
+  const warn = $("modelsWarn");
+  if (!view) {
+    warn.hidden = true;
+    return;
+  }
+  const active = (purpose) =>
+    view.installed.some((m) => m.state === "ACTIVE" && m.purpose === purpose);
+  const missing = [];
+  if (!active("RECOGNITION")) missing.push("распознавание речи");
+  if (!active("TRANSLATION")) missing.push("перевод");
+  warn.hidden = missing.length === 0;
+  warn.textContent = missing.length
+    ? "Сервер не пришлёт сюда " + missing.join(" и ") +
+      ": нет рабочей модели. Откройте «Модели»."
+    : "";
+}
+
+// ---- Модели -------------------------------------------------------------
+// The site decides what may be installed; this screen decides nothing, it only
+// shows what the worker reported and asks it to act.
+const modelGroups = [
+  { purpose: "RECOGNITION", title: "Распознавание речи", tasks: ["speech", "subs"],
+    hint: "Нужна одна. Выберите, какой работать." },
+  { purpose: "TRANSLATION", title: "Перевод", tasks: ["subs"],
+    hint: "Нужна одна. Без неё субтитры не соберутся." },
+];
+function bytes(n) {
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  const gb = n / 1024 ** 3;
+  return gb >= 1
+    ? gb.toFixed(1).replace(".", ",") + " ГБ"
+    : Math.round(n / 1024 ** 2) + " МБ";
+}
+function chosenTasks() {
+  const out = [];
+  if ($("taskSpeech").checked) out.push("speech");
+  if ($("taskSubs").checked) out.push("subs");
+  return out;
+}
+function modelRow(entry, view, group) {
+  const installed = view.installed.find(
+    (m) => m.id === entry.id && m.revision === entry.revision,
+  );
+  const active = installed?.state === "ACTIVE";
+  const fits = entry.minimumRamBytes <= view.environment.memoryBytes;
+  const fetching =
+    view.fetching &&
+    view.fetching.id === entry.id &&
+    view.fetching.revision === entry.revision;
+
+  const row = document.createElement("div");
+  row.className = "model-row" + (active ? " chosen" : "");
+
+  if (group) {
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "use-" + group.purpose;
+    radio.checked = active;
+    radio.disabled = !installed || !fits || busy;
+    radio.setAttribute("aria-label", "Работать моделью " + entry.id);
+    radio.onclick = () =>
+      action(() => window.processor.model("activate", entry.id, entry.revision));
+    row.append(radio);
+  } else row.append(document.createElement("span"));
+
+  const who = document.createElement("div");
+  who.className = "who";
+  const name = document.createElement("span");
+  name.className = "nm";
+  name.textContent = entry.id;
+  const meta = document.createElement("span");
+  meta.className = "meta";
+  meta.textContent =
+    bytes(entry.downloadBytes) +
+    " · ОЗУ от " + bytes(entry.minimumRamBytes) +
+    " · версия " + entry.revision;
+  who.append(name, meta);
+  if (!fits) {
+    const stop = document.createElement("span");
+    stop.className = "meta";
+    stop.textContent =
+      "Не хватит ОЗУ: нужно " + bytes(entry.minimumRamBytes) +
+      ", на этом компьютере " + bytes(view.environment.memoryBytes);
+    who.append(stop);
+  }
+  row.append(who);
+
+  const side = document.createElement("div");
+  side.className = "side";
+  const tag = document.createElement("span");
+  tag.className = "model-tag";
+  if (fetching) tag.textContent = "Скачивается";
+  else if (!fits) { tag.className += " no"; tag.textContent = "Не встанет"; }
+  else if (active) { tag.className += " ok"; tag.textContent = "Работает"; }
+  else if (installed) { tag.className += " ok"; tag.textContent = "Установлена"; }
+  else tag.textContent = "Не установлена";
+  side.append(tag);
+
+  if (!installed && fits && !fetching) {
+    const install = document.createElement("button");
+    install.type = "button";
+    install.textContent = "Установить — " + bytes(entry.downloadBytes);
+    install.disabled = busy || !!view.fetching;
+    install.onclick = () =>
+      action(() => window.processor.model("install", entry.id, entry.revision));
+    side.append(install);
+  }
+  if (installed && !active) {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "Удалить";
+    remove.disabled = busy;
+    remove.onclick = () =>
+      action(() => window.processor.model("delete", entry.id, entry.revision));
+    side.append(remove);
+  }
+  row.append(side);
+
+  if (fetching) {
+    const bar = document.createElement("div");
+    bar.className = "model-bar";
+    const fill = document.createElement("i");
+    fill.style.width = Math.round((view.fetching.progress || 0) * 100) + "%";
+    bar.append(fill);
+    row.append(bar);
+  }
+  return row;
+}
+function drawModels(view) {
+  const host = $("modelGroups");
+  const done = $("modelsInstalled");
+  if (!view) {
+    $("envGrid").replaceChildren();
+    $("envHint").hidden = false;
+    host.replaceChildren();
+    done.replaceChildren();
+    $("modelPlan").textContent = "";
+    return;
+  }
+  $("envHint").hidden = true;
+  const env = view.environment;
+  $("envGrid").replaceChildren();
+  [["Оперативная память", bytes(env.memoryBytes)],
+   ["Ядер процессора", String(env.cpuCores)],
+   ["Свободно в рабочей папке", env.diskReady ? bytes(env.freeDiskBytes) : "папка недоступна"],
+   ["Рабочая папка", env.workDir || "—"],
+  ].forEach(([k, v]) => {
+    const cell = document.createElement("div");
+    const key = document.createElement("span");
+    key.className = "k";
+    key.textContent = k;
+    const val = document.createElement("span");
+    val.className = "v";
+    val.textContent = v;
+    cell.append(key, val);
+    $("envGrid").append(cell);
+  });
+
+  const tasks = chosenTasks();
+  host.replaceChildren();
+  let shown = 0;
+  modelGroups
+    .filter((g) => g.tasks.some((task) => tasks.includes(task)))
+    .forEach((g) => {
+      const entries = view.catalog.filter((m) => m.purpose === g.purpose);
+      const box = document.createElement("div");
+      box.className = "model-group";
+      const title = document.createElement("h3");
+      title.textContent = g.title;
+      const hint = document.createElement("p");
+      hint.className = "hint";
+      hint.textContent = entries.length
+        ? g.hint
+        : "Сервер не прислал ни одной подходящей модели. Добавьте её в каталог на сайте.";
+      box.append(title, hint);
+      entries.forEach((m) => box.append(modelRow(m, view, g)));
+      shown += entries.length;
+      host.append(box);
+    });
+  if (!tasks.length) {
+    const empty = document.createElement("p");
+    empty.className = "hint";
+    empty.textContent = "Отметьте задачу выше, чтобы увидеть подходящие модели.";
+    host.append(empty);
+  }
+
+  done.replaceChildren();
+  if (!view.installed.length) {
+    const empty = document.createElement("p");
+    empty.className = "hint";
+    empty.textContent = "Пока ничего не установлено.";
+    done.append(empty);
+  } else
+    view.installed.forEach((m) => {
+      const entry =
+        view.catalog.find((c) => c.id === m.id && c.revision === m.revision) || {
+          id: m.id, revision: m.revision, downloadBytes: 0,
+          minimumRamBytes: m.minimumRamBytes, purpose: m.purpose,
+        };
+      done.append(modelRow(entry, view, null));
+    });
+
+  const missing = view.catalog.filter(
+    (m) =>
+      shown &&
+      !view.installed.some((i) => i.id === m.id && i.revision === m.revision),
+  );
+  $("modelPlan").textContent = view.fetching
+    ? "Скачиваем «" + view.fetching.id + "» — " +
+      Math.round((view.fetching.progress || 0) * 100) + "%"
+    : missing.length
+      ? "Не установлено моделей: " + missing.length +
+        ". Выбранная модель должна быть установлена и отмечена точкой."
+      : "";
 }
 async function action(callback, spinner) {
   if (busy) return;

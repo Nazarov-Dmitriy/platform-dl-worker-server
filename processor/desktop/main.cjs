@@ -735,6 +735,13 @@ else {
       await stop();
       return snapshot;
     });
+    handle("processor:model", (request) => {
+      if (!child?.connected) throw Error("Обработчик не запущен.");
+      if (!["install", "activate", "delete"].includes(request?.action))
+        throw Error("Неизвестное действие с моделью.");
+      child.send({ type: "model", ...request });
+      return snapshot;
+    });
     handle("processor:pause", (paused) => {
       if (typeof paused !== "boolean" || !child?.connected)
         throw Error("Обработчик не запущен.");

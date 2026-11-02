@@ -1,5 +1,7 @@
 import { mkdirSync } from "node:fs";
+import os from "node:os";
 import { randomUUID } from "node:crypto";
+import { installModel, activateModel, deleteModel } from "./models.js";
 import { loadConfig } from "./config.js";
 import { Agent } from "./agent.js";
 import { Journal } from "./journal.js";
@@ -10,6 +12,44 @@ let agent: Agent | undefined,
   timer: NodeJS.Timeout | undefined,
   starting = false,
   lastMessage = "";
+// One model is fetched at a time. A second request while one is running would
+// race for the same work directory and the same disk budget.
+let fetching: { id: string; revision: string; progress: number } | undefined;
+
+// What the Models screen needs: this machine, what the site allows, and what
+// is already here. The screen never computes a path or a URL of its own.
+function modelsView() {
+  if (!agent) return undefined;
+  const usage = agent.usage();
+  const installed = agent.journal.state.models;
+  return {
+    environment: {
+      memoryBytes: os.totalmem(),
+      cpuCores: os.cpus().length,
+      freeDiskBytes: usage.freeDiskBytes,
+      workDir: agent.config.workDir,
+      diskReady: usage.workDiskAvailable,
+    },
+    catalog: agent.journal.state.catalog.map((m) => ({
+      id: m.id,
+      revision: m.revision,
+      purpose: m.purpose,
+      operations: m.operations ?? [],
+      downloadBytes: m.downloadBytes,
+      minimumRamBytes: m.minimumRamBytes,
+      languages: m.recognitionLanguages?.length ?? 0,
+      directions: m.translationDirections?.length ?? 0,
+    })),
+    installed: installed.map((m) => ({
+      id: m.id,
+      revision: m.revision,
+      state: m.state,
+      purpose: m.purpose,
+      minimumRamBytes: m.minimumRamBytes,
+    })),
+    fetching,
+  };
+}
 function status(message?: string) {
   if (message) lastMessage = message;
   if (agent?.session) lastMessage = "";
@@ -26,6 +66,7 @@ function status(message?: string) {
         stage: r.stage, progress: r.progress, encoder: r.encoder, download: r.download,
       })) : [],
       paused: !!agent?.config.paused,
+      models: modelsView(),
       message:
         lastMessage ||
         (agent?.session ? "Подключено к серверу." : "Подключаемся к серверу…"),
@@ -127,6 +168,8 @@ process.on("message", async (input: any) => {
       Object.assign(agent.config, s, { localSettings: true });
       agent.nextHeartbeat = 0;
       status("Настройки обработки применены. Текущие задания продолжаются; режимы и потоки применятся к новым.");
+    } else if (input?.type === "model" && agent) {
+      await runModel(input);
     } else if (input?.type === "stop") await stop();
   } catch {
     process.send?.({
@@ -147,6 +190,69 @@ process.on("message", async (input: any) => {
     }
   }
 });
+// Installing, switching and removing a model, asked for by the person at the
+// keyboard rather than by the dispatcher. The dispatcher's own MODEL_* commands
+// still arrive over the session and run through the same functions.
+async function runModel(input: any) {
+  if (!agent) throw Error("NOT_RUNNING");
+  const id = String(input.id || ""),
+    revision = String(input.revision || "");
+  const entry = agent.journal.state.catalog.find(
+    (m) => m.id === id && m.revision === revision,
+  );
+  if (input.action === "delete") {
+    deleteModel(
+      agent.config.workDir,
+      agent.journal,
+      id,
+      revision,
+      agent.running.size > 0,
+    );
+    agent.nextHeartbeat = 0;
+    status("Модель удалена.");
+    return;
+  }
+  if (input.action === "activate") {
+    agent.readiness.clear();
+    activateModel(
+      agent.journal,
+      id,
+      revision,
+      agent.config.whisperCpp,
+      agent.config.ffmpeg,
+    );
+    agent.nextHeartbeat = 0;
+    status("Модель выбрана рабочей.");
+    return;
+  }
+  if (input.action !== "install") throw Error("UNKNOWN_MODEL_ACTION");
+  if (fetching) throw Error("MODEL_FETCH_BUSY");
+  if (!entry) throw Error("MODEL_NOT_IN_CATALOG");
+  const usage = agent.usage();
+  if (!usage.workDiskAvailable) throw Error("WORK_DISK_UNAVAILABLE");
+  if (entry.minimumRamBytes > os.totalmem()) throw Error("INSUFFICIENT_MEMORY");
+  fetching = { id, revision, progress: 0 };
+  status("Скачиваем «" + id + "»…");
+  try {
+    await installModel(
+      agent.config.workDir,
+      agent.journal,
+      agent.journal.state.catalog,
+      id,
+      revision,
+      usage.freeDiskBytes,
+      (n) => {
+        if (fetching) fetching.progress = n;
+        status();
+      },
+    );
+    agent.nextHeartbeat = 0;
+    status("«" + id + "» установлена.");
+  } finally {
+    fetching = undefined;
+  }
+}
+
 process.on("disconnect", () => void stop());
 process.on("SIGTERM", () => void stop());
 process.on("SIGINT", () => void stop());
