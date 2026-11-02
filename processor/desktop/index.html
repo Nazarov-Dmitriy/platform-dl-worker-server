@@ -35,6 +35,11 @@
           <span id="workState">Обработчик не запущен</span>
           <span id="detail">Готов к настройке подключения</span>
         </section>
+        <div class="actions dashboard-actions">
+          <button id="start" class="primary" type="button">Подключиться</button>
+          <button id="pause" type="button" disabled>Пауза</button>
+          <button id="stop" type="button" disabled>Остановить</button>
+        </div>
         <section class="jobs-card" aria-label="Задания этого устройства">
           <h2>Задания на этом устройстве</h2>
           <div class="jobs-scroll"><table class="jobs-table">
@@ -54,11 +59,6 @@
           <div class="actions"><button id="dashCiStop" type="button" disabled>Остановить сборки</button></div>
         </details>
         <p class="hint">Новые задания назначает сервер. Общая очередь доступна в панели диспетчера.</p>
-        <div class="actions dashboard-actions">
-          <button id="start" class="primary" type="button">Подключиться</button>
-          <button id="pause" type="button" disabled>Пауза</button>
-          <button id="stop" type="button" disabled>Остановить</button>
-        </div>
       </section>
       <section id="settingsScreen" hidden>
         <div class="screen-heading"><h1>Настройки</h1><button id="back" type="button">К заданиям</button></div>
