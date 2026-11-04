@@ -217,6 +217,25 @@
               <div class="card-heading"><h2 id="siteSettingsTitle">Настройки сайта</h2><button id="closeSiteSettings" type="button" class="button quiet">Закрыть</button></div>
               <div class="card-body">
                 <p id="siteSettingsId" class="caption"></p>
+                <form id="siteOpsForm" class="stacked-form">
+                  <fieldset class="form-options">
+                    <legend>Разрешённые операции</legend>
+                    <div class="option-list">
+                      <label class="check-field"
+                        ><input type="checkbox" name="transcode" />Обработка видео</label
+                      ><label class="check-field"
+                        ><input type="checkbox" name="transcribe" />Распознавание речи</label
+                      ><label class="check-field"
+                        ><input type="checkbox" name="subtitles" />Субтитры</label
+                      >
+                    </div>
+                  </fieldset>
+                  <p class="caption">Сайт сможет заказывать только отмеченные виды работ. Изменение действует сразу, текущие задания не отменяются.</p>
+                  <div class="form-actions">
+                    <button class="button primary" type="submit">Сохранить операции</button>
+                  </div>
+                </form>
+                <p id="siteOpsOut" class="notice-box" role="status" hidden></p>
                 <div class="form-actions"><button id="issueSiteToken" type="button" class="button primary">Выдать новый токен</button><button id="deleteSite" type="button" class="button danger">Удалить сайт</button></div>
                 <div id="siteIssued" class="token-box" role="status" hidden></div>
               </div>

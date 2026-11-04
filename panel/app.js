@@ -814,6 +814,22 @@ window.addEventListener("focus", () => void refreshOverview());
 
 init();
 
+const SITE_OPERATION_FIELDS = [
+  ["transcode", "media.transcode"],
+  ["transcribe", "media.transcribe"],
+  ["subtitles", "media.subtitles"],
+];
+function fillSiteSettings(site) {
+  state.selectedSite = site;
+  $("siteSettingsTitle").textContent = "Настройки сайта «" + site.name + "»";
+  $("siteSettingsId").textContent = "ID: " + site.id;
+  SITE_OPERATION_FIELDS.forEach(([name, code]) => {
+    $("siteOpsForm").elements[name].checked = (site.operations || []).includes(code);
+  });
+  $("siteIssued").hidden = true;
+  message("siteOpsOut", "");
+  $("siteSettings").hidden = false;
+}
 function siteSettingsButton(site) {
   const button = node("button", null, "button quiet site-settings-button");
   button.innerHTML = icon("settings");
@@ -822,11 +838,7 @@ function siteSettingsButton(site) {
   button.setAttribute("aria-label", "Настройки сайта «" + site.name + "»");
   button.title = "Настройки сайта «" + site.name + "»";
   button.onclick = () => {
-    state.selectedSite = site;
-    $("siteSettingsTitle").textContent = "Настройки сайта «" + site.name + "»";
-    $("siteSettingsId").textContent = "ID: " + site.id;
-    $("siteIssued").hidden = true;
-    $("siteSettings").hidden = false;
+    fillSiteSettings(site);
     $("siteSettings").scrollIntoView({block:"nearest"});
   };
   return button;
@@ -836,7 +848,37 @@ on("showSiteCreate", "click", () => {
   if (!$("siteCreateForm").hidden) $("siteForm").elements.name.focus();
 });
 on("cancelSiteCreate", "click", () => { $("siteCreateForm").hidden = true; });
-on("closeSiteSettings", "click", () => { $("siteSettings").hidden = true; $("siteIssued").hidden = true; });
+on("closeSiteSettings", "click", () => {
+  $("siteSettings").hidden = true;
+  $("siteIssued").hidden = true;
+  message("siteOpsOut", "");
+});
+on("siteOpsForm", "submit", async () => {
+  const site = state.selectedSite;
+  if (!site || state.siteActionId) return;
+  const operations = SITE_OPERATION_FIELDS.filter(([name]) => $("siteOpsForm").elements[name].checked).map(([, code]) => code);
+  await api("/api/v2/admin/sites/" + site.id, {
+    method: "PUT",
+    mutate: true,
+    headers: { "If-Match": JSON.stringify(String(site.revision)) },
+    body: JSON.stringify({
+      name: site.name,
+      enabled: site.enabled,
+      weight: site.weight,
+      operations,
+    }),
+  });
+  const id = site.id;
+  await reload();
+  const updated = state.sites.find((item) => item.id === id);
+  if (!updated) {
+    $("siteSettings").hidden = true;
+    state.selectedSite = null;
+    return;
+  }
+  fillSiteSettings(updated);
+  message("siteOpsOut", "Операции сохранены. Сайт сразу сможет заказывать отмеченные виды работ.");
+});
 async function siteAction(kind) {
   const site = state.selectedSite;
   if (!site || state.siteActionId) return;

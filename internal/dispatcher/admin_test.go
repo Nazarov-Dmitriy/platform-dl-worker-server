@@ -185,6 +185,45 @@ func TestAdminSiteTokenOnceAndPanel(t *testing.T) {
 	page.Body.Close()
 }
 
+func TestAdminUpdateSiteOperations(t *testing.T) {
+	srv, _ := adminServer(t)
+	owner, sess := login(t, srv, "owner", "owner-password-1")
+	csrf := sess["csrfToken"].(string)
+	created := adminDo(t, owner, "POST", srv.URL+"/api/v2/admin/sites", csrf, map[string]any{
+		"name": "courses", "enabled": true, "weight": 1, "operations": []string{"media.transcode"},
+	})
+	if created.StatusCode != 201 {
+		t.Fatal(created.Status)
+	}
+	var view map[string]any
+	json.NewDecoder(created.Body).Decode(&view)
+	created.Body.Close()
+	req, e := http.NewRequest("PUT", srv.URL+"/api/v2/admin/sites/"+view["id"].(string), bytes.NewReader(encode(map[string]any{
+		"name": "courses", "enabled": true, "weight": 1,
+		"operations": []string{"media.transcode", "media.transcribe", "media.subtitles"},
+	})))
+	if e != nil {
+		t.Fatal(e)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", csrf)
+	req.Header.Set("If-Match", `"1"`)
+	resp, e := owner.Do(req)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer resp.Body.Close()
+	var updated map[string]any
+	json.NewDecoder(resp.Body).Decode(&updated)
+	if resp.StatusCode != 200 {
+		t.Fatalf("wanted 200, got %d: %v", resp.StatusCode, updated)
+	}
+	ops, _ := updated["operations"].([]any)
+	if len(ops) != 3 {
+		t.Fatalf("operations: %v", updated["operations"])
+	}
+}
+
 func TestAdminOpsOwnerOnly(t *testing.T) {
 	srv, s := adminServer(t)
 	owner, sess := login(t, srv, "owner", "owner-password-1")
