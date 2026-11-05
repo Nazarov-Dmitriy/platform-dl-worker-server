@@ -35,11 +35,16 @@ function processingInput() {
     cpuThreads: Number(processingForm.elements.cpuThreads.value),
     videoMode: processingForm.elements.videoMode.value,
     audioMode: processingForm.elements.audioMode.value,
-    workDir: processingForm.elements.workDir.value };
+    workDir: processingForm.elements.workDir.value,
+    modelTasks: chosenTasks() };
 }
 function fillProcessing(settings) {
   for (const name of ["workDir", "maxParallel", "cpuThreads", "videoMode", "audioMode"])
     if (settings[name] != null) processingForm.elements[name].value = settings[name];
+  if (Array.isArray(settings.modelTasks)) {
+    $("taskSpeech").checked = settings.modelTasks.includes("speech");
+    $("taskSubs").checked = settings.modelTasks.includes("subs");
+  }
   if (settings.cpuCount) {
     processingForm.elements.cpuThreads.max = settings.cpuCount;
     $("cpuHint").textContent = "Доступно логических CPU-потоков: " + settings.cpuCount + ".";
@@ -116,8 +121,14 @@ $("openSettings").onclick = () => screen("settings");
 $("back").onclick = () => screen("dashboard");
 $("openModels").onclick = () => screen("models");
 $("modelsBack").onclick = () => screen("dashboard");
-$("taskSpeech").onchange = () => drawModels(current.models);
-$("taskSubs").onchange = () => drawModels(current.models);
+function persistModelTasks() {
+  drawModels(current.models);
+  void window.processor
+    .processing(processingInput())
+    .catch((error) => notice(error.message));
+}
+$("taskSpeech").onchange = persistModelTasks;
+$("taskSubs").onchange = persistModelTasks;
 $("start").onclick = () => configured
   ? action(() => window.processor.start())
   : screen(true);
@@ -392,7 +403,7 @@ function modelRow(entry, view, group) {
       action(() => window.processor.model("install", entry.id, entry.revision));
     side.append(install);
   }
-  if (installed && !active) {
+  if (installed) {
     const remove = document.createElement("button");
     remove.type = "button";
     remove.textContent = "Удалить";
@@ -592,6 +603,19 @@ window.processor
       $("fingerprint").hidden = false;
     }
     draw(status);
+    // Auto-check readiness if it was never run, so the install button is visible.
+    if (!savedReadiness.video) {
+      void action(
+        async () => setCapabilityReadiness("video", await window.processor.readiness("video")),
+        $("videoSpinner"),
+      );
+    }
+    if (!savedReadiness.speech) {
+      void action(
+        async () => setCapabilityReadiness("speech", await window.processor.readiness("speech")),
+        $("speechSpinner"),
+      );
+    }
   })
   .catch((error) => notice(error.message));
 

@@ -27,7 +27,7 @@ const { join } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { pipeline } = require("node:stream/promises");
 const https = require("node:https");
-const { validateProcessing } = require("./processing.cjs");
+const { validateProcessing, validateModelTasks, remapWorkDirModels } = require("./processing.cjs");
 const { availableParallelism, tmpdir } = require("node:os");
 const { validateSettings } = require("./settings.cjs");
 const { createLoginController, NAME } = require("./login.cjs");
@@ -675,12 +675,14 @@ else {
         atomic("credential.bin", safeStorage.encryptString(settings.token));
       if (settings.ca) atomic("device-ca.crt", settings.ca);
       saved = {
+        ...saved,
         server: settings.server,
         deviceId: settings.deviceId,
         workDir: settings.workDir,
         ...validateProcessing({ ...saved, ...input }),
         fingerprint: settings.fingerprint,
         launch,
+        modelTasks: validateModelTasks({ modelTasks: input.modelTasks ?? saved.modelTasks }),
       };
       atomic(
         "config.json",
@@ -716,6 +718,7 @@ else {
         if (existsSync(journalPath)) {
           const journal = JSON.parse(readFileSync(journalPath, "utf8"));
           if (journal.attempts?.length) throw Error("Сначала завершите незавершённые задания перед сменой папки.");
+          remapWorkDirModels(journal, saved.workDir, workDir);
           delete journal.workVolume;
           writeFileSync(journalPath, JSON.stringify(journal), { mode: 0o600 });
         }
@@ -725,7 +728,14 @@ else {
         const config = JSON.parse(readFileSync(configPath, "utf8"));
         atomic("config.json", JSON.stringify({ ...config, ...next, workDir, localSettings: true }, null, 2));
       }
-      saved = { ...saved, ...next, workDir };
+      saved = {
+        ...saved,
+        ...next,
+        workDir,
+        modelTasks: validateModelTasks({
+          modelTasks: input.modelTasks ?? saved.modelTasks,
+        }),
+      };
       atomic("settings.json", JSON.stringify(saved, null, 2));
       if (child?.connected) child.send({ type: "processing", settings: next });
       return publicSettings();

@@ -1,4 +1,30 @@
 const { availableParallelism } = require("node:os");
+function rebaseWorkPath(path, fromDir, toDir) {
+  if (typeof path !== "string" || !fromDir || !toDir) return path;
+  const slash = (p) => String(p).replace(/[\\/]+$/, "").replace(/\//g, "\\");
+  const from = slash(fromDir),
+    to = slash(toDir),
+    value = path.replace(/\//g, "\\");
+  if (value.toLowerCase() === from.toLowerCase()) return to;
+  const prefix = from + "\\";
+  if (value.toLowerCase().startsWith(prefix.toLowerCase()))
+    return to + value.slice(from.length);
+  return path;
+}
+function remapWorkDirModels(journal, fromDir, toDir) {
+  if (!journal || fromDir === toDir) return journal;
+  if (Array.isArray(journal.models))
+    for (const model of journal.models)
+      model.path = rebaseWorkPath(model.path, fromDir, toDir);
+  return journal;
+}
+function validateModelTasks(input) {
+  const raw = input?.modelTasks;
+  if (raw == null) return ["speech"];
+  if (!Array.isArray(raw) || raw.some((task) => task !== "speech" && task !== "subs"))
+    throw Error("Выберите задачи этого компьютера.");
+  return [...new Set(raw)];
+}
 function validateProcessing(input) {
   const maxParallel = Number(input.maxParallel ?? 1);
   const cpuThreads = Number(input.cpuThreads ?? Math.max(1, Math.floor(availableParallelism() / 2)));
@@ -11,4 +37,4 @@ function validateProcessing(input) {
     throw Error("Выберите режим обработки.");
   return { maxParallel, cpuThreads, videoMode, audioMode };
 }
-module.exports = { validateProcessing };
+module.exports = { validateProcessing, validateModelTasks, remapWorkDirModels, rebaseWorkPath };

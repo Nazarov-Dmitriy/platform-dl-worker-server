@@ -188,6 +188,9 @@ export function deleteModel(
   journal.save();
   const dir = join(modelsDir(workDir), id, revision);
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  // Remove empty parent model directory
+  const parent = join(modelsDir(workDir), id);
+  try { rmSync(parent, { recursive: true, force: true }); } catch {}
 }
 
 function safeModelComponent(value: string) {

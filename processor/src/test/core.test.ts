@@ -29,6 +29,8 @@ import { whisperLanguages } from "../catalog.js";
 import {
   parseWhisperJson,
   cuesToVtt,
+  gpuSpeechAvailable,
+  nllbLanguage,
   selectRecognition,
   transcribeSource,
   translateCues,
@@ -335,6 +337,33 @@ test("expired storage URLs refresh instead of rewriting the package", async (t) 
       ),
     (e: unknown) => e instanceof TransferError && e.refresh,
   );
+});
+test("GPU speech probe accepts CUDA logs and rejects silent -np output", () => {
+  const cuda = [
+    "ggml_cuda_init: found 1 CUDA devices:",
+    "  Device 0: NVIDIA GeForce RTX 5060 Ti, compute capability 12.0, VMM: yes",
+    "whisper_backend_init_gpu: using CUDA0 backend",
+  ].join("\n");
+  assert.equal(gpuSpeechAvailable(0, cuda), true);
+  assert.equal(
+    gpuSpeechAvailable(0, "ggml_cuda_init: found 1 CUDA devices:\n"),
+    false,
+  );
+  assert.equal(gpuSpeechAvailable(3, cuda), false);
+  assert.equal(
+    gpuSpeechAvailable(
+      0,
+      cuda + "\nwhisper_backend_init_gpu: failed to initialize CUDA backend",
+    ),
+    false,
+  );
+});
+test("NLLB translation uses Flores language tags", () => {
+  assert.equal(nllbLanguage("en"), "eng_Latn");
+  assert.equal(nllbLanguage("ru"), "rus_Cyrl");
+  assert.equal(nllbLanguage("uz"), "uzn_Latn");
+  assert.equal(nllbLanguage("eng_Latn"), "eng_Latn");
+  assert.equal(nllbLanguage("xx"), undefined);
 });
 test("recognition languages come from the Whisper tokenizer list", () => {
   assert.ok(whisperLanguages.includes("yue"));

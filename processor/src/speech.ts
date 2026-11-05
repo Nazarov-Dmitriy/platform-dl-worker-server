@@ -44,6 +44,48 @@ export function selectTranslation(
   );
 }
 
+// ISO 639 codes from Whisper/catalog → NLLB-200 Flores tags required by transformers.js.
+const nllbFlores: Record<string, string> = {
+  ar: "arb_Arab",
+  az: "azj_Latn",
+  be: "bel_Cyrl",
+  cs: "ces_Latn",
+  de: "deu_Latn",
+  en: "eng_Latn",
+  es: "spa_Latn",
+  fr: "fra_Latn",
+  hi: "hin_Deva",
+  hy: "hye_Armn",
+  it: "ita_Latn",
+  ja: "jpn_Jpan",
+  ka: "kat_Geor",
+  kk: "kaz_Cyrl",
+  ko: "kor_Hang",
+  nl: "nld_Latn",
+  pl: "pol_Latn",
+  pt: "por_Latn",
+  ru: "rus_Cyrl",
+  tr: "tur_Latn",
+  uk: "ukr_Cyrl",
+  uz: "uzn_Latn",
+  vi: "vie_Latn",
+  zh: "zho_Hans",
+};
+
+export function nllbLanguage(code: string): string | undefined {
+  const raw = String(code || "").trim();
+  if (/^[a-z]{3}_[A-Za-z]{4}$/.test(raw)) return raw;
+  return nllbFlores[raw.toLowerCase()];
+}
+
+export function gpuSpeechAvailable(status: number | null, log: string): boolean {
+  return (
+    status === 0 &&
+    /whisper_backend_init_gpu: using [^\r\n]+ backend/.test(log) &&
+    !/failed to initialize .* backend/.test(log)
+  );
+}
+
 export function transcribeSource(
   source: string,
   model: InstalledModel,
@@ -104,10 +146,14 @@ function whisperCppSpeech(
   const args = ["-m", modelPath, "-f", source, "-oj", "-np", "-t", String(cpuThreads)];
   if (mode === "cpu") args.push("-ng");
   if (mode === "gpu") {
-    const probe = spawnSync(exe, ["-m", modelPath, "-f", source, "-d", "1", "-nt", "-np", "-t", String(cpuThreads)],
-      { timeout: 60000, windowsHide: true, encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
-    if (probe.status !== 0 || !/whisper_backend_init_gpu: using [^\n]+ backend/.test(probe.stderr || "") ||
-        /failed to initialize .* backend/.test(probe.stderr || "")) throw Error("GPU_UNAVAILABLE");
+    // -np hides the GPU-backend line this mode requires.
+    const probe = spawnSync(
+      exe,
+      ["-m", modelPath, "-f", source, "-d", "1", "-nt", "-t", String(cpuThreads)],
+      { timeout: 60000, windowsHide: true, encoding: "utf8", maxBuffer: 4 * 1024 * 1024 },
+    );
+    if (!gpuSpeechAvailable(probe.status, `${probe.stderr || ""}\n${probe.stdout || ""}`))
+      throw Error("GPU_UNAVAILABLE");
   }
   if (requested && requested !== "auto") args.push("-l", requested);
   else args.push("-l", "auto");

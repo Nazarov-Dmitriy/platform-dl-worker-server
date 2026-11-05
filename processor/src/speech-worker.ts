@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { parentPort, workerData } from "node:worker_threads";
 import {
   extractAudio,
+  nllbLanguage,
   transcribeSource,
   translateCues,
   wavPath,
@@ -54,6 +55,9 @@ try {
       env.allowRemoteModels = false;
       env.allowLocalModels = true;
       env.useFSCache = false;
+      const srcLang = nllbLanguage(w.source);
+      const tgtLang = nllbLanguage(w.target);
+      if (!srcLang || !tgtLang) throw new Error("TRANSLATION_UNAVAILABLE");
       const translator = await pipeline("translation", w.model.path, {
         local_files_only: true,
         dtype: "q8",
@@ -64,6 +68,8 @@ try {
         for (const cue of w.cues) {
           const output = await translator(cue.text, {
             max_new_tokens: 256,
+            src_lang: srcLang,
+            tgt_lang: tgtLang,
           } as any);
           const text = (output as any)[0]?.translation_text;
           if (typeof text !== "string" || !text.trim())
