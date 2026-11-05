@@ -1,8 +1,59 @@
 import os from "node:os";
 import { realpathSync, statSync, statfsSync, readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import type { Config } from "./config.js";
 import type { Journal } from "./journal.js";
+
+function parseNvidiaSmi(): { totalBytes: number; usedBytes: number } | null {
+  try {
+    const out = execFileSync(
+      "nvidia-smi",
+      [
+        "--query-gpu=memory.total,memory.used",
+        "--format=csv,noheader,nounits",
+      ],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 5000,
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    );
+    const line = out.trim().split(/\r?\n/)[0];
+    if (!line) return null;
+    const parts = line.split(",").map((s) => Number(s.trim()));
+    if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+    return {
+      totalBytes: Math.round(parts[0] * 1024 * 1024),
+      usedBytes: Math.round(parts[1] * 1024 * 1024),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function detectGpuName(): string {
+  if (process.platform === "win32") {
+    try {
+      const out = execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          "(Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join '|'",
+        ],
+        {
+          encoding: "utf8",
+          windowsHide: true,
+          timeout: 8000,
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      );
+      return out.trim();
+    } catch {}
+  }
+  return "";
+}
 export const transcodeCapability = {
   code: "media.transcode",
   recognitionLanguages: [] as string[],
@@ -111,6 +162,8 @@ export class Resources {
       available = true;
     } catch {}
     const memory = 100 * (1 - free / os.totalmem());
+    const gpuInfo = parseNvidiaSmi();
+    const gpuName = detectGpuName();
     return {
       cpuPercent: cpu,
       memoryUsedPercent: memory,
@@ -118,7 +171,10 @@ export class Resources {
       diskUsedPercent: disk,
       freeMemoryBytes: free,
       freeDiskBytes: freeDisk,
-      freeVramBytes: null,
+      freeVramBytes: gpuInfo ? gpuInfo.totalBytes - gpuInfo.usedBytes : null,
+      vramTotalBytes: gpuInfo ? gpuInfo.totalBytes : null,
+      vramUsedBytes: gpuInfo ? gpuInfo.usedBytes : null,
+      gpuName: gpuName || null,
       encoderBusyPercent: null,
       availableSlots: slotBudget(
         {

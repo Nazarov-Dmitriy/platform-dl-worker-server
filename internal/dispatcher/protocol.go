@@ -188,6 +188,9 @@ type Usage struct {
 	FreeMemoryBytes    int64    `json:"freeMemoryBytes"`
 	FreeDiskBytes      int64    `json:"freeDiskBytes"`
 	FreeVRAMBytes      *int64   `json:"freeVramBytes"`
+	VramTotalBytes     *int64   `json:"vramTotalBytes"`
+	VramUsedBytes      *int64   `json:"vramUsedBytes"`
+	GpuName            string   `json:"gpuName"`
 	EncoderBusyPercent *float64 `json:"encoderBusyPercent"`
 	AvailableSlots     int      `json:"availableSlots"`
 	Paused             bool     `json:"paused"`

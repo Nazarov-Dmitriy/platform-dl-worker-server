@@ -85,6 +85,12 @@ function vramMeter(total, used) {
   n.append(track, label);
   return n;
 }
+function vramCell(usage) {
+  if (!usage) return node("span", "—", "muted");
+  const total = usage.vramTotalBytes;
+  const used = usage.vramUsedBytes;
+  return vramMeter(total, used);
+}
 function date(value) {
   const d = new Date(value);
   return value && !Number.isNaN(d.valueOf())
@@ -160,11 +166,13 @@ function renderDevices(target, devices) {
     devices.map((d) => {
       const cpu = d.online ? meter(d.usage?.cpuPercent) : node("span", "—", "muted");
       const ram = d.online ? meter(d.usage?.memoryUsedPercent) : node("span", "—", "muted");
-      const vram = vramMeter(d.usage?.vramTotal, d.usage?.vramUsed);
+      const vram = vramCell(d.usage);
       const resources = node("div", null, "resources-cell");
       resources.append(cpu, ram, vram);
+      const gpuName = d.usage?.gpuName || "";
+      const subtitle = gpuName ? d.id + " · " + gpuName : d.id;
       return [
-        titleCell(d.name, d.id, "monitor"),
+        titleCell(d.name, subtitle, "monitor"),
         badge(
           !d.enabled ? "Отключено" : d.online ? "В сети" : "Не в сети",
           !d.enabled ? "" : d.online ? "good" : "",
