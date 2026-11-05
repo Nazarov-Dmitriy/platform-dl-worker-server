@@ -571,63 +571,6 @@ table {
   text-align: left;
   font-size: 14px;
 }
-/* Fixed columns: connection / role / action stay compact; device + resources
-   take the rest. Cells clip overflow so long IDs do not spill into neighbors.
-   No min-width — the table fits the card; sideways scroll only if the card
-   itself is narrower than these fixed columns plus a usable device column. */
-table.devices-table {
-  table-layout: fixed;
-  width: 100%;
-}
-table.devices-table th,
-table.devices-table td {
-  overflow: hidden;
-  vertical-align: middle;
-}
-table.devices-table th:nth-child(1),
-table.devices-table td:nth-child(1) {
-  width: 28%;
-}
-table.devices-table th:nth-child(2),
-table.devices-table td:nth-child(2) {
-  width: 120px;
-  padding-left: 12px;
-  padding-right: 12px;
-}
-table.devices-table th:nth-child(3),
-table.devices-table td:nth-child(3) {
-  width: auto;
-}
-table.devices-table th:nth-child(4),
-table.devices-table td:nth-child(4) {
-  width: 100px;
-  padding-left: 12px;
-  padding-right: 12px;
-}
-table.devices-table th:nth-child(5),
-table.devices-table td:nth-child(5) {
-  width: 130px;
-  padding-left: 10px;
-  padding-right: 10px;
-}
-table.devices-table .cell-title {
-  min-width: 0;
-  max-width: 100%;
-}
-table.devices-table .cell-title > div {
-  min-width: 0;
-  overflow: hidden;
-}
-table.devices-table .cell-meta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-table.devices-table .meter,
-table.devices-table .meter.vram-meter {
-  min-width: 0;
-  max-width: 100%;
-}
 th {
   padding: 12px 22px;
   color: var(--muted);
