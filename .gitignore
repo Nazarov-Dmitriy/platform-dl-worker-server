@@ -32,3 +32,6 @@ processor/desktop-release/
 !/releases/windows/.gitkeep
 !/releases/macos/.gitkeep
 !/releases/linux/.gitkeep
+
+# GigaCode local config and worktrees
+.gigacode_vsc/
