@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <style>
+        html {
+            color-scheme: dark;
+        }
+
+        body {
+            margin: 0;
+            font: 14px system-ui, sans-serif;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+    </style>
+    <title>Таблица устройств — ресурсы</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+    <style>
+        :root {
+            color-scheme: dark;
+            --page: #0b1016;
+            --chrome: #10151c;
+            --surface: #141c25;
+            --raised: #192330;
+            --line: #253444;
+            --line-soft: #1d2834;
+            --ink: #e6edf5;
+            --ink-dim: #93a4b8;
+            --ink-faint: #63768b;
+            --accent: #27b6c4;
+            --accent-ink: #042026;
+            --good: #46c08a;
+            --warn: #e0a33c;
+            --bad: #e2686b;
+            --gpu: #a37fff;
+            --gpu-ink: #1a0f2e;
+            --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+            --mono: "IBM Plex Mono", "Cascadia Mono", ui-monospace, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--page);
+            color: var(--ink);
+            font-family: var(--sans);
+            font-size: 15px;
+            line-height: 1.5;
+            padding-block: 28px 56px;
+            padding-left: max(16px, env(safe-area-inset-left, 0px));
+            padding-right: max(16px, env(safe-area-inset-right, 0px));
+        }
+
+        .wrap {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+        }
+
+        .lede h1 {
+            font-size: 26px;
+            margin: 0 0 6px;
+            text-wrap: balance;
+            letter-spacing: -0.015em;
+        }
+
+        .lede p {
+            margin: 0;
+            color: var(--ink-dim);
+            max-width: 64ch;
+        }
+
+        /* ---- the window ---- */
+        .window {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--chrome);
+            overflow: hidden;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+        }
+
+        .titlebar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 14px;
+            border-bottom: 1px solid var(--line-soft);
+            background: #0e131a;
+        }
+
+        .titlebar .mark {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            background: var(--accent);
+            color: var(--accent-ink);
+            font-size: 11px;
+            font-weight: 700;
+            display: grid;
+            place-items: center;
+        }
+
+        .titlebar .name {
+            font-size: 13px;
+            color: var(--ink-dim);
+        }
+
+        .titlebar .keys {
+            margin-left: auto;
+            display: flex;
+            gap: 14px;
+            color: var(--ink-faint);
+            font-size: 13px;
+        }
+
+        /* ---- toggle switch ---- */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--line-soft);
+            background: var(--surface);
+        }
+
+        .toggle-row label {
+            font-size: 13px;
+            color: var(--ink-dim);
+        }
+
+        .switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .switch .slider {
+            position: absolute;
+            inset: 0;
+            background: var(--line);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .switch .slider::before {
+            content: "";
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            left: 3px;
+            top: 3px;
+            background: var(--ink);
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .switch input:checked+.slider {
+            background: var(--accent);
+        }
+
+        .switch input:checked+.slider::before {
+            transform: translateX(20px);
+        }
+
+        .switch input:focus-visible+.slider {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .toggle-label {
+            font-size: 13px;
+            color: var(--ink);
+            font-weight: 500;
+        }
+
+        /* ---- table ---- */
+        .table-wrap {
+            padding: 14px 18px 20px;
+        }
+
+        table.dev {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13.5px;
+            table-layout: fixed;
+        }
+
+        table.dev th,
+        table.dev td {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: normal;
+        }
+
+        table.dev th {
+            text-align: left;
+            color: var(--ink-faint);
+            font-weight: 500;
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--line-soft);
+            white-space: nowrap;
+        }
+
+        table.dev td {
+            padding: 10px 10px;
+            border-bottom: 1px solid var(--line-soft);
+            vertical-align: middle;
+        }
+
+        table.dev tr:last-child td {
+            border-bottom: none;
+        }
+
+        table.dev .device-name {
+            font-weight: 600;
+        }
+
+        table.dev .device-id {
+            color: var(--ink-faint);
+            font-family: var(--mono);
+            font-size: 11.5px;
+        }
+
+        /* ---- badges ---- */
+        .badge {
+            display: inline-block;
+            font-size: 12px;
+            padding: 2px 9px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            color: var(--ink-dim);
+        }
+
+        .badge.good {
+            color: var(--good);
+            border-color: #255c44;
+        }
+
+        .badge.off {
+            color: var(--ink-faint);
+            border-color: var(--line-soft);
+        }
+
+        /* ---- meters ---- */
+        .meter-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 130px;
+        }
+
+        .meter-track {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #0e1620;
+            overflow: hidden;
+        }
+
+        .meter-fill {
+            display: block;
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.4s ease, background 0.3s;
+        }
+
+        .meter-fill.green {
+            background: var(--good);
+        }
+
+        .meter-fill.warm {
+            background: var(--warn);
+        }
+
+        .meter-fill.hot {
+            background: var(--bad);
+        }
+
+        .meter-fill.gpu {
+            background: var(--gpu);
+        }
+
+        .meter-val {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--ink-dim);
+            font-variant-numeric: tabular-nums;
+            min-width: 38px;
+            text-align: right;
+        }
+
+        .meter-val.gpu-val {
+            color: var(--gpu);
+        }
+
+        /* ---- role badge ---- */
+        .role {
+            font-size: 13px;
+        }
+
+        .role.primary {
+            color: var(--accent);
+        }
+
+        /* ---- action button ---- */
+        .btn-action {
+            appearance: none;
+            font: inherit;
+            font-size: 12.5px;
+            cursor: pointer;
+            border: 1px solid var(--line);
+            background: var(--raised);
+            color: var(--ink);
+            border-radius: 6px;
+            padding: 4px 11px;
+        }
+
+        .btn-action:hover {
+            border-color: #31485e;
+        }
+
+        /* ---- annotations ---- */
+        .notes {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 14px;
+        }
+
+        .note {
+            border: 1px solid var(--line-soft);
+            border-radius: 9px;
+            background: var(--surface);
+            padding: 15px 17px;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+        }
+
+        .note h3 {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .note p {
+            margin: 0;
+            color: var(--ink-dim);
+            font-size: 13px;
+        }
+
+        .note .callout {
+            color: var(--accent);
+            font-size: 12.5px;
+        }
+
+        /* ---- table headers ---- */
+        table.dev thead th {
+            padding-bottom: 4px;
+        }
+
+        .foot {
+            color: var(--ink-faint);
+            font-size: 13px;
+        }
+
+        @media (max-width: 700px) {
+            .table-wrap {
+                overflow-x: auto;
+            }
+
+            table.dev {
+                min-width: 500px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="lede">
+            <h1>Таблица устройств — ресурсы</h1>
+            <p>Три отдельных подстолбца CPU / RAM / VRAM объединены в одну колонку «Ресурсы».</p>
+        </div>
+
+        <div class="window">
+            <div class="titlebar">
+                <span class="mark">P</span>
+                <span class="name">Панель оператора — Устройства</span>
+                <span class="keys">— □ ✕</span>
+            </div>
+
+            <div class="toggle-row" style="justify-content:center;color:var(--ink-faint);font-size:13px">
+                Все ресурсы отображаются одновременно
+            </div>
+
+            <div class="table-wrap">
+                <table class="dev" id="deviceTable">
+                    <thead>
+                        <tr>
+                            <th>Устройство</th>
+                            <th style="width:120px">Подключение</th>
+                            <th>Ресурсы</th>
+                            <th style="width:100px">Роль</th>
+                            <th style="width:100px">Действие</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deviceBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="notes">
+            <div class="note">
+                <h3>Одна колонка «Ресурсы» с тремя подстолбцами</h3>
+                <p>ЦПУ, ОЗУ и ВРАМ объединены в одну колонку. Каждый подстолбец показывает свой прогресс-бар и значение.</p>
+                <span class="callout">ЦПУ и ОЗУ — в %, ВРАМ — в ГБ</span>
+            </div>
+            <div class="note">
+                <h3>Цвета прогресс-баров</h3>
+                <p>ЦПУ и ОЗУ: зелёный &lt; 60%, жёлтый 60–85%, красный &gt; 85%. ВРАМ — фиолетовый для быстрого отличия.</p>
+                <span class="callout">Фиолетовый — чтобы оператор сразу видел GPU-нагрузку</span>
+            </div>
+            <div class="note">
+                <h3>Пустой ВРАМ для CPU-устройств</h3>
+                <p>У устройств без дискретной видеокарты (Mac с Apple Silicon, CPU-ноды) подстолбец ВРАМ показывает «—».</p>
+                <span class="callout">Apple Silicon: Unified Memory отображается в ОЗУ, ВРАМ = —</span>
+            </div>
+        </div>
+
+        <p class="foot">Макет, не приложение. Скажите, что переставить, и только потом трогаем panel/render.js.</p>
+    </div>
+
+    <script>
+        // Mock device data
+        const devices = [
+            {
+                name: "MacBook Pro 16\"",
+                id: "mac-01a2b3",
+                enabled: true, online: true,
+                cpuPercent: 42, ramPercent: 68,
+                gpuName: "Apple M3 Max",
+                vramTotal: 128, vramUsed: 14,
+                role: "primary"
+            },
+            {
+                name: "Desktop RTX 4090",
+                id: "win-04c5d6",
+                enabled: true, online: true,
+                cpuPercent: 78, ramPercent: 82,
+                gpuName: "RTX 4090 24GB",
+                vramTotal: 24, vramUsed: 19,
+                role: "primary"
+            },
+            {
+                name: "Workstation RTX 3080",
+                id: "win-07e8f9",
+                enabled: true, online: true,
+                cpuPercent: 55, ramPercent: 45,
+                gpuName: "RTX 3080 10GB",
+                vramTotal: 10, vramUsed: 7,
+                role: "assistant"
+            },
+            {
+                name: "Mac Mini M2",
+                id: "mac-10g1h2",
+                enabled: false, online: false,
+                cpuPercent: 0, ramPercent: 0,
+                gpuName: "Apple M2",
+                vramTotal: 16, vramUsed: 0,
+                role: "assistant"
+            },
+            {
+                name: "CPU Node #3",
+                id: "lin-11i2j3",
+                enabled: true, online: true,
+                cpuPercent: 12, ramPercent: 30,
+                gpuName: "CPU-only", vramTotal: 8,
+                vramUsed: 0,
+                role: "assistant"
+            }
+        ];
+
+        const body = document.getElementById('deviceBody');
+
+        function meterColor(pct) {
+            if (!pct) return '';
+            if (pct < 60) return 'green';
+            if (pct < 85) return 'warm';
+            return 'hot';
+        }
+
+        function meterHTML(pct, gpu) {
+            const color = meterColor(pct);
+            const cls = gpu ? 'gpu' : color;
+            const valCls = gpu ? 'gpu-val' : '';
+            const label = pct != null ? pct + '%' : '—';
+            return '<div class="meter-cell">' +
+                '<div class="meter-track"><span class="meter-fill ' + cls + '" style="width:' + (pct || 0) + '%"></span></div>' +
+                '<span class="meter-val ' + valCls + '">' + label + '</span>' +
+                '</div>';
+        }
+
+        function vramHTML(d) {
+            if (d.gpuName === 'CPU-only') {
+                return '<span style="color:var(--ink-faint);font-size:12px">—</span>';
+            }
+            const pct = Math.round((d.vramUsed / d.vramTotal) * 100);
+            const gb = d.vramUsed.toFixed(1).replace('.', ',');
+            const total = d.vramTotal.toFixed(1).replace('.', ',');
+            return '<div class="meter-cell">' +
+                '<div class="meter-track"><span class="meter-fill gpu" style="width:' + pct + '%"></span></div>' +
+                '<span class="meter-val gpu-val">' + gb + ' / ' + total + ' ГБ</span>' +
+                '</div>';
+        }
+
+        function renderDevices() {
+            body.innerHTML = '';
+            devices.forEach(function (d) {
+                var tr = document.createElement('tr');
+                var statusBadge;
+                if (!d.enabled) statusBadge = '<span class="badge off">Отключено</span>';
+                else if (d.online) statusBadge = '<span class="badge good">В сети</span>';
+                else statusBadge = '<span class="badge">Не в сети</span>';
+                var roleLabel = d.role === 'primary' ? 'Основной' : 'Помощник';
+                var roleCls = d.role === 'primary' ? 'primary' : '';
+                var cpuLine = d.online ? meterHTML(d.cpuPercent) : '';
+                var ramLine = d.online ? meterHTML(d.ramPercent) : '';
+                var vramLine = vramHTML(d);
+                tr.innerHTML =
+                    '<td><span class="device-name">' + d.name + '</span><br><span class="device-id">' + d.id + ' · ' + d.gpuName + '</span></td>' +
+                    '<td>' + statusBadge + '</td>' +
+                    '<td style="display:flex;flex-direction:column;gap:8px">' + cpuLine + ramLine + vramLine + '</td>' +
+                    '<td><span class="role ' + roleCls + '">' + roleLabel + '</span></td>' +
+                    '<td><button class="btn-action">Управлять</button></td>';
+                body.appendChild(tr);
+            });
+        }
+
+        renderDevices();
+    </script>
+</body>
+
+</html>
+
++691
+-0
+/ для вызова команд, @ для добавления контекста
