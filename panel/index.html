@@ -1,692 +1,587 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Панель управления · Worker</title>
-    <script src="/panel/theme.js?v=2"></script>
-    <link rel="stylesheet" href="/panel/app.css?v=2" />
-    <script defer src="/panel/common.js?v=2"></script>
-    <script defer src="/panel/render.js?v=2"></script>
-    <script defer src="/panel/app.js?v=2"></script>
-  </head>
-  <body>
-    <p id="loading" class="empty" role="status">Загружаем панель…</p>
-    <div id="app" hidden>
-      <aside class="sidebar" id="sidebar">
-        <a class="brand" href="/panel/" aria-label="Worker — главная"
-          ><svg class="brand-mark" viewBox="0 0 40 34" aria-hidden="true">
-            <path
-              fill="currentColor"
-              d="M0 3h8l5 18 6-18h7l5 18 5-18h8L34 32h-8l-4-15-5 15H9z"
-            /></svg
-          >Worker</a
-        >
-        <p class="sidebar-subtitle">Диспетчер обработки медиа</p>
-        <nav id="nav" class="nav-list" aria-label="Основная навигация">
-          <button type="button" data-tab="overview" aria-pressed="false">
-            <span data-icon="grid"></span>Обзор</button
-          ><button type="button" data-tab="queue" aria-pressed="false">
-            <span data-icon="list"></span>Очередь заданий</button
-          ><button type="button" data-tab="devices" aria-pressed="false">
-            <span data-icon="monitor"></span>Устройства</button
-          ><button type="button" data-tab="sites" aria-pressed="false">
-            <span data-icon="globe"></span>Сайты</button
-          ><button type="button" data-tab="models" aria-pressed="false">
-            <span data-icon="box"></span>Модели</button
-          ><button
-            type="button"
-            data-tab="accounts"
-            aria-pressed="false"
-            id="accountsTab"
-            hidden
-          >
-            <span data-icon="user"></span>Аккаунты</button
-          ><button
-            type="button"
-            data-tab="audit"
-            aria-pressed="false"
-            id="auditTab"
-            hidden
-          >
-            <span data-icon="file"></span>Журнал</button
-          ><button
-            type="button"
-            data-tab="ops"
-            aria-pressed="false"
-            id="opsTab"
-            hidden
-          >
-            <span data-icon="settings"></span>Обслуживание
-          </button>
-          <button
-            type="button"
-            data-tab="updates"
-            id="updatesTab"
-            aria-pressed="false"
-            hidden
-          >
-            <span data-icon="refresh"></span>Обновления
-          </button>
-        </nav>
-        <div class="sidebar-footer">
-          <label class="theme-picker"
-            >Тема<select data-theme-control aria-label="Тема оформления">
-              <option value="light">Светлая</option>
-              <option value="dark">Тёмная</option>
-            </select></label
-          ><button type="button" class="button" id="logout">
-            <span data-icon="logout"></span>Выйти
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Панель управления · Worker</title>
+  <script src="/panel/theme.js?v=3"></script>
+  <link rel="stylesheet" href="/panel/app.css?v=3" />
+  <script defer src="/panel/common.js?v=3"></script>
+  <script defer src="/panel/render.js?v=3"></script>
+  <script defer src="/panel/app.js?v=3"></script>
+</head>
+
+<body>
+  <p id="loading" class="empty" role="status">Загружаем панель…</p>
+  <div id="app" hidden>
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="/panel/" aria-label="Worker — главная"><svg class="brand-mark" viewBox="0 0 40 34"
+          aria-hidden="true">
+          <path fill="currentColor" d="M0 3h8l5 18 6-18h7l5 18 5-18h8L34 32h-8l-4-15-5 15H9z" />
+        </svg>Worker</a>
+      <p class="sidebar-subtitle">Диспетчер обработки медиа</p>
+      <nav id="nav" class="nav-list" aria-label="Основная навигация">
+        <button type="button" data-tab="overview" aria-pressed="false">
+          <span data-icon="grid"></span>Обзор</button><button type="button" data-tab="queue" aria-pressed="false">
+          <span data-icon="list"></span>Очередь заданий</button><button type="button" data-tab="devices"
+          aria-pressed="false">
+          <span data-icon="monitor"></span>Устройства</button><button type="button" data-tab="sites"
+          aria-pressed="false">
+          <span data-icon="globe"></span>Сайты</button><button type="button" data-tab="models" aria-pressed="false">
+          <span data-icon="box"></span>Модели</button><button type="button" data-tab="accounts" aria-pressed="false"
+          id="accountsTab" hidden>
+          <span data-icon="user"></span>Аккаунты</button><button type="button" data-tab="worker" aria-pressed="false">
+          <span data-icon="cpu"></span>Воркер</button><button type="button" data-tab="audit" id="auditTab"
+          aria-pressed="false" hidden>
+          <span data-icon="file"></span>Журнал</button><button type="button" data-tab="ops" aria-pressed="false"
+          id="opsTab" hidden>
+          <span data-icon="settings"></span>Обслуживание
+        </button>
+        <button type="button" data-tab="updates" id="updatesTab" aria-pressed="false" hidden>
+          <span data-icon="refresh"></span>Обновления
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <label class="theme-picker">Тема<select data-theme-control aria-label="Тема оформления">
+            <option value="light">Светлая</option>
+            <option value="dark">Тёмная</option>
+          </select></label><button type="button" class="button" id="logout">
+          <span data-icon="logout"></span>Выйти
+        </button>
+      </div>
+    </aside>
+    <button type="button" id="overlay" class="overlay" aria-label="Закрыть меню"></button>
+    <div class="dashboard">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button type="button" class="button icon-only menu-toggle" id="menuToggle" aria-label="Открыть меню"
+            aria-controls="sidebar" aria-expanded="false">
+            <span data-icon="menu"></span></button><span class="breadcrumb">Панель управления</span>
+        </div>
+        <div class="topbar-actions">
+          <a class="button quiet" href="/device-ca.crt" download="device-ca.crt" aria-label="Скачать сертификат"><span
+              data-icon="download"></span><span class="certificate-label">Сертификат</span></a>
+          <div class="owner-chip">
+            <span class="avatar" data-icon="user"></span><span class="owner-label" id="roleLabel">Владелец</span>
+          </div>
+        </div>
+      </header>
+      <main class="page-content">
+        <div class="page-heading">
+          <div>
+            <h1 id="pageTitle">Обзор</h1>
+            <p id="pageSubtitle">
+              Состояние обработки и подключённых устройств
+            </p>
+          </div>
+          <button type="button" class="button" id="reloadAll" aria-label="Обновить данные">
+            <span data-icon="refresh"></span><span class="refresh-label">Обновить</span>
           </button>
         </div>
-      </aside>
-      <button
-        type="button"
-        id="overlay"
-        class="overlay"
-        aria-label="Закрыть меню"
-      ></button>
-      <div class="dashboard">
-        <header class="topbar">
-          <div class="topbar-left">
-            <button
-              type="button"
-              class="button icon-only menu-toggle"
-              id="menuToggle"
-              aria-label="Открыть меню"
-              aria-controls="sidebar"
-              aria-expanded="false"
-            >
-              <span data-icon="menu"></span></button
-            ><span class="breadcrumb">Панель управления</span>
-          </div>
-          <div class="topbar-actions">
-            <a
-              class="button quiet"
-              href="/device-ca.crt"
-              download="device-ca.crt"
-              aria-label="Скачать сертификат"
-              ><span data-icon="download"></span
-              ><span class="certificate-label">Сертификат</span></a
-            >
-            <div class="owner-chip">
-              <span class="avatar" data-icon="user"></span
-              ><span class="owner-label" id="roleLabel">Владелец</span>
+        <p id="globalError" class="notice-box global-error" role="alert" hidden></p>
+        <p id="feedback" class="notice-box" role="status" hidden></p>
+        <section data-panel="overview">
+          <p id="overviewRefresh" class="caption" role="status">Автообновление каждые 15 секунд</p>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-icon notice" data-icon="clock"></span>
+              <div>
+                <p class="stat-label">В очереди</p>
+                <p class="stat-value" id="stat-queued">—</p>
+              </div>
+            </div>
+            <div class="stat">
+              <span class="stat-icon" data-icon="play"></span>
+              <div>
+                <p class="stat-label">В работе</p>
+                <p class="stat-value" id="stat-running">—</p>
+              </div>
+            </div>
+            <div class="stat">
+              <span class="stat-icon" data-icon="globe"></span>
+              <div>
+                <p class="stat-label">Подключено сайтов</p>
+                <p class="stat-value" id="stat-siteCount">—</p>
+              </div>
+            </div>
+            <div class="stat">
+              <span class="stat-icon good" data-icon="monitor"></span>
+              <div>
+                <p class="stat-label">Устройства в сети</p>
+                <p class="stat-value" id="stat-online">—</p>
+              </div>
             </div>
           </div>
-        </header>
-        <main class="page-content">
-          <div class="page-heading">
-            <div>
-              <h1 id="pageTitle">Обзор</h1>
-              <p id="pageSubtitle">
-                Состояние обработки и подключённых устройств
-              </p>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Последние задания</h2>
+              <select id="overviewSite" aria-label="Сайт для последних заданий"></select>
             </div>
-            <button
-              type="button"
-              class="button"
-              id="reloadAll"
-              aria-label="Обновить данные"
-            >
-              <span data-icon="refresh"></span
-              ><span class="refresh-label">Обновить</span>
-            </button>
+            <div id="overviewJobs"></div>
           </div>
-          <p
-            id="globalError"
-            class="notice-box global-error"
-            role="alert"
-            hidden
-          ></p>
-          <p id="feedback" class="notice-box" role="status" hidden></p>
-          <section data-panel="overview">
-            <p id="overviewRefresh" class="caption" role="status">Автообновление каждые 15 секунд</p>
-            <div class="stats">
-              <div class="stat">
-                <span class="stat-icon notice" data-icon="clock"></span>
-                <div>
-                  <p class="stat-label">В очереди</p>
-                  <p class="stat-value" id="stat-queued">—</p>
-                </div>
-              </div>
-              <div class="stat">
-                <span class="stat-icon" data-icon="play"></span>
-                <div>
-                  <p class="stat-label">В работе</p>
-                  <p class="stat-value" id="stat-running">—</p>
-                </div>
-              </div>
-              <div class="stat">
-                <span class="stat-icon" data-icon="globe"></span>
-                <div>
-                  <p class="stat-label">Подключено сайтов</p>
-                  <p class="stat-value" id="stat-siteCount">—</p>
-                </div>
-              </div>
-              <div class="stat">
-                <span class="stat-icon good" data-icon="monitor"></span>
-                <div>
-                  <p class="stat-label">Устройства в сети</p>
-                  <p class="stat-value" id="stat-online">—</p>
-                </div>
-              </div>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Устройства</h2>
+              <button class="button quiet" data-go="devices">
+                Все устройства →
+              </button>
             </div>
-            <div class="card">
-              <div class="card-heading">
-                <h2>Последние задания</h2>
-                <select
-                  id="overviewSite"
-                  aria-label="Сайт для последних заданий"
-                ></select>
-              </div>
-              <div id="overviewJobs"></div>
+            <div id="overviewDevices"></div>
+          </div>
+        </section>
+        <section data-panel="queue" hidden>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Задания сайта</h2>
+              <select id="jobSite" aria-label="Сайт для очереди"></select>
             </div>
-            <div class="card">
-              <div class="card-heading">
-                <h2>Устройства</h2>
-                <button class="button quiet" data-go="devices">
-                  Все устройства →
-                </button>
-              </div>
-              <div id="overviewDevices"></div>
+            <div id="jobs"></div>
+            <div class="card-body actions">
+              <button type="button" class="button" id="reloadJobs">
+                <span data-icon="refresh"></span>Обновить</button><button type="button" class="button danger"
+                id="cancelAll">
+                Отменить все задания сайта
+              </button>
             </div>
-          </section>
-          <section data-panel="queue" hidden>
-            <div class="card">
-              <div class="card-heading">
-                <h2>Задания сайта</h2>
-                <select id="jobSite" aria-label="Сайт для очереди"></select>
-              </div>
-              <div id="jobs"></div>
-              <div class="card-body actions">
-                <button type="button" class="button" id="reloadJobs">
-                  <span data-icon="refresh"></span>Обновить</button
-                ><button type="button" class="button danger" id="cancelAll">
-                  Отменить все задания сайта
-                </button>
-              </div>
+          </div>
+        </section>
+        <section data-panel="sites" hidden>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Подключённые сайты</h2>
             </div>
-          </section>
-          <section data-panel="sites" hidden>
-            <div class="card">
-              <div class="card-heading"><h2>Подключённые сайты</h2></div>
-              <div id="sites"></div>
+            <div id="sites"></div>
+          </div>
+          <section id="siteSettings" class="card" hidden>
+            <div class="card-heading">
+              <h2 id="siteSettingsTitle">Настройки сайта</h2><button id="closeSiteSettings" type="button"
+                class="button quiet">Закрыть</button>
             </div>
-            <section id="siteSettings" class="card" hidden>
-              <div class="card-heading"><h2 id="siteSettingsTitle">Настройки сайта</h2><button id="closeSiteSettings" type="button" class="button quiet">Закрыть</button></div>
-              <div class="card-body">
-                <p id="siteSettingsId" class="caption"></p>
-                <form id="siteOpsForm" class="stacked-form">
-                  <fieldset class="form-options">
-                    <legend>Разрешённые операции</legend>
-                    <div class="option-list">
-                      <label class="check-field"
-                        ><input type="checkbox" name="transcode" />Обработка видео</label
-                      ><label class="check-field"
-                        ><input type="checkbox" name="transcribe" />Распознавание речи</label
-                      ><label class="check-field"
-                        ><input type="checkbox" name="subtitles" />Субтитры</label
-                      >
-                    </div>
-                  </fieldset>
-                  <p class="caption">Сайт сможет заказывать только отмеченные виды работ. Изменение действует сразу, текущие задания не отменяются.</p>
-                  <div class="form-actions">
-                    <button class="button primary" type="submit">Сохранить операции</button>
+            <div class="card-body">
+              <p id="siteSettingsId" class="caption"></p>
+              <form id="siteOpsForm" class="stacked-form">
+                <fieldset class="form-options">
+                  <legend>Разрешённые операции</legend>
+                  <div class="option-list">
+                    <label class="check-field"><input type="checkbox" name="transcode" />Обработка видео</label><label
+                      class="check-field"><input type="checkbox" name="transcribe" />Распознавание речи</label><label
+                      class="check-field"><input type="checkbox" name="subtitles" />Субтитры</label>
                   </div>
-                </form>
-                <p id="siteOpsOut" class="notice-box" role="status" hidden></p>
-                <div class="form-actions"><button id="issueSiteToken" type="button" class="button primary">Выдать новый токен</button><button id="deleteSite" type="button" class="button danger">Удалить сайт</button></div>
-                <div id="siteIssued" class="token-box" role="status" hidden></div>
-              </div>
-            </section>
-            <div id="siteCreate">
-              <button id="showSiteCreate" class="button primary" type="button">Добавить сайт</button>
-              <div id="siteCreateForm" hidden>
+                </fieldset>
+                <p class="caption">Сайт сможет заказывать только отмеченные виды работ. Изменение действует сразу,
+                  текущие задания не отменяются.</p>
+                <div class="form-actions">
+                  <button class="button primary" type="submit">Сохранить операции</button>
+                </div>
+              </form>
+              <p id="siteOpsOut" class="notice-box" role="status" hidden></p>
+              <div class="form-actions"><button id="issueSiteToken" type="button" class="button primary">Выдать новый
+                  токен</button><button id="deleteSite" type="button" class="button danger">Удалить сайт</button></div>
+              <div id="siteIssued" class="token-box" role="status" hidden></div>
+            </div>
+          </section>
+          <div id="siteCreate">
+            <button id="showSiteCreate" class="button primary" type="button">Добавить сайт</button>
+            <div id="siteCreateForm" hidden>
               <div class="card">
-                <div class="card-heading"><h2>Добавить сайт</h2></div>
+                <div class="card-heading">
+                  <h2>Добавить сайт</h2>
+                </div>
                 <div class="card-body">
                   <form id="siteForm" class="stacked-form">
                     <div class="form-grid">
-                      <label class="field"
-                        >Название сайта<input
-                          name="name"
-                          type="text"
-                          required
-                          maxlength="200"
-                          placeholder="Например, основной сайт" /></label
-                      ><label class="field"
-                        >Вес в очереди<input
-                          name="weight"
-                          type="number"
-                          min="1"
-                          max="100"
-                          value="1"
-                          required
-                      /></label>
+                      <label class="field">Название сайта<input name="name" type="text" required maxlength="200"
+                          placeholder="Например, основной сайт" /></label><label class="field">Вес в очереди<input
+                          name="weight" type="number" min="1" max="100" value="1" required /></label>
                     </div>
                     <fieldset class="form-options">
                       <legend>Разрешённые операции</legend>
                       <div class="option-list">
-                        <label class="check-field"
-                          ><input
-                            type="checkbox"
-                            name="transcode"
-                            checked
-                          />Обработка видео</label
-                        ><label class="check-field"
-                          ><input
-                            type="checkbox"
-                            name="transcribe"
-                          />Распознавание речи</label
-                        ><label class="check-field"
-                          ><input
-                            type="checkbox"
-                            name="subtitles"
-                          />Субтитры</label
-                        >
+                        <label class="check-field"><input type="checkbox" name="transcode" checked />Обработка
+                          видео</label><label class="check-field"><input type="checkbox"
+                            name="transcribe" />Распознавание речи</label><label class="check-field"><input
+                            type="checkbox" name="subtitles" />Субтитры</label>
                       </div>
                     </fieldset>
                     <div class="form-actions">
-                      <button class="button primary">Добавить</button><button id="cancelSiteCreate" type="button" class="button quiet">Отмена</button>
+                      <button class="button primary">Добавить</button><button id="cancelSiteCreate" type="button"
+                        class="button quiet">Отмена</button>
                     </div>
                   </form>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+        <section data-panel="devices" hidden>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Все устройства</h2>
+            </div>
+            <div id="deviceList"></div>
+          </div>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Добавить устройство</h2>
+            </div>
+            <div class="card-body">
+              <form id="deviceForm" class="stacked-form">
+                <div class="form-grid single-field">
+                  <label class="field">Название устройства<input name="name" type="text" required maxlength="200"
+                      placeholder="Например, Mac mini" /></label>
+                </div>
+                <div class="form-actions">
+                  <button class="button primary">Добавить устройство</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-heading">
+              <div>
+                <h2 id="selectedDeviceTitle">Управление устройством</h2>
+                <p class="muted caption" id="selectedDeviceHint"></p>
               </div>
+              <button type="button" class="button danger" id="deleteDevice" hidden>
+                Удалить устройство
+              </button>
             </div>
-          </section>
-          <section data-panel="devices" hidden>
-            <div class="card">
-              <div class="card-heading"><h2>Все устройства</h2></div>
-              <div id="deviceList"></div>
+            <div class="card-body">
+              <label class="field">Выберите устройство<select id="deviceSelect"></select></label>
+              <div class="actions" id="deviceDetail"></div>
+              <form id="devicePriorityForm" class="form-grid">
+                <label class="field">Роль устройства<select id="devicePriority">
+                    <option value="0">Помощник</option>
+                    <option value="100">Основной</option>
+                  </select></label>
+                <p class="muted caption">Основных и помощников может быть несколько, независимо от ОС. Помощники
+                  получают новые задания, если подходящие основные заняты, на паузе, перегружены или недоступны. Без
+                  основных помощники работают самостоятельно. Смена роли не прерывает текущие задания.</p>
+                <div class="actions"><button type="submit" class="button" id="saveDevicePriority">Сохранить
+                    роль</button></div>
+              </form>
+              <div id="devicePriorityOut" hidden class="notice" aria-live="polite"></div>
             </div>
+          </div>
+          <div id="deviceControls" hidden>
             <div class="card">
-              <div class="card-heading"><h2>Добавить устройство</h2></div>
+              <div class="card-heading">
+                <h2 id="deviceConnectionTitle">Подключение устройства</h2>
+              </div>
               <div class="card-body">
-                <form id="deviceForm" class="stacked-form">
-                  <div class="form-grid single-field">
-                    <label class="field"
-                      >Название устройства<input
-                        name="name"
-                        type="text"
-                        required
-                        maxlength="200"
-                        placeholder="Например, Mac mini"
-                    /></label>
-                  </div>
-                  <div class="form-actions">
-                    <button class="button primary">Добавить устройство</button>
-                  </div>
-                </form>
+                <p class="muted caption">
+                  <strong id="tokenRecipient"></strong><br />Введите этот
+                  токен в приложении на выбранном компьютере. Токен
+                  показывается один раз.
+                </p>
+                <div class="actions">
+                  <button type="button" class="button primary" id="issueDeviceToken">
+                    Выдать токен
+                  </button>
+                </div>
+                <div id="issued" hidden class="token-box" aria-live="polite"></div>
               </div>
             </div>
             <div class="card">
               <div class="card-heading">
-                <div>
-                  <h2 id="selectedDeviceTitle">Управление устройством</h2>
-                  <p class="muted caption" id="selectedDeviceHint"></p>
-                </div>
-                <button
-                  type="button"
-                  class="button danger"
-                  id="deleteDevice"
-                  hidden
-                >
-                  Удалить устройство
-                </button>
+                <h2 id="deviceSettingsTitle">Настройки устройства</h2>
               </div>
               <div class="card-body">
-                <label class="field"
-                  >Выберите устройство<select id="deviceSelect"></select
-                ></label>
-                <div class="actions" id="deviceDetail"></div>
-                <form id="devicePriorityForm" class="form-grid">
-                  <label class="field">Роль устройства<select id="devicePriority">
-                    <option value="0">Помощник</option><option value="100">Основной</option>
-                  </select></label>
-                  <p class="muted caption">Основных и помощников может быть несколько, независимо от ОС. Помощники получают новые задания, если подходящие основные заняты, на паузе, перегружены или недоступны. Без основных помощники работают самостоятельно. Смена роли не прерывает текущие задания.</p>
-                  <div class="actions"><button type="submit" class="button" id="saveDevicePriority">Сохранить роль</button></div>
-                </form>
-                <div id="devicePriorityOut" hidden class="notice" aria-live="polite"></div>
-              </div>
-            </div>
-            <div id="deviceControls" hidden>
-              <div class="card">
-                <div class="card-heading">
-                  <h2 id="deviceConnectionTitle">Подключение устройства</h2>
-                </div>
-                <div class="card-body">
-                  <p class="muted caption">
-                    <strong id="tokenRecipient"></strong><br />Введите этот
-                    токен в приложении на выбранном компьютере. Токен
-                    показывается один раз.
-                  </p>
-                  <div class="actions">
-                    <button
-                      type="button"
-                      class="button primary"
-                      id="issueDeviceToken"
-                    >
-                      Выдать токен
-                    </button>
-                  </div>
-                  <div
-                    id="issued"
-                    hidden
-                    class="token-box"
-                    aria-live="polite"
-                  ></div>
-                </div>
-              </div>
-              <div class="card">
-                <div class="card-heading">
-                  <h2 id="deviceSettingsTitle">Настройки устройства</h2>
-                </div>
-                <div class="card-body">
-                  <div id="settings"></div>
-                  <p class="muted">Рабочая папка выбирается только в приложении на Windows или Mac.</p>
-                  <form id="configureForm" class="stacked-form">
-                    <div class="form-grid">
-                      <label class="field"
-                        >Параллельные задания<input
-                          name="maxParallel"
-                          type="number"
-                          min="1"
-                          max="64"
-                          value="2"
-                          required /></label
-                      ><label class="field"
-                        >Порог загрузки CPU, %<input
-                          name="cpuThresholdPercent"
-                          type="number"
-                          min="1"
-                          max="80"
-                          value="80"
-                          required /></label
-                      ><label class="field"
-                        >Порог использования RAM, %<input
-                          name="memoryThresholdPercent"
-                          type="number"
-                          min="1"
-                          max="80"
-                          value="80"
-                          required /></label
-                      ><label class="field"
-                        >Порог заполнения диска, %<input
-                          name="diskThresholdPercent"
-                          type="number"
-                          min="1"
-                          max="80"
-                          value="80"
-                          required
-                      /></label>
-                    </div>
-                    <fieldset class="form-options">
-                      <legend>Режим работы</legend>
-                      <div class="option-list">
-                        <label class="check-field"
-                          ><input type="checkbox" name="paused" />Приостановить
-                          обработку</label
-                        >
-                      </div>
-                    </fieldset>
-                    <div class="form-actions">
-                      <button class="button primary">
-                        Отправить настройки
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-              <p id="commandOut" class="notice-box" role="status" hidden></p>
-            </div>
-          </section>
-          <section data-panel="models" hidden>
-            <div class="card">
-              <div class="card-heading"><h2>Каталог моделей</h2></div>
-              <div id="catalog"></div>
-            </div>
-            <div class="card" id="catalogCard" hidden>
-              <div class="card-heading"><h2>Добавить модель</h2></div>
-              <div class="card-body">
-                <p class="muted">
-                  Модели берутся с
-                  <a
-                    href="https://huggingface.co/models"
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    >huggingface.co/models</a
-                  >. Найдите модель там и скопируйте имя репозитория из адресной
-                  строки — например
-                  <code>huggingface.co/ggerganov/whisper.cpp</code> даёт
-                  <code>ggerganov/whisper.cpp</code>. Размер и контрольная сумма
-                  считываются сами, вводить их не нужно.
-                </p>
-                <form id="catalogForm" class="stacked-form">
+                <div id="settings"></div>
+                <p class="muted">Рабочая папка выбирается только в приложении на Windows или Mac.</p>
+                <form id="configureForm" class="stacked-form">
                   <div class="form-grid">
-                    <label class="field"
-                      >Короткое имя<input
-                        name="id"
-                        type="text"
-                        required
-                        placeholder="whisper-cpp-large-v3-turbo" /></label
-                    ><label class="field"
-                      >Репозиторий<input
-                        name="repository"
-                        type="text"
-                        required
-                        placeholder="ggerganov/whisper.cpp" /></label
-                    ><label class="field"
-                      >Версия репозитория<input
-                        name="revision"
-                        type="text"
-                        placeholder="main — последняя" /><span class="hint"
-                        >Оставьте пустым, если не нужна конкретная
-                        версия.</span
-                      ></label
-                    ><label class="field"
-                      >Что делает<select name="purpose" id="catalogPurpose">
-                        <option value="RECOGNITION">Распознавание речи</option>
-                        <option value="TRANSLATION">Перевод</option>
-                      </select></label
-                    >
-                  </div>
-                  <div class="form-grid" id="catalogFileField">
-                    <label class="field"
-                      >Файл модели<select name="file" id="catalogFile">
-                        <option value=""></option></select
-                      ><span class="hint" id="catalogFileHint"
-                        >Нажмите «Показать файлы репозитория».</span
-                      ></label
-                    >
-                  </div>
-                  <div class="form-grid" id="catalogPairFields" hidden>
-                    <label class="field"
-                      >Язык источника<input
-                        name="source"
-                        type="text"
-                        placeholder="ru" /></label
-                    ><label class="field"
-                      >Язык перевода<input
-                        name="target"
-                        type="text"
-                        placeholder="fr"
-                    /></label>
-                  </div>
-                  <fieldset class="field-group">
-                    <legend>Для каких заданий</legend>
-                    <label class="check-field"
-                      ><input
-                        type="checkbox"
-                        name="operations"
-                        value="media.transcribe"
-                      />Распознавание речи</label
-                    ><label class="check-field"
-                      ><input
-                        type="checkbox"
-                        name="operations"
-                        value="media.subtitles"
-                      />Субтитры</label
-                    >
-                  </fieldset>
-                  <div class="actions">
-                    <button type="button" class="button" id="catalogFiles">
-                      Показать файлы репозитория
-                    </button>
-                    <button type="submit" class="button primary">
-                      Добавить в каталог
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-            <p id="modelOut" class="notice-box" role="status" hidden></p>
-          </section>
-          <section data-panel="accounts" hidden>
-            <div class="card">
-              <div class="card-heading"><h2>Аккаунты</h2></div>
-              <div id="accounts"></div>
-            </div>
-            <button id="showAccountCreate" type="button" class="button primary" aria-expanded="false" aria-controls="accountCreateForm">Добавить аккаунт</button>
-            <div id="accountCreateForm" class="card" hidden>
-              <div class="card-heading"><h2>Добавить аккаунт</h2></div>
-              <div class="card-body">
-                <form id="accountForm" class="stacked-form">
-                  <div class="form-grid">
-                    <label class="field"
-                      >Логин<input
-                        name="login"
-                        type="text"
-                        required
-                        autocomplete="off" /></label
-                    ><label class="field"
-                      >Пароль<input
-                        name="password"
-                        type="password"
-                        required
-                        minlength="12"
-                        autocomplete="new-password"
-                        placeholder="Не менее 12 символов" /></label
-                    ><label class="field"
-                      >Роль<select name="role">
-                        <option value="OPERATOR">Оператор</option>
-                        <option value="OWNER">Владелец</option>
-                      </select></label
-                    >
+                    <label class="field">Параллельные задания<input name="maxParallel" type="number" min="1" max="64"
+                        value="2" required /></label><label class="field">Порог загрузки CPU, %<input
+                        name="cpuThresholdPercent" type="number" min="1" max="80" value="80" required /></label><label
+                      class="field">Порог использования RAM, %<input name="memoryThresholdPercent" type="number" min="1"
+                        max="80" value="80" required /></label><label class="field">Порог заполнения диска, %<input
+                        name="diskThresholdPercent" type="number" min="1" max="80" value="80" required /></label>
                   </div>
                   <fieldset class="form-options">
-                    <legend>Дополнительные права</legend>
+                    <legend>Режим работы</legend>
                     <div class="option-list">
-                      <label class="check-field"
-                        ><input type="checkbox" name="manageSites" />Управление
-                        сайтами</label
-                      >
+                      <label class="check-field"><input type="checkbox" name="paused" />Приостановить
+                        обработку</label>
                     </div>
                   </fieldset>
                   <div class="form-actions">
-                    <button class="button primary">Добавить</button>
-                    <button id="cancelAccountCreate" type="button" class="button quiet">Отмена</button>
+                    <button class="button primary">
+                      Отправить настройки
+                    </button>
                   </div>
                 </form>
               </div>
             </div>
-          </section>
-          <section data-panel="audit" hidden>
-            <div class="card">
-              <div class="card-heading"><h2>История действий</h2></div>
-              <form id="auditFilters" class="card-body form-grid">
-                <label>Действие<select id="auditKind"><option value="">Все действия</option></select></label>
-                <label>Участник<select id="auditPrincipal"><option value="">Все участники</option></select></label>
-                <label class="full">ID задания<input id="auditJob" placeholder="Вставьте полный ID задания"></label>
-                <label>С даты и времени<input id="auditFrom" type="datetime-local"></label>
-                <label>По дату и время<input id="auditTo" type="datetime-local"></label>
-                <label class="check-field full"><input id="auditErrors" type="checkbox">Только ошибки</label>
-                <div class="form-actions full"><button class="button primary" type="submit">Применить фильтры</button><button id="auditReset" class="button quiet" type="button">Сбросить</button></div>
-              </form>
-              <div id="audit"></div>
-              <div class="audit-pagination"><button id="auditPrev" class="button" type="button" disabled>Назад</button><span id="auditPageLabel">Страница 1 · до 20 записей</span><button id="auditNext" class="button" type="button" disabled>Далее</button></div>
+            <p id="commandOut" class="notice-box" role="status" hidden></p>
+          </div>
+        </section>
+        <section data-panel="models" hidden>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Каталог моделей</h2>
             </div>
-          </section>
-          <section data-panel="ops" hidden>
-            <p class="notice-box">
-              Обслуживание останавливает назначение новых заданий. Текущие
-              задания продолжают работу. Снимок не содержит задания, принятые
-              после его создания.
-            </p>
-            <div class="card">
-              <div class="card-heading"><h2>Состояние диспетчера</h2></div>
-              <div class="card-body">
-                <div id="ops"></div>
-                <div class="ops-actions">
-                  <div class="ops-action">
-                    <h3>Пауза выдачи заданий</h3>
-                    <p class="muted">Новые задания останутся в очереди. Уже запущенные продолжат работу.</p>
-                    <button type="button" class="button" id="opsMaintenanceOn">Приостановить выдачу</button>
-                  </div>
-                  <div class="ops-action">
-                    <h3>Возобновление работы</h3>
-                    <p class="muted">Снять паузу и снова передавать задания подключённым устройствам.</p>
-                    <button type="button" class="button" id="opsMaintenanceOff">Возобновить выдачу</button>
-                  </div>
-                  <div class="ops-action">
-                    <h3>Резервная копия</h3>
-                    <p class="muted">Сохранить снимок базы диспетчера на сервере. Медиафайлы в копию не входят. Работа не приостанавливается.</p>
-                    <button type="button" class="button" id="opsBackup">Создать резервную копию</button>
-                  </div>
-                  <div class="ops-action">
-                    <h3>Подготовка к ручному обновлению</h3>
-                    <p class="muted">Приостановить выдачу и создать копию после завершения текущих заданий. Если они ещё работают, повторите действие позже. Обновление не устанавливается; выдача останется на паузе.</p>
-                    <button type="button" class="button" id="opsPrepare">Подготовить обновление</button>
-                  </div>
+            <div id="catalog"></div>
+          </div>
+          <div class="card" id="catalogCard" hidden>
+            <div class="card-heading">
+              <h2>Добавить модель</h2>
+            </div>
+            <div class="card-body">
+              <p class="muted">
+                Модели берутся с
+                <a href="https://huggingface.co/models" target="_blank"
+                  rel="noreferrer noopener">huggingface.co/models</a>. Найдите модель там и скопируйте имя репозитория
+                из адресной
+                строки — например
+                <code>huggingface.co/ggerganov/whisper.cpp</code> даёт
+                <code>ggerganov/whisper.cpp</code>. Размер и контрольная сумма
+                считываются сами, вводить их не нужно.
+              </p>
+              <form id="catalogForm" class="stacked-form">
+                <div class="form-grid">
+                  <label class="field">Короткое имя<input name="id" type="text" required
+                      placeholder="whisper-cpp-large-v3-turbo" /></label><label class="field">Репозиторий<input
+                      name="repository" type="text" required placeholder="ggerganov/whisper.cpp" /></label><label
+                    class="field">Версия репозитория<input name="revision" type="text"
+                      placeholder="main — последняя" /><span class="hint">Оставьте пустым, если не нужна конкретная
+                      версия.</span></label><label class="field">Что делает<select name="purpose" id="catalogPurpose">
+                      <option value="RECOGNITION">Распознавание речи</option>
+                      <option value="TRANSLATION">Перевод</option>
+                    </select></label>
                 </div>
-                <p id="opsOut" class="notice-box" role="status" hidden></p>
-              </div>
-            </div>
-          </section>
-          <section data-panel="updates" hidden>
-            <div class="card">
-              <div class="card-heading"><h2>Публичный сертификат HTTPS</h2></div>
-              <div class="card-body">
-                <p class="caption">Let’s Encrypt для IP-адреса. Домен не нужен. TCP 80 должен быть доступен извне; Worker остаётся на своём порту.</p>
-                <p class="caption">Сначала обновите Windows-приложение: прежняя сборка доверяет только локальному сертификату.</p>
-                <p id="publicCertificateStatus" class="notice-box" role="status">Проверяем сертификат…</p>
-                <div class="form-actions"><button id="enablePublicCertificate" type="button" class="button primary">Включить Let’s Encrypt</button></div>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-heading"><h2>Обновление Worker</h2></div>
-              <div class="card-body">
-                <div id="updateVersions" class="detail-list"></div>
-                <p id="updateMessage" class="notice-box" role="status">
-                  Проверяем состояние службы…
-                </p>
-                <p class="muted caption">
-                  При установке новые задания подождут в очереди, активные
-                  завершатся. Данные и подключения сохранятся.
-                </p>
+                <div class="form-grid" id="catalogFileField">
+                  <label class="field">Файл модели<select name="file" id="catalogFile">
+                      <option value=""></option>
+                    </select><span class="hint" id="catalogFileHint">Нажмите «Показать файлы
+                      репозитория».</span></label>
+                </div>
+                <div class="form-grid" id="catalogPairFields" hidden>
+                  <label class="field">Язык источника<input name="source" type="text" placeholder="ru" /></label><label
+                    class="field">Язык перевода<input name="target" type="text" placeholder="fr" /></label>
+                </div>
+                <fieldset class="field-group">
+                  <legend>Для каких заданий</legend>
+                  <label class="check-field"><input type="checkbox" name="operations"
+                      value="media.transcribe" />Распознавание речи</label><label class="check-field"><input
+                      type="checkbox" name="operations" value="media.subtitles" />Субтитры</label>
+                </fieldset>
                 <div class="actions">
-                  <button type="button" class="button" id="checkUpdate">
-                    <span data-icon="refresh"></span>Проверить обновления</button
-                  ><button
-                    type="button"
-                    class="button primary"
-                    id="installUpdate"
-                    disabled
-                  >
-                    Установить обновление
+                  <button type="button" class="button" id="catalogFiles">
+                    Показать файлы репозитория
+                  </button>
+                  <button type="submit" class="button primary">
+                    Добавить в каталог
                   </button>
                 </div>
+              </form>
+            </div>
+          </div>
+          <p id="modelOut" class="notice-box" role="status" hidden></p>
+        </section>
+        <section data-panel="accounts" hidden>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Аккаунты</h2>
+            </div>
+            <div id="accounts"></div>
+          </div>
+          <button id="showAccountCreate" type="button" class="button primary" aria-expanded="false"
+            aria-controls="accountCreateForm">Добавить аккаунт</button>
+          <div id="accountCreateForm" class="card" hidden>
+            <div class="card-heading">
+              <h2>Добавить аккаунт</h2>
+            </div>
+            <div class="card-body">
+              <form id="accountForm" class="stacked-form">
+                <div class="form-grid">
+                  <label class="field">Логин<input name="login" type="text" required autocomplete="off" /></label><label
+                    class="field">Пароль<input name="password" type="password" required minlength="12"
+                      autocomplete="new-password" placeholder="Не менее 12 символов" /></label><label
+                    class="field">Роль<select name="role">
+                      <option value="OPERATOR">Оператор</option>
+                      <option value="OWNER">Владелец</option>
+                    </select></label>
+                </div>
+                <fieldset class="form-options">
+                  <legend>Дополнительные права</legend>
+                  <div class="option-list">
+                    <label class="check-field"><input type="checkbox" name="manageSites" />Управление
+                      сайтами</label>
+                  </div>
+                </fieldset>
+                <div class="form-actions">
+                  <button class="button primary">Добавить</button>
+                  <button id="cancelAccountCreate" type="button" class="button quiet">Отмена</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+        <section data-panel="audit" hidden>
+          <div class="card">
+            <div class="card-heading">
+              <h2>История действий</h2>
+            </div>
+            <form id="auditFilters" class="card-body form-grid">
+              <label>Действие<select id="auditKind">
+                  <option value="">Все действия</option>
+                </select></label>
+              <label>Участник<select id="auditPrincipal">
+                  <option value="">Все участники</option>
+                </select></label>
+              <label class="full">ID задания<input id="auditJob" placeholder="Вставьте полный ID задания"></label>
+              <label>С даты и времени<input id="auditFrom" type="datetime-local"></label>
+              <label>По дату и время<input id="auditTo" type="datetime-local"></label>
+              <label class="check-field full"><input id="auditErrors" type="checkbox">Только ошибки</label>
+              <div class="form-actions full"><button class="button primary" type="submit">Применить
+                  фильтры</button><button id="auditReset" class="button quiet" type="button">Сбросить</button></div>
+            </form>
+            <div id="audit"></div>
+            <div class="audit-pagination"><button id="auditPrev" class="button" type="button"
+                disabled>Назад</button><span id="auditPageLabel">Страница 1 · до 20 записей</span><button id="auditNext"
+                class="button" type="button" disabled>Далее</button></div>
+          </div>
+        </section>
+        <section data-panel="ops" hidden>
+          <p class="notice-box">
+            Обслуживание останавливает назначение новых заданий. Текущие
+            задания продолжают работу. Снимок не содержит задания, принятые
+            после его создания.
+          </p>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Состояние диспетчера</h2>
+            </div>
+            <div class="card-body">
+              <div id="ops"></div>
+              <div class="ops-actions">
+                <div class="ops-action">
+                  <h3>Пауза выдачи заданий</h3>
+                  <p class="muted">Новые задания останутся в очереди. Уже запущенные продолжат работу.</p>
+                  <button type="button" class="button" id="opsMaintenanceOn">Приостановить выдачу</button>
+                </div>
+                <div class="ops-action">
+                  <h3>Возобновление работы</h3>
+                  <p class="muted">Снять паузу и снова передавать задания подключённым устройствам.</p>
+                  <button type="button" class="button" id="opsMaintenanceOff">Возобновить выдачу</button>
+                </div>
+                <div class="ops-action">
+                  <h3>Резервная копия</h3>
+                  <p class="muted">Сохранить снимок базы диспетчера на сервере. Медиафайлы в копию не входят. Работа не
+                    приостанавливается.</p>
+                  <button type="button" class="button" id="opsBackup">Создать резервную копию</button>
+                </div>
+                <div class="ops-action">
+                  <h3>Подготовка к ручному обновлению</h3>
+                  <p class="muted">Приостановить выдачу и создать копию после завершения текущих заданий. Если они ещё
+                    работают, повторите действие позже. Обновление не устанавливается; выдача останется на паузе.</p>
+                  <button type="button" class="button" id="opsPrepare">Подготовить обновление</button>
+                </div>
+              </div>
+              <p id="opsOut" class="notice-box" role="status" hidden></p>
+            </div>
+          </div>
+        </section>
+        <section data-panel="worker" hidden>
+          <div class="card">
+            <div class="screen-heading">
+              <h2>Обработка заданий</h2>
+              <div class="actions">
+                <button type="button" class="button" data-go="models">Модели</button>
+                <button type="button" class="button" data-go="ops">Настройки</button>
               </div>
             </div>
-          </section>
-        </main>
-      </div>
+            <div class="status-row">
+              <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Подключение</span>
+              <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Сборки GitHub</span>
+              <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Видео</span>
+              <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Аудио</span>
+            </div>
+            <div class="summary">
+              <h2>На этом компьютере</h2>
+              <span id="worker-activity">Заданий в работе: 0</span>
+              <span id="worker-state">Обработчик запущен</span>
+              <span id="worker-detail" class="muted">Готов к обработке</span>
+            </div>
+            <div class="actions dashboard-actions">
+              <button type="button" class="button primary">Подключиться</button>
+              <button type="button" class="button">Пауза</button>
+              <button type="button" class="button">Остановить</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Задания на этом устройстве</h2>
+            <div class="jobs-scroll">
+              <table class="jobs-table">
+                <thead>
+                  <tr>
+                    <th>Задание</th>
+                    <th>Этап</th>
+                    <th>Прогресс</th>
+                  </tr>
+                </thead>
+                <tbody id="workerJobs"></tbody>
+              </table>
+            </div>
+            <p class="hint">Новые задания назначает сервер. Общая очередь доступна в панели диспетчера.</p>
+          </div>
+          <details class="card">
+            <summary>
+              <span>Сборка GitHub</span>
+              <span class="ci-dot" data-phase="idle"></span>
+              <span>Не запущены</span>
+            </summary>
+            <p class="hint">Нажмите «Настройки» → «Сборки GitHub» для настройки.</p>
+          </details>
+        </section>
+        <section data-panel="updates" hidden>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Публичный сертификат HTTPS</h2>
+            </div>
+            <div class="card-body">
+              <p class="caption">Let’s Encrypt для IP-адреса. Домен не нужен. TCP 80 должен быть доступен извне; Worker
+                остаётся на своём порту.</p>
+              <p class="caption">Сначала обновите Windows-приложение: прежняя сборка доверяет только локальному
+                сертификату.</p>
+              <p id="publicCertificateStatus" class="notice-box" role="status">Проверяем сертификат…</p>
+              <div class="form-actions"><button id="enablePublicCertificate" type="button"
+                  class="button primary">Включить Let’s Encrypt</button></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Обновление Worker</h2>
+            </div>
+            <div class="card-body">
+              <div id="updateVersions" class="detail-list"></div>
+              <p id="updateMessage" class="notice-box" role="status">
+                Проверяем состояние службы…
+              </p>
+              <p class="muted caption">
+                При установке новые задания подождут в очереди, активные
+                завершатся. Данные и подключения сохранятся.
+              </p>
+              <div class="actions">
+                <button type="button" class="button" id="checkUpdate">
+                  <span data-icon="refresh"></span>Проверить обновления</button><button type="button"
+                  class="button primary" id="installUpdate" disabled>
+                  Установить обновление
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
-    <noscript
-      ><p class="empty">
-        Для работы панели включите JavaScript в браузере.
-      </p></noscript
-    >
-  </body>
+  </div>
+  <noscript>
+    <p class="empty">
+      Для работы панели включите JavaScript в браузере.
+    </p>
+  </noscript>
+</body>
+
 </html>

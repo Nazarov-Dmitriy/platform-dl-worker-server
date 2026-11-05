@@ -17,12 +17,13 @@ function empty(target, title, description, glyph = "box") {
   n.append(i, node("strong", title), node("p", description));
   $(target).replaceChildren(n);
 }
-function table(target, headers, rows) {
+function table(target, headers, rows, className) {
   const wrapper = node("div", null, "table-scroll"),
     t = node("table"),
     head = node("thead"),
     hr = node("tr"),
     body = node("tbody");
+  if (className) t.className = className;
   headers.forEach((h) => hr.append(node("th", h)));
   head.append(hr);
   rows.forEach((cells) => {
@@ -57,16 +58,31 @@ function titleCell(title, subtitle, glyph) {
   n.append(text);
   return n;
 }
-function meter(value) {
+function meter(value, accent) {
   if (typeof value !== "number" || !Number.isFinite(value))
     return node("span", "—", "muted");
   const percent = Math.round(Math.max(0, Math.min(100, value))),
     n = node("div", null, "meter"),
     track = node("div", null, "meter-track"),
     fill = node("div", null, "meter-fill");
+  if (accent) fill.classList.add(accent);
   fill.style.width = percent + "%";
   track.append(fill);
   n.append(track, node("span", percent + "%"));
+  return n;
+}
+function vramMeter(total, used) {
+  if (total == null || total <= 0 || used == null)
+    return node("span", "—", "muted");
+  const pct = Math.round(Math.max(0, Math.min(100, (used / total) * 100))),
+    n = node("div", null, "meter vram-meter"),
+    track = node("div", null, "meter-track"),
+    fill = node("div", null, "meter-fill");
+  fill.classList.add("vram");
+  fill.style.width = pct + "%";
+  track.append(fill);
+  const label = node("span", used.toFixed(1).replace(".", ",") + " / " + total.toFixed(1).replace(".", ",") + " ГБ");
+  n.append(track, label);
   return n;
 }
 function date(value) {
@@ -137,22 +153,28 @@ function renderDevices(target, devices) {
     [
       "Устройство",
       "Подключение",
-      "CPU",
-      "RAM",
+      "Ресурсы",
       "Роль",
       ...(manage ? ["Действие"] : []),
     ],
-    devices.map((d) => [
-      titleCell(d.name, d.id, "monitor"),
-      badge(
-        !d.enabled ? "Отключено" : d.online ? "В сети" : "Не в сети",
-        !d.enabled ? "" : d.online ? "good" : "",
-      ),
-      meter(d.online ? d.usage?.cpuPercent : null),
-      meter(d.online ? d.usage?.memoryUsedPercent : null),
-      d.priority > 0 ? "Основной" : "Помощник",
-      ...(manage ? [deviceManageButton(d)] : []),
-    ]),
+    devices.map((d) => {
+      const cpu = d.online ? meter(d.usage?.cpuPercent) : node("span", "—", "muted");
+      const ram = d.online ? meter(d.usage?.memoryUsedPercent) : node("span", "—", "muted");
+      const vram = vramMeter(d.usage?.vramTotal, d.usage?.vramUsed);
+      const resources = node("div", null, "resources-cell");
+      resources.append(cpu, ram, vram);
+      return [
+        titleCell(d.name, d.id, "monitor"),
+        badge(
+          !d.enabled ? "Отключено" : d.online ? "В сети" : "Не в сети",
+          !d.enabled ? "" : d.online ? "good" : "",
+        ),
+        resources,
+        d.priority > 0 ? "Основной" : "Помощник",
+        ...(manage ? [deviceManageButton(d)] : []),
+      ];
+    }),
+    "devices-table",
   );
 }
 function deviceManageButton(device) {
