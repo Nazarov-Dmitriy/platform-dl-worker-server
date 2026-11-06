@@ -69,7 +69,7 @@ type Running = {
   stage: string;
   encoder?: string;
   download?: { bytes: number; total: number };
-  processing?: Pick<Config, "videoMode" | "audioMode" | "cpuThreads" | "maxParallel">;
+  processing?: Pick<Config, "videoMode" | "audioMode" | "generationMode" | "cpuThreads" | "maxParallel">;
 };
 export class Agent {
   socket?: WebSocket;
@@ -123,10 +123,10 @@ export class Agent {
   readyModel(model: import("./journal.js").InstalledModel) {
     if (model.executor === "catalog-test" && !this.config.allowTestModels)
       return false;
-    const key = model.path + ":" + model.executor;
+    const key = model.path + ":" + model.executor + ":" + (this.config.generationMode || "auto");
     const cached = this.readiness.get(key);
     if (cached && Date.now() - cached.at < 30000) return cached.ready;
-    const ready = modelReady(model, this.config.whisperCpp, this.config.ffmpeg, this.config.stableDiffusion);
+    const ready = modelReady(model, this.config.whisperCpp, this.config.ffmpeg, this.config.stableDiffusion, this.config.generationMode);
     this.readiness.set(key, { at: Date.now(), ready });
     return ready;
   }
@@ -397,7 +397,7 @@ export class Agent {
         grants: [],
         acks: new Set(),
         stage: "WAITING_SOURCE",
-        processing: { videoMode: this.config.videoMode, audioMode: this.config.audioMode, cpuThreads: this.config.cpuThreads, maxParallel: this.config.maxParallel },
+        processing: { videoMode: this.config.videoMode, audioMode: this.config.audioMode, generationMode: this.config.generationMode, cpuThreads: this.config.cpuThreads, maxParallel: this.config.maxParallel },
         transferAbort: new AbortController(),
       };
       this.running.set(id, r);
@@ -619,6 +619,7 @@ export class Agent {
           this.config.whisperCpp,
           this.config.ffmpeg,
           this.config.stableDiffusion,
+          this.config.generationMode,
         );
       } else if (cmd.type === "MODEL_DELETE") {
         deleteModel(
@@ -736,7 +737,7 @@ export class Agent {
       const model = this.journal.state.models.find(m => m.state === "ACTIVE" && m.id === job.params.modelId && m.revision === job.params.modelRevision);
       const profile = model && generationProfile(model);
       if (!model || !profile || profile.profileRevision !== job.params.profileRevision || !generationInputsValid(profile, job.params.inputs) || job.source && !profile.acceptsReference) throw new Error("INVALID_GENERATION_PARAMETERS");
-      const device = generationDevice(this.config.stableDiffusion);
+      const device = generationDevice(this.config.stableDiffusion, r.processing?.generationMode || this.config.generationMode);
       if (!device) throw new Error("EXECUTOR_UNAVAILABLE");
       if (job.source) validateGenerationReference(dest);
       r.stage = "GENERATING";
@@ -748,7 +749,7 @@ export class Agent {
           if (m.type === "generated") { generated = true; resolve(); }
           if (m.type === "failed" || m.type === "executor-error") reject(new Error(m.code || "GENERATION_FAILED"));
         }, new URL("./generation-child.js", import.meta.url), {
-          executable: this.config.stableDiffusion, device, modelPath: model.path, inputs: job.params.inputs,
+          executable: this.config.stableDiffusion, device, cpuThreads: Math.max(1, Math.floor((r.processing?.cpuThreads || this.config.cpuThreads || 2) / (r.processing?.maxParallel || this.config.maxParallel))), modelPath: model.path, inputs: job.params.inputs,
           steps: model.id === "flux2-klein-4b-q4" ? 4 : 8, reference: job.source ? dest : undefined,
           outDir, maxDurationSeconds: job.maxDurationSeconds, maxOutputBytes: job.maxOutputBytes,
           reserveDiskBytes: this.config.reserveDiskBytes,

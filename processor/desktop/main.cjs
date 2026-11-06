@@ -501,6 +501,7 @@ async function start() {
       phase: failed ? "error" : "stopped",
       connected: false,
       running: 0,
+      jobs: [],
       message: failed ? snapshot.message : "Обработчик остановлен.",
     });
   });

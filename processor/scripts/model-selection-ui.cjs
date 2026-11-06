@@ -107,7 +107,7 @@ async function main() {
       window.processor = {
         state: async () => ({ settings: { tokenSet: true, modelTasks: ["generation"], readiness: { video: { ok: true }, speech: { ok: true } } }, status }),
         onStatus: callback => { window.sendTestStatus = callback; }, onCiStatus: () => {}, ciState: async () => ({ repos: [] }),
-        processing: async input => input,
+        processing: async input => { window.savedProcessing = input; return input; },
         readiness: async capability => capability === "generation"
           ? { ok: false, supported: true, version: "test-pinned", label: "Windows · NVIDIA CUDA", downloadBytes: 900000000, message: "Установите движок генерации." }
           : { ok: true },
@@ -145,6 +145,13 @@ async function main() {
     await desktop.locator("#installGeneration").click();
     await desktop.waitForFunction(() => window.testEngineInstalled === true);
     await desktop.locator("#generationEngineStatus").filter({ hasText: "Движок запускается" }).waitFor();
+    await desktop.locator("#modelsBack").click();
+    await desktop.locator("#openSettings").click();
+    await desktop.locator("#processingTab").click();
+    await desktop.locator('[name="generationMode"][value="cpu"]').check();
+    await desktop.locator("#applyProcessing").click();
+    await desktop.waitForFunction(() => window.savedProcessing?.generationMode === "cpu");
+    await desktop.screenshot({ path: path.join(assets, "generation-processing-mode.png"), fullPage: true });
     assert.deepEqual(errors, []);
     console.log("PASS: website, desktop, mobile, install request, Mac memory and compact resource column.");
   } finally {

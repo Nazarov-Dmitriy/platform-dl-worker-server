@@ -42,9 +42,10 @@ async function run(work: any) {
   const args = ["--diffusion-model", join(work.modelPath, "transformer/model.gguf"), "--llm", join(work.modelPath, "text_encoder/model.gguf"),
     "--vae", join(work.modelPath, "vae/model.safetensors"), "--prompt", work.inputs.prompt, "--width", String(work.inputs.width), "--height", String(work.inputs.height),
     "--seed", String(work.inputs.seed ?? -1), "--steps", String(work.steps), "--cfg-scale", "1", "--output", file,
-    "--backend", "diffusion=" + work.device + ",te=cpu,vae=cpu"];
+    "--threads", String(work.cpuThreads || 2),
+    "--backend", work.device.toLowerCase() === "cpu" ? "cpu" : "diffusion=" + work.device + ",te=cpu,vae=cpu"];
   if (work.reference) args.push("--ref-image", work.reference);
-  if (work.maxVramGiB > 0) args.push("--max-vram", String(work.maxVramGiB));
+  if (work.device.toLowerCase() !== "cpu" && work.maxVramGiB > 0) args.push("--max-vram", String(work.maxVramGiB));
   const env = { ...process.env }; delete env.PROCESSOR_TOKEN;
   await new Promise<void>((resolve, reject) => {
     child = spawn(work.executable, args, { windowsHide: true, detached: process.platform !== "win32", cwd: work.outDir, env, stdio: ["ignore", "pipe", "pipe"] });

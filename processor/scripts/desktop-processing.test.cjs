@@ -2,8 +2,8 @@ const test=require("node:test"),assert=require("node:assert/strict");
 const {availableParallelism}=require("node:os");
 const {validateProcessing,validateModelTasks,remapWorkDirModels}=require("../desktop/processing.cjs");
 test("independent video/audio preferences default to auto",()=>{
- const defaults=validateProcessing({}); assert.equal(defaults.videoMode,"auto"); assert.equal(defaults.audioMode,"auto");
- assert.deepEqual(validateProcessing({maxParallel:2,cpuThreads:1,videoMode:"gpu",audioMode:"cpu"}),{maxParallel:2,cpuThreads:1,videoMode:"gpu",audioMode:"cpu"});
+ const defaults=validateProcessing({}); assert.equal(defaults.videoMode,"auto"); assert.equal(defaults.audioMode,"auto"); assert.equal(defaults.generationMode,"auto");
+ assert.deepEqual(validateProcessing({maxParallel:2,cpuThreads:1,videoMode:"gpu",audioMode:"cpu",generationMode:"gpu"}),{maxParallel:2,cpuThreads:1,videoMode:"gpu",audioMode:"cpu",generationMode:"gpu"});
 });
 test("changing work folder rebases model paths under the new directory",()=>{
  const journal={models:[
@@ -22,5 +22,5 @@ test("model task checkboxes persist as speech and subs",()=>{
  assert.throws(()=>validateModelTasks({modelTasks:["video"]}));
 });
 test("invalid resource and mode values cannot be persisted",()=>{
- for(const settings of [{maxParallel:0},{maxParallel:65},{cpuThreads:0},{cpuThreads:availableParallelism()+1},{videoMode:"cuda"},{audioMode:"invalid"}])assert.throws(()=>validateProcessing(settings));
+ for(const settings of [{maxParallel:0},{maxParallel:65},{cpuThreads:0},{cpuThreads:availableParallelism()+1},{videoMode:"cuda"},{audioMode:"invalid"},{generationMode:"invalid"}])assert.throws(()=>validateProcessing(settings));
 });

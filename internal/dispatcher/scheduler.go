@@ -431,7 +431,7 @@ func (s *Store) Renew(ctx context.Context, p Principal, session string, f Fence,
 	if update.Progress != nil && (*update.Progress < 0 || *update.Progress > 1) || update.ActivitySequence < 0 {
 		return Lease{}, problem(400, "INVALID_STATUS", "Invalid progress")
 	}
-	if !contains([]string{"WAITING_SOURCE", "DOWNLOADING", "ANALYZING", "TRANSCODING", "TRANSCRIBING", "TRANSLATING", "PACKAGING", "WAITING_UPLOAD", "UPLOADING", "WAITING_PUBLICATION", "STOPPING"}, update.Stage) {
+	if !contains([]string{"WAITING_SOURCE", "DOWNLOADING", "ANALYZING", "TRANSCODING", "TRANSCRIBING", "TRANSLATING", "GENERATING", "PACKAGING", "WAITING_UPLOAD", "UPLOADING", "WAITING_PUBLICATION", "STOPPING"}, update.Stage) {
 		return Lease{}, problem(400, "INVALID_STATUS", "Invalid stage")
 	}
 	for _, step := range update.Steps {

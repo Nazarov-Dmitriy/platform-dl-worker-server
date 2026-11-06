@@ -12,13 +12,20 @@ import { Journal, type InstalledModel } from "../journal.js";
 import type { Config } from "../config.js";
 import { Executor } from "../executor.js";
 import { LeaseClock } from "../lease.js";
-import { generationProfile } from "../generation.js";
+import { generationProfile, generationDevice } from "../generation.js";
 
 test("generation executes a native child, uploads a PNG and awaits publication without a fictitious source", { timeout: 30000 }, async t => {
   const root = mkdtempSync(join(tmpdir(), "generation-runtime-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const engine = join(root, process.platform === "win32" ? "engine.exe" : "engine");
   execFileSync("go", ["build", "-o", engine, fileURLToPath(new URL("../../src/test/fixtures/generation-engine.go", import.meta.url))], { windowsHide: true });
+  assert.equal(generationDevice(engine, "cpu"), "CPU");
+  assert.match(generationDevice(engine, "gpu")!, /CUDA0|Metal0/);
+  process.env.GENERATION_FIXTURE_CPU_ONLY = "1";
+  try {
+    assert.equal(generationDevice(engine, "auto"), "CPU");
+    assert.equal(generationDevice(engine, "gpu"), null);
+  } finally { delete process.env.GENERATION_FIXTURE_CPU_ONLY; }
   const modelPath = join(root, "model");
   for (const file of ["transformer/model.gguf", "text_encoder/model.gguf", "vae/model.safetensors"]) {
     mkdirSync(join(modelPath, file, ".."), { recursive: true }); writeFileSync(join(modelPath, file), "fixture");
@@ -45,14 +52,15 @@ test("generation executes a native child, uploads a PNG and awaits publication w
   (agent as any).durable = async (_running: any, frame: any) => { frames.push(frame); };
   (agent as any).transfer = async (path: string, method: string, running: any, action: any) => action({ path, method, objectName: path,
     url: `http://127.0.0.1:${(server.address() as any).port}/file`, headers: {}, expiresAt: new Date(Date.now() + 60000).toISOString() });
-  for (const withReference of [false, true]) {
+  for (const mode of ["gpu", "cpu"] as const) {
+   for (const withReference of [false, true]) {
     frames.length = 0; uploaded = Buffer.alloc(0);
     const lease = new LeaseClock(); lease.sent("initial"); lease.grant("initial", 120, 5);
     const job: any = { id: randomUUID(), type: "media.generate", maxOutputBytes: 1024 ** 2, maxDurationSeconds: 30,
       params: { modelId: model.id, modelRevision: model.revision, profileRevision: profile.profileRevision,
-        inputs: { prompt: "A forest; $(not-a-command)", width: 512, height: 512, seed: 10 } } };
+        inputs: { prompt: mode === "cpu" ? "cpu-settings-test" : "A forest; $(not-a-command)", width: 512, height: 512, seed: 10 } } };
     if (withReference) job.source = { kind: "FILE", bytes: reference.length, sha256: createHash("sha256").update(reference).digest("hex") };
-    const running: any = { job, lease, ending: false, progress: 0, activity: 0, grants: [], acks: new Set(), transferAbort: new AbortController(),
+    const running: any = { job, lease, processing: { generationMode: mode, cpuThreads: 4, maxParallel: 2 }, ending: false, progress: 0, activity: 0, grants: [], acks: new Set(), transferAbort: new AbortController(),
       attempt: { jobId: job.id, fence: { assignmentId: randomUUID(), generation: 1, dispatcherEpoch: randomUUID() }, started: true } };
     journal.state.attempts.push(running.attempt); agent.running.set(running.attempt.fence.assignmentId, running);
     await agent.runJob(running);
@@ -64,6 +72,7 @@ test("generation executes a native child, uploads a PNG and awaits publication w
     assert.equal(running.attempt.awaitingPublication, true);
     assert.ok(frames.some(f => f.type === "job.upload.complete"));
     assert.equal(agent.running.size, 0);
+   }
   }
   const lease = new LeaseClock(); lease.sent("expiry"); lease.grant("expiry", 3, 0);
   const cancelDir = join(root, "cancel-test");

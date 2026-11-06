@@ -9,6 +9,7 @@ export type Config = {
   cpuThreads?: number;
   videoMode?: "auto" | "cpu" | "gpu";
   audioMode?: "auto" | "cpu" | "gpu";
+  generationMode?: "auto" | "cpu" | "gpu";
   localSettings?: boolean;
   reserveMemoryBytes: number;
   taskMemoryBytes: number;
@@ -39,7 +40,7 @@ export function loadConfig(path: string): Config {
     "deviceId",
     "stateDir",
     "workDir",
-    "maxParallel", "cpuThreads", "videoMode", "audioMode", "localSettings",
+    "maxParallel", "cpuThreads", "videoMode", "audioMode", "generationMode", "localSettings",
     "reserveMemoryBytes",
     "taskMemoryBytes",
     "reserveDiskBytes",
@@ -110,6 +111,7 @@ export function loadConfig(path: string): Config {
     cpuThreads: v.cpuThreads ?? 2,
     videoMode: v.videoMode ?? "auto",
     audioMode: v.audioMode ?? "auto",
+    generationMode: v.generationMode ?? "auto",
     localSettings: v.localSettings === true,
     reserveMemoryBytes: v.reserveMemoryBytes ?? 2 * 1024 ** 3,
     taskMemoryBytes: v.taskMemoryBytes ?? 1024 ** 3,
@@ -167,7 +169,7 @@ export function loadConfig(path: string): Config {
     if (!Number.isInteger(threshold) || threshold! < 1 || threshold! > 80)
       throw new Error("INVALID_RESOURCE_CONFIG");
   if (!Number.isInteger(c.cpuThreads) || c.cpuThreads! < 1 || c.cpuThreads! > 1024 ||
-      !["auto", "cpu", "gpu"].includes(c.videoMode!) || !["auto", "cpu", "gpu"].includes(c.audioMode!))
+      !["auto", "cpu", "gpu"].includes(c.videoMode!) || !["auto", "cpu", "gpu"].includes(c.audioMode!) || !["auto", "cpu", "gpu"].includes(c.generationMode!))
     throw new Error("INVALID_RESOURCE_CONFIG");
   return c;
 }

@@ -28,13 +28,13 @@ function validateModelTasks(input) {
 function validateProcessing(input) {
   const maxParallel = Number(input.maxParallel ?? 1);
   const cpuThreads = Number(input.cpuThreads ?? Math.max(1, Math.floor(availableParallelism() / 2)));
-  const videoMode = input.videoMode ?? "auto", audioMode = input.audioMode ?? "auto";
+  const videoMode = input.videoMode ?? "auto", audioMode = input.audioMode ?? "auto", generationMode = input.generationMode ?? "auto";
   if (!Number.isInteger(maxParallel) || maxParallel < 1 || maxParallel > 64)
     throw Error("Параллельных заданий должно быть от 1 до 64.");
   if (!Number.isInteger(cpuThreads) || cpuThreads < 1 || cpuThreads > availableParallelism())
     throw Error("Число CPU-потоков должно быть от 1 до " + availableParallelism() + ".");
-  if (!["auto", "cpu", "gpu"].includes(videoMode) || !["auto", "cpu", "gpu"].includes(audioMode))
+  if (!["auto", "cpu", "gpu"].includes(videoMode) || !["auto", "cpu", "gpu"].includes(audioMode) || !["auto", "cpu", "gpu"].includes(generationMode))
     throw Error("Выберите режим обработки.");
-  return { maxParallel, cpuThreads, videoMode, audioMode };
+  return { maxParallel, cpuThreads, videoMode, audioMode, generationMode };
 }
 module.exports = { validateProcessing, validateModelTasks, remapWorkDirModels, rebaseWorkPath };

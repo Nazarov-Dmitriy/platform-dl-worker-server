@@ -130,9 +130,10 @@ export function modelReady(
   whisperCpp?: string,
   ffmpeg = "ffmpeg",
   stableDiffusion?: string,
+  generationMode: "auto" | "cpu" | "gpu" = "auto",
 ) {
   if (!existsSync(model.path)) return false;
-  if (model.purpose === "GENERATION") return generationReady(model, stableDiffusion);
+  if (model.purpose === "GENERATION") return generationReady(model, stableDiffusion, generationMode);
   if (model.executor === "catalog-test") return true;
   if (model.executor === "transformers-js")
     return [
@@ -166,12 +167,13 @@ export function activateModel(
   whisperCpp?: string,
   ffmpeg?: string,
   stableDiffusion?: string,
+  generationMode: "auto" | "cpu" | "gpu" = "auto",
 ) {
   const model = journal.state.models.find(
     (m) => m.id === id && m.revision === revision,
   );
   if (!model || !existsSync(model.path)) throw new Error("MODEL_NOT_INSTALLED");
-  if (!modelReady(model, whisperCpp, ffmpeg, stableDiffusion))
+  if (!modelReady(model, whisperCpp, ffmpeg, stableDiffusion, generationMode))
     throw new Error("EXECUTOR_UNAVAILABLE");
   if (model.purpose === "GENERATION")
     for (const other of journal.state.models)

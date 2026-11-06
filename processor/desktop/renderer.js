@@ -36,11 +36,12 @@ function processingInput() {
     cpuThreads: Number(processingForm.elements.cpuThreads.value),
     videoMode: processingForm.elements.videoMode.value,
     audioMode: processingForm.elements.audioMode.value,
+    generationMode: processingForm.elements.generationMode.value,
     workDir: processingForm.elements.workDir.value,
     modelTasks: chosenTasks() };
 }
 function fillProcessing(settings) {
-  for (const name of ["workDir", "maxParallel", "cpuThreads", "videoMode", "audioMode"])
+  for (const name of ["workDir", "maxParallel", "cpuThreads", "videoMode", "audioMode", "generationMode"])
     if (settings[name] != null) processingForm.elements[name].value = settings[name];
   if (Array.isArray(settings.modelTasks)) {
     $("taskSpeech").checked = settings.modelTasks.includes("speech");

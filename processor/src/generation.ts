@@ -32,16 +32,19 @@ export function generationInputsValid(profile: NonNullable<ReturnType<typeof gen
   }
   return true;
 }
-export function generationDevice(executable?: string) {
+export function generationDevice(executable?: string, mode: "auto" | "cpu" | "gpu" = "auto") {
   if (!executable || !existsSync(executable)) return null;
   try {
     const output = execFileSync(executable, ["--list-devices"], { encoding: "utf8", windowsHide: true, timeout: 15000, maxBuffer: 1024 ** 2 });
     const expected = process.platform === "darwin" ? /^(?:metal|mtl)\d*\t/im : /^cuda\d*\t/im;
-    return output.split(/\r?\n/).find(line => expected.test(line))?.split("\t")[0] || null;
+    const devices = output.split(/\r?\n/);
+    const cpu = devices.find(line => /^cpu\t/i.test(line))?.split("\t")[0] || null;
+    const gpu = devices.find(line => expected.test(line))?.split("\t")[0] || null;
+    return mode === "cpu" ? cpu : mode === "gpu" ? gpu : gpu || cpu;
   } catch { return null; }
 }
-export function generationReady(model: InstalledModel, executable?: string) {
-  return !!generationProfile(model) && ["transformer/model.gguf", "text_encoder/model.gguf", "vae/model.safetensors"].every(file => existsSync(join(model.path, file))) && !!generationDevice(executable);
+export function generationReady(model: InstalledModel, executable?: string, mode: "auto" | "cpu" | "gpu" = "auto") {
+  return !!generationProfile(model) && ["transformer/model.gguf", "text_encoder/model.gguf", "vae/model.safetensors"].every(file => existsSync(join(model.path, file))) && !!generationDevice(executable, mode);
 }
 export function validateGenerationReference(file: string) {
   const data = readFileSync(file);

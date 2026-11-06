@@ -3,9 +3,10 @@ package main
 import("fmt";"os";"strconv";"image";"image/png";"time")
 func main(){
  if len(os.Args)>1 && os.Args[1]=="--help" {fmt.Println("--diffusion-model --list-devices");return}
- if len(os.Args)>1 && os.Args[1]=="--list-devices" {fmt.Println("CUDA0\tTest GPU");fmt.Println("Metal0\tTest GPU");return}
+ if len(os.Args)>1 && os.Args[1]=="--list-devices" {if os.Getenv("GENERATION_FIXTURE_CPU_ONLY")!="1" {fmt.Println("CUDA0\tTest GPU");fmt.Println("Metal0\tTest GPU")};fmt.Println("CPU\tTest CPU");return}
  args:=map[string]string{}
  for i:=1;i+1<len(os.Args);i+=2{args[os.Args[i]]=os.Args[i+1]}
+ if args["--prompt"]=="cpu-settings-test" && (args["--backend"]!="cpu" || args["--threads"]!="2" || args["--max-vram"]!="") {os.Exit(3)}
  if args["--prompt"]=="wait-for-cancel" {os.WriteFile(args["--output"]+".pid",[]byte(strconv.Itoa(os.Getpid())),0600);time.Sleep(time.Minute)}
  if source:=args["--ref-image"];source!="" {if _,err:=os.Stat(source);err!=nil{os.Exit(2)}}
  width,_:=strconv.Atoi(args["--width"]);height,_:=strconv.Atoi(args["--height"])

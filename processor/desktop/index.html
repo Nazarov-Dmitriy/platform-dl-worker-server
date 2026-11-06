@@ -259,6 +259,14 @@
               <p class="hint" id="speechInstallReason" role="status" hidden></p>
             </div>
           </fieldset>
+        <fieldset class="mode-options"><legend>Генерация изображений</legend>
+          <div class="mode-choices" id="generationModeChoices">
+            <label><input type="radio" name="generationMode" value="auto" checked>Автоматически</label>
+            <label><input type="radio" name="generationMode" value="cpu">Процессор</label>
+            <label><input type="radio" name="generationMode" value="gpu">Видеокарта</label>
+          </div>
+          <p class="hint">Авто использует NVIDIA CUDA на Windows или Metal на Mac, при отсутствии ускорителя — CPU. «Видеокарта» требует доступного ускорителя. В этом режиме текстовый кодировщик и VAE работают на CPU. «Процессор» использует RAM и может работать значительно медленнее. Движок и рабочая Q4-модель выбираются в разделе «Модели».</p>
+        </fieldset>
         </div>
         <div class="actions"><button id="applyProcessing" class="primary" type="submit">Сохранить настройки обработки</button></div>
         <p id="processingNotice" class="notice success" role="status" hidden></p>

@@ -78,7 +78,7 @@ function status(message?: string) {
       connected: !!agent?.session,
       running: agent?.running.size || 0,
       processing: agent ? { maxParallel: agent.config.maxParallel, cpuThreads: agent.config.cpuThreads,
-        videoMode: agent.config.videoMode, audioMode: agent.config.audioMode } : undefined,
+        videoMode: agent.config.videoMode, audioMode: agent.config.audioMode, generationMode: agent.config.generationMode } : undefined,
       jobs: agent ? [...agent.running.values()].map(r => ({
         id: r.attempt.jobId, type: r.job?.type || "media.transcode",
         stage: r.stage, progress: r.progress, encoder: r.encoder, download: r.download,
@@ -181,7 +181,7 @@ process.on("message", async (input: any) => {
       const s = input.settings;
       if (!Number.isInteger(s?.maxParallel) || s.maxParallel < 1 || s.maxParallel > 64 ||
           !Number.isInteger(s.cpuThreads) || s.cpuThreads < 1 || s.cpuThreads > 1024 ||
-          !["auto", "cpu", "gpu"].includes(s.videoMode) || !["auto", "cpu", "gpu"].includes(s.audioMode))
+          !["auto", "cpu", "gpu"].includes(s.videoMode) || !["auto", "cpu", "gpu"].includes(s.audioMode) || !["auto", "cpu", "gpu"].includes(s.generationMode))
         throw Error("INVALID_RESOURCE_CONFIG");
       Object.assign(agent.config, s, { localSettings: true });
       agent.nextHeartbeat = 0;
@@ -254,6 +254,7 @@ async function runModel(input: any) {
       agent.config.whisperCpp,
       agent.config.ffmpeg,
       agent.config.stableDiffusion,
+      agent.config.generationMode,
     );
     agent.nextHeartbeat = 0;
     status("Модель выбрана рабочей.");
