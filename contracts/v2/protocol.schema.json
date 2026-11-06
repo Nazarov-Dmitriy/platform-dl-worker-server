@@ -1961,6 +1961,11 @@
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 100
+                },
+                "vramThresholdPercent": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 80
                 }
               },
               "required": [

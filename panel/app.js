@@ -17,6 +17,7 @@ const views = {
   sites: ["Сайты", "Источники заданий для обработки медиа"],
   models: ["Модели", "Доступные модели для обработки медиа"],
   accounts: ["Аккаунты", "Доступ к панели и роли пользователей"],
+  worker: ["Воркер", "Обработка заданий на этом компьютере"],
   audit: ["Журнал", "Последние действия в диспетчере"],
   updates: ["Обновления", "Версии и установка обновлений Worker"],
   ops: ["Обслуживание", "Снимки данных и подготовка к обновлению"],
@@ -100,7 +101,8 @@ function selectTab(tab) {
   [$("pageTitle").textContent, $("pageSubtitle").textContent] = views[tab];
   document.title = views[tab][0] + " · Worker";
   closeMenu();
-  if (tab === "audit" && state.role === "OWNER" && overviewReady) void loadAudit();
+  if (tab === "audit" && state.role === "OWNER" && overviewReady)
+    void loadAudit();
   if (tab === "updates") void loadPublicCertificate();
   if (tab === "overview" && overviewReady) void refreshOverview();
 }
@@ -213,9 +215,14 @@ async function reload() {
         a.manageSites ? "Разрешено" : "Нет",
       ]),
     );
-    const participant = $("auditPrincipal"), previousParticipant = participant.value;
+    const participant = $("auditPrincipal"),
+      previousParticipant = participant.value;
     participant.replaceChildren(new Option("Все участники", ""));
-    [...state.sites, ...state.devices, ...accounts.items].forEach(item => participant.append(new Option(item.name || item.login || item.id, item.id)));
+    [...state.sites, ...state.devices, ...accounts.items].forEach((item) =>
+      participant.append(
+        new Option(item.name || item.login || item.id, item.id),
+      ),
+    );
     participant.value = previousParticipant;
     await loadAudit();
     renderOps(ops);
@@ -230,7 +237,11 @@ async function loadJobs() {
     id = $("jobSite").value;
   $("cancelAll").disabled = !id;
   const page = id
-    ? await api("/api/v2/admin/jobs?siteId=" + encodeURIComponent(id) + "&order=desc&limit=10")
+    ? await api(
+        "/api/v2/admin/jobs?siteId=" +
+          encodeURIComponent(id) +
+          "&order=desc&limit=10",
+      )
     : { jobs: [] };
   if (version !== jobsVersion) return;
   renderJobs("jobs", page.jobs, !!id);
@@ -428,12 +439,20 @@ on("devicePriorityForm", "submit", (event) => {
     message("devicePriorityOut", "");
     const priority = Number($("devicePriority").value);
     await api("/api/v2/admin/devices/" + device.id, {
-      method: "PUT", mutate: true,
+      method: "PUT",
+      mutate: true,
       headers: { "If-Match": JSON.stringify(String(device.revision)) },
-      body: JSON.stringify({name: device.name, enabled: device.enabled, priority}),
+      body: JSON.stringify({
+        name: device.name,
+        enabled: device.enabled,
+        priority,
+      }),
     });
     await reload();
-    message("devicePriorityOut", "Роль сохранена. Она применяется к новым заданиям.");
+    message(
+      "devicePriorityOut",
+      "Роль сохранена. Она применяется к новым заданиям.",
+    );
   });
 });
 on("deleteDevice", "click", () =>
@@ -623,6 +642,7 @@ on("configureForm", "submit", async (e) => {
     "cpuThresholdPercent",
     "memoryThresholdPercent",
     "diskThresholdPercent",
+    "vramThresholdPercent",
   ])
     settings[key] = Number(fd.get(key));
   await sendCommand({ type: "CONFIGURE", settings });
@@ -631,9 +651,14 @@ function toggleAccountCreate(open) {
   $("accountCreateForm").hidden = !open;
   $("showAccountCreate").setAttribute("aria-expanded", String(open));
   if (open) $("accountForm").elements.login.focus();
-  else { $("accountForm").reset(); $("showAccountCreate").focus(); }
+  else {
+    $("accountForm").reset();
+    $("showAccountCreate").focus();
+  }
 }
-on("showAccountCreate", "click", () => toggleAccountCreate($("accountCreateForm").hidden));
+on("showAccountCreate", "click", () =>
+  toggleAccountCreate($("accountCreateForm").hidden),
+);
 on("cancelAccountCreate", "click", () => toggleAccountCreate(false));
 on("accountForm", "submit", async (e) => {
   const fd = new FormData(e.target);
@@ -659,14 +684,36 @@ async function opsAction(method, path, body, success) {
   message("opsOut", success || "Состояние обновлено.");
 }
 on("opsMaintenanceOn", "click", () =>
-  opsAction("PUT", "/api/v2/admin/ops", { maintenance: true }, "Выдача приостановлена. Новые задания остаются в очереди."),
+  opsAction(
+    "PUT",
+    "/api/v2/admin/ops",
+    { maintenance: true },
+    "Выдача приостановлена. Новые задания остаются в очереди.",
+  ),
 );
 on("opsMaintenanceOff", "click", () =>
-  opsAction("PUT", "/api/v2/admin/ops", { maintenance: false }, "Выдача возобновлена. Задания передаются устройствам."),
+  opsAction(
+    "PUT",
+    "/api/v2/admin/ops",
+    { maintenance: false },
+    "Выдача возобновлена. Задания передаются устройствам.",
+  ),
 );
-on("opsBackup", "click", () => opsAction("POST", "/api/v2/admin/backup", {}, "Резервная копия базы сохранена на сервере."));
+on("opsBackup", "click", () =>
+  opsAction(
+    "POST",
+    "/api/v2/admin/backup",
+    {},
+    "Резервная копия базы сохранена на сервере.",
+  ),
+);
 on("opsPrepare", "click", () =>
-  opsAction("POST", "/api/v2/admin/update-prepare", {}, "Выдача приостановлена. Проверьте готовность к обновлению выше. После ручных работ нажмите «Возобновить выдачу»."),
+  opsAction(
+    "POST",
+    "/api/v2/admin/update-prepare",
+    {},
+    "Выдача приостановлена. Проверьте готовность к обновлению выше. После ручных работ нажмите «Возобновить выдачу».",
+  ),
 );
 async function init() {
   try {
@@ -674,9 +721,10 @@ async function init() {
     state.csrf = session.csrfToken;
     state.role = session.role;
     state.manageSites = session.manageSites;
-    ["accounts", "audit", "ops", "updates"].forEach(
-      (tab) => ($(tab + "Tab").hidden = state.role !== "OWNER"),
-    );
+    ["accounts", "audit", "ops", "updates"].forEach((tab) => {
+      const button = $(tab + "Tab");
+      if (button) button.hidden = state.role !== "OWNER";
+    });
     $("siteCreate").hidden = state.role !== "OWNER" && !state.manageSites;
     // Only an owner may change the catalog, so an operator is not shown a form
     // the dispatcher would refuse.
@@ -781,22 +829,42 @@ setInterval(() => {
 let overviewReady = false;
 let overviewRefreshing = false;
 function markOverviewUpdated() {
-  $("overviewRefresh").textContent = "Обновлено в " + new Date().toLocaleTimeString("ru-RU") + " · каждые 15 секунд";
+  $("overviewRefresh").textContent =
+    "Обновлено в " +
+    new Date().toLocaleTimeString("ru-RU") +
+    " · каждые 15 секунд";
 }
 async function refreshOverview() {
-  if (!overviewReady || overviewRefreshing || document.hidden || document.querySelector('[data-panel="overview"]').hidden) return;
+  if (
+    !overviewReady ||
+    overviewRefreshing ||
+    document.hidden ||
+    document.querySelector('[data-panel="overview"]').hidden
+  )
+    return;
   overviewRefreshing = true;
   const siteId = $("overviewSite").value;
   try {
     const [sites, devices, jobs, ops] = await Promise.all([
       api("/api/v2/admin/sites"),
       api("/api/v2/admin/devices"),
-      siteId ? api("/api/v2/admin/jobs?siteId=" + encodeURIComponent(siteId) + "&order=desc&limit=10") : Promise.resolve({jobs:[]}),
+      siteId
+        ? api(
+            "/api/v2/admin/jobs?siteId=" +
+              encodeURIComponent(siteId) +
+              "&order=desc&limit=10",
+          )
+        : Promise.resolve({ jobs: [] }),
       state.role === "OWNER" ? api("/api/v2/admin/ops") : Promise.resolve(null),
     ]);
-    if (document.hidden || document.querySelector('[data-panel="overview"]').hidden || siteId !== $("overviewSite").value) return;
+    if (
+      document.hidden ||
+      document.querySelector('[data-panel="overview"]').hidden ||
+      siteId !== $("overviewSite").value
+    )
+      return;
     $("stat-siteCount").textContent = sites.items.length;
-    $("stat-online").textContent = devices.items.filter(d => d.online).length;
+    $("stat-online").textContent = devices.items.filter((d) => d.online).length;
     renderDevices("overviewDevices", devices.items);
     renderJobs("overviewJobs", jobs.jobs, !!siteId);
     if (ops) {
@@ -805,11 +873,17 @@ async function refreshOverview() {
     }
     markOverviewUpdated();
   } catch (error) {
-    if (error.status !== 401) $("overviewRefresh").textContent = "Не удалось обновить данные · повторим через 15 секунд";
-  } finally { overviewRefreshing = false; }
+    if (error.status !== 401)
+      $("overviewRefresh").textContent =
+        "Не удалось обновить данные · повторим через 15 секунд";
+  } finally {
+    overviewRefreshing = false;
+  }
 }
 setInterval(() => void refreshOverview(), 15000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) void refreshOverview(); });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) void refreshOverview();
+});
 window.addEventListener("focus", () => void refreshOverview());
 
 init();
@@ -824,7 +898,9 @@ function fillSiteSettings(site) {
   $("siteSettingsTitle").textContent = "Настройки сайта «" + site.name + "»";
   $("siteSettingsId").textContent = "ID: " + site.id;
   SITE_OPERATION_FIELDS.forEach(([name, code]) => {
-    $("siteOpsForm").elements[name].checked = (site.operations || []).includes(code);
+    $("siteOpsForm").elements[name].checked = (site.operations || []).includes(
+      code,
+    );
   });
   $("siteIssued").hidden = true;
   message("siteOpsOut", "");
@@ -839,7 +915,7 @@ function siteSettingsButton(site) {
   button.title = "Настройки сайта «" + site.name + "»";
   button.onclick = () => {
     fillSiteSettings(site);
-    $("siteSettings").scrollIntoView({block:"nearest"});
+    $("siteSettings").scrollIntoView({ block: "nearest" });
   };
   return button;
 }
@@ -847,7 +923,9 @@ on("showSiteCreate", "click", () => {
   $("siteCreateForm").hidden = !$("siteCreateForm").hidden;
   if (!$("siteCreateForm").hidden) $("siteForm").elements.name.focus();
 });
-on("cancelSiteCreate", "click", () => { $("siteCreateForm").hidden = true; });
+on("cancelSiteCreate", "click", () => {
+  $("siteCreateForm").hidden = true;
+});
 on("closeSiteSettings", "click", () => {
   $("siteSettings").hidden = true;
   $("siteIssued").hidden = true;
@@ -856,7 +934,9 @@ on("closeSiteSettings", "click", () => {
 on("siteOpsForm", "submit", async () => {
   const site = state.selectedSite;
   if (!site || state.siteActionId) return;
-  const operations = SITE_OPERATION_FIELDS.filter(([name]) => $("siteOpsForm").elements[name].checked).map(([, code]) => code);
+  const operations = SITE_OPERATION_FIELDS.filter(
+    ([name]) => $("siteOpsForm").elements[name].checked,
+  ).map(([, code]) => code);
   await api("/api/v2/admin/sites/" + site.id, {
     method: "PUT",
     mutate: true,
@@ -877,35 +957,64 @@ on("siteOpsForm", "submit", async () => {
     return;
   }
   fillSiteSettings(updated);
-  message("siteOpsOut", "Операции сохранены. Сайт сразу сможет заказывать отмеченные виды работ.");
+  message(
+    "siteOpsOut",
+    "Операции сохранены. Сайт сразу сможет заказывать отмеченные виды работ.",
+  );
 });
 async function siteAction(kind) {
   const site = state.selectedSite;
   if (!site || state.siteActionId) return;
-  if (kind === "delete" && !confirm("Удалить сайт «" + site.name + "»?\nID: " + site.id + "\nТокены перестанут работать. История заданий сохранится.")) return;
+  if (
+    kind === "delete" &&
+    !confirm(
+      "Удалить сайт «" +
+        site.name +
+        "»?\nID: " +
+        site.id +
+        "\nТокены перестанут работать. История заданий сохранится.",
+    )
+  )
+    return;
   state.siteActionId = site.id;
-  const controls = [...$("siteSettings").querySelectorAll("button"), ...$("sites").querySelectorAll("button")];
-  controls.forEach(b => b.disabled = true);
+  const controls = [
+    ...$("siteSettings").querySelectorAll("button"),
+    ...$("sites").querySelectorAll("button"),
+  ];
+  controls.forEach((b) => (b.disabled = true));
   $("siteIssued").hidden = true;
   try {
     if (kind === "token") {
       const issued = await api("/api/v2/admin/sites/" + site.id + "/tokens", {
-        method:"POST", mutate:true, body:JSON.stringify({requestId:crypto.randomUUID()})
+        method: "POST",
+        mutate: true,
+        body: JSON.stringify({ requestId: crypto.randomUUID() }),
       });
       $("siteIssued").replaceChildren(
         node("strong", "Новый токен сайта «" + site.name + "»"),
-        node("p", "Вставьте его в настройки сервиса обработки на сайте. Токен показывается один раз. Ранее выданные токены продолжают работать.", "caption"),
-        node("code", issued.token, "code")
+        node(
+          "p",
+          "Вставьте его в настройки сервиса обработки на сайте. Токен показывается один раз. Ранее выданные токены продолжают работать.",
+          "caption",
+        ),
+        node("code", issued.token, "code"),
       );
       $("siteIssued").hidden = false;
     } else {
-      await api("/api/v2/admin/sites/" + site.id, {method:"DELETE",mutate:true,headers:{"If-Match":JSON.stringify(String(site.revision))}});
+      await api("/api/v2/admin/sites/" + site.id, {
+        method: "DELETE",
+        mutate: true,
+        headers: { "If-Match": JSON.stringify(String(site.revision)) },
+      });
       $("siteSettings").hidden = true;
       state.selectedSite = null;
       await reload();
       message("feedback", "Сайт «" + site.name + "» удалён.");
     }
-  } finally { state.siteActionId = null; controls.forEach(b => b.disabled = false); }
+  } finally {
+    state.siteActionId = null;
+    controls.forEach((b) => (b.disabled = false));
+  }
 }
 on("issueSiteToken", "click", () => siteAction("token"));
 on("deleteSite", "click", () => siteAction("delete"));
@@ -914,46 +1023,132 @@ let certificateRequestBusy = false;
 let certificateStatus = null;
 function showPublicCertificate(value) {
   certificateStatus = value;
-  const expires = value.expiresAt ? " Действует до " + new Date(value.expiresAt * 1000).toLocaleString("ru-RU") + "." : "";
+  const expires = value.expiresAt
+    ? " Действует до " +
+      new Date(value.expiresAt * 1000).toLocaleString("ru-RU") +
+      "."
+    : "";
   message("publicCertificateStatus", value.message + expires);
-  $("enablePublicCertificate").disabled = !!value.busy || certificateRequestBusy;
-  $("enablePublicCertificate").textContent = value.busy ? "Получаем сертификат…" : value.enabled ? "Проверить продление" : "Включить Let’s Encrypt";
+  $("enablePublicCertificate").disabled =
+    !!value.busy || certificateRequestBusy;
+  $("enablePublicCertificate").textContent = value.busy
+    ? "Получаем сертификат…"
+    : value.enabled
+      ? "Проверить продление"
+      : "Включить Let’s Encrypt";
 }
 async function loadPublicCertificate() {
   if (state.role !== "OWNER") return;
-  try { showPublicCertificate(await api("/api/v2/admin/connection/public-certificate")); }
-  catch { message("publicCertificateStatus", "Служба сертификатов недоступна. Требуется обновление службы Worker на сервере."); }
+  try {
+    showPublicCertificate(
+      await api("/api/v2/admin/connection/public-certificate"),
+    );
+  } catch {
+    message(
+      "publicCertificateStatus",
+      "Служба сертификатов недоступна. Требуется обновление службы Worker на сервере.",
+    );
+  }
 }
 on("enablePublicCertificate", "click", async () => {
-  if (certificateRequestBusy || !confirm("Получить сертификат Let’s Encrypt для IP сервера? Требуется доступный TCP 80. Вы принимаете условия Let’s Encrypt (https://letsencrypt.org/repository/). Windows-приложение должно быть обновлено для доверия публичным сертификатам.")) return;
+  if (
+    certificateRequestBusy ||
+    !confirm(
+      "Получить сертификат Let’s Encrypt для IP сервера? Требуется доступный TCP 80. Вы принимаете условия Let’s Encrypt (https://letsencrypt.org/repository/). Windows-приложение должно быть обновлено для доверия публичным сертификатам.",
+    )
+  )
+    return;
   certificateRequestBusy = true;
-  try { showPublicCertificate(await api("/api/v2/admin/connection/public-certificate", {method:"POST",mutate:true,body:"{}"})); }
-  finally { certificateRequestBusy = false; }
-});
-setInterval(() => { if (!document.hidden && !document.querySelector('[data-panel="updates"]').hidden) void loadPublicCertificate(); }, 5000);
-
-let auditCursor = "", auditNextCursor = null, auditPrevious = [], auditLoading = false, appliedAuditQuery = null;
-Object.entries(auditLabels).sort((a,b)=>a[1].localeCompare(b[1],"ru")).forEach(([kind,label])=>$("auditKind").append(new Option(label,kind)));
-async function loadAudit(action = "refresh") {
- if(auditLoading || state.role !== "OWNER") return;
- if(action === "reset") {auditCursor="";auditPrevious=[];auditNextCursor=null;appliedAuditQuery=null;}
- if(action === "next") {if(!auditNextCursor)return;auditPrevious.push(auditCursor);auditCursor=String(auditNextCursor);}
- if(action === "prev") {if(!auditPrevious.length)return;auditCursor=auditPrevious.pop();}
- auditLoading=true;$("auditPrev").disabled=true;$("auditNext").disabled=true;
- try{
-  const query=new URLSearchParams({limit:"20"});
-  if(!appliedAuditQuery) {
-  for(const [id,key] of [["auditKind","kind"],["auditPrincipal","principalId"],["auditJob","jobId"]])if($(id).value.trim())query.set(key,$(id).value.trim());
-  for(const [id,key] of [["auditFrom","from"],["auditTo","to"]])if($(id).value)query.set(key,new Date($(id).value).toISOString());
-  if($("auditErrors").checked)query.set("errorsOnly","true");
-  appliedAuditQuery=query.toString();
+  try {
+    showPublicCertificate(
+      await api("/api/v2/admin/connection/public-certificate", {
+        method: "POST",
+        mutate: true,
+        body: "{}",
+      }),
+    );
+  } finally {
+    certificateRequestBusy = false;
   }
-  const requestQuery=new URLSearchParams(appliedAuditQuery);
-  if(auditCursor)requestQuery.set("cursor",auditCursor);
-  const page=await api("/api/v2/admin/audit?"+requestQuery);auditNextCursor=page.nextCursor;
-  renderAudit(page.items);$("auditPageLabel").textContent="Страница "+(auditPrevious.length+1)+" · записей: "+page.items.length;
- }catch(error){report(error)}finally{auditLoading=false;$("auditPrev").disabled=!auditPrevious.length;$("auditNext").disabled=!auditNextCursor;}
+});
+setInterval(() => {
+  if (
+    !document.hidden &&
+    !document.querySelector('[data-panel="updates"]').hidden
+  )
+    void loadPublicCertificate();
+}, 5000);
+
+let auditCursor = "",
+  auditNextCursor = null,
+  auditPrevious = [],
+  auditLoading = false,
+  appliedAuditQuery = null;
+Object.entries(auditLabels)
+  .sort((a, b) => a[1].localeCompare(b[1], "ru"))
+  .forEach(([kind, label]) => $("auditKind").append(new Option(label, kind)));
+async function loadAudit(action = "refresh") {
+  if (auditLoading || state.role !== "OWNER") return;
+  if (action === "reset") {
+    auditCursor = "";
+    auditPrevious = [];
+    auditNextCursor = null;
+    appliedAuditQuery = null;
+  }
+  if (action === "next") {
+    if (!auditNextCursor) return;
+    auditPrevious.push(auditCursor);
+    auditCursor = String(auditNextCursor);
+  }
+  if (action === "prev") {
+    if (!auditPrevious.length) return;
+    auditCursor = auditPrevious.pop();
+  }
+  auditLoading = true;
+  $("auditPrev").disabled = true;
+  $("auditNext").disabled = true;
+  try {
+    const query = new URLSearchParams({ limit: "20" });
+    if (!appliedAuditQuery) {
+      for (const [id, key] of [
+        ["auditKind", "kind"],
+        ["auditPrincipal", "principalId"],
+        ["auditJob", "jobId"],
+      ])
+        if ($(id).value.trim()) query.set(key, $(id).value.trim());
+      for (const [id, key] of [
+        ["auditFrom", "from"],
+        ["auditTo", "to"],
+      ])
+        if ($(id).value) query.set(key, new Date($(id).value).toISOString());
+      if ($("auditErrors").checked) query.set("errorsOnly", "true");
+      appliedAuditQuery = query.toString();
+    }
+    const requestQuery = new URLSearchParams(appliedAuditQuery);
+    if (auditCursor) requestQuery.set("cursor", auditCursor);
+    const page = await api("/api/v2/admin/audit?" + requestQuery);
+    auditNextCursor = page.nextCursor;
+    renderAudit(page.items);
+    $("auditPageLabel").textContent =
+      "Страница " +
+      (auditPrevious.length + 1) +
+      " · записей: " +
+      page.items.length;
+  } catch (error) {
+    report(error);
+  } finally {
+    auditLoading = false;
+    $("auditPrev").disabled = !auditPrevious.length;
+    $("auditNext").disabled = !auditNextCursor;
+  }
 }
-$("auditFilters").addEventListener("submit",event=>{event.preventDefault();void loadAudit("reset")});
-$("auditReset").onclick=()=>{$("auditFilters").reset();void loadAudit("reset")};
-$("auditPrev").onclick=()=>void loadAudit("prev");$("auditNext").onclick=()=>void loadAudit("next");
+$("auditFilters").addEventListener("submit", (event) => {
+  event.preventDefault();
+  void loadAudit("reset");
+});
+$("auditReset").onclick = () => {
+  $("auditFilters").reset();
+  void loadAudit("reset");
+};
+$("auditPrev").onclick = () => void loadAudit("prev");
+$("auditNext").onclick = () => void loadAudit("next");

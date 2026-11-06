@@ -1,0 +1,393 @@
+﻿<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Worker — Обработчик медиа</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --page: #10171e;
+            --card: #18222d;
+            --border: #2c3c4b;
+            --muted: #9eafc1;
+            --text: #edf3f9;
+            --accent: #29c6d5;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--page);
+            color: var(--text);
+            font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        header {
+            padding: 22px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            background: var(--card);
+        }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand strong { font-size: 22px; }
+        .brand small { display: block; color: var(--muted); font-size: 12px; }
+        .mark { font-size: 34px; font-weight: 900; color: var(--accent); }
+        .badge {
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 7px 13px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .badge.online {
+            color: #77d7a1;
+            background: #173c30;
+            border-color: #285c47;
+        }
+        main {
+            max-width: 1100px;
+            padding: 28px 32px 24px;
+            margin: auto;
+        }
+        h1 { font-size: 25px; letter-spacing: -0.5px; margin: 0 0 24px; }
+        h2 { font-size: 17px; margin: 0 0 8px; }
+        .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+        .card {
+            padding: 24px;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            background: var(--card);
+            margin-bottom: 18px;
+        }
+        label {
+            display: grid;
+            gap: 7px;
+            margin-top: 18px;
+            font-weight: 600;
+        }
+        input {
+            width: 100%;
+            min-width: 0;
+            background: #101a24;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 11px 12px;
+            font: inherit;
+            font-weight: 400;
+        }
+        input::placeholder { color: #8093a7; }
+        input:focus-visible, button:focus-visible {
+            outline: 3px solid #29c6d555;
+            outline-offset: 2px;
+        }
+        label small {
+            color: var(--muted);
+            font-weight: 400;
+            font-size: 12px;
+        }
+        .picker { display: flex; gap: 10px; }
+        .picker input { flex: 1; }
+        .picker button { flex-shrink: 0; }
+        .parallel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 380px;
+        }
+        .parallel input { width: 90px; }
+        button {
+            font: 600 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--text);
+            padding: 11px 16px;
+            min-height: 42px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #243443;
+            cursor: pointer;
+        }
+        button:hover { background: #30475c; }
+        .primary {
+            background: var(--accent);
+            color: #09262c;
+            border-color: transparent;
+        }
+        .primary:hover { background: #4ed6e2; }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+        .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+        .summary {
+            display: grid;
+            gap: 10px;
+            padding: 24px;
+            margin: 24px 0;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            border-radius: 13px;
+        }
+        .summary h2 { margin: 0; color: var(--muted); font-size: 14px; }
+        .summary #activity { font-size: 25px; font-weight: 700; }
+        .summary #detail { color: var(--muted); overflow-wrap: anywhere; }
+        .window-actions {
+            justify-content: flex-end;
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+        }
+        .startup-toggle {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin: 0;
+            cursor: pointer;
+        }
+        .startup-toggle input {
+            width: 19px;
+            min-width: 19px;
+            height: 19px;
+            margin: 3px 0 0;
+            accent-color: var(--accent);
+        }
+        .startup-toggle small {
+            display: block;
+            color: var(--muted);
+            font-weight: 400;
+            margin-top: 4px;
+        }
+        .status-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 0 0 18px;
+        }
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--card);
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .ci-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #e0a04a;
+            flex-shrink: 0;
+        }
+        .ci-dot[data-phase="idle"],
+        .ci-dot[data-phase="busy"] { background: #3dce7a; }
+        .ci-dot[data-phase="error"] { background: #e25b6a; }
+        .jobs-card {
+            margin: 28px 0;
+            padding: 24px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+        .jobs-card h2 { margin: 0 0 22px; }
+        .jobs-scroll { overflow-x: auto; }
+        .jobs-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        .jobs-table th {
+            padding: 14px 16px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .jobs-table td {
+            padding: 20px 16px;
+            border-top: 1px solid var(--border);
+        }
+        .jobs-table small {
+            display: block;
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 11px;
+        }
+        .job-progress {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 170px;
+        }
+        .job-progress progress {
+            width: 140px;
+            height: 8px;
+            accent-color: var(--accent);
+        }
+        .job-progress span { white-space: nowrap; font-size: 12px; }
+        .screen-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        .dashboard-actions { margin: 24px 0; }
+        .settings-tabs {
+            display: flex;
+            gap: 12px;
+            margin: 0 0 24px;
+            flex-wrap: wrap;
+        }
+        .settings-tabs button[aria-pressed="true"] {
+            background: var(--accent);
+            color: #08212b;
+        }
+        .mode-options {
+            border: 0;
+            margin: 26px 0 0;
+            padding: 0;
+        }
+        .mode-options legend {
+            font-weight: 650;
+            margin-bottom: 14px;
+        }
+        .mode-choices {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .mode-choices label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            padding: 14px 18px;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+        }
+        .mode-choices input {
+            width: 18px;
+            min-width: 18px;
+            margin: 0;
+            accent-color: var(--accent);
+        }
+        .mode-options .hint { margin-top: 12px; }
+        .notice {
+            background: #422730;
+            border: 1px solid #69414c;
+            color: #ffb5be;
+            padding: 13px 16px;
+            border-radius: 9px;
+            margin-bottom: 18px;
+        }
+        .notice.success {
+            color: #a9eac4;
+            background: #173c30;
+            border: 1px solid #285c47;
+        }
+        .fingerprint {
+            font-size: 11px;
+            overflow-wrap: anywhere;
+            color: var(--muted);
+            margin-top: 10px;
+        }
+        [hidden] { display: none !important; }
+        @media (max-width: 700px) {
+            main { padding: 22px; }
+            header { padding: 18px 22px; }
+            .card { padding: 20px; }
+            .picker { flex-wrap: wrap; }
+            .picker button { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <span class="mark">W</span>
+            <div><strong>Worker</strong><small>Обработчик медиа</small></div>
+        </div>
+        <span class="badge online">В сети</span>
+    </header>
+
+    <main>
+        <div class="screen-heading">
+            <h1>Обработка заданий</h1>
+            <div class="actions">
+                <button>Модели</button>
+                <button>Настройки</button>
+            </div>
+        </div>
+
+        <div class="status-row">
+            <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Подключение</span>
+            <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Сборки GitHub</span>
+            <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Видео</span>
+            <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Аудио</span>
+        </div>
+
+        <div class="summary">
+            <h2>На этом компьютере</h2>
+            <span id="activity">Заданий в работе: 0</span>
+            <span id="workState">Обработчик запущен</span>
+            <span id="detail">Готов к обработке</span>
+        </div>
+
+        <div class="actions dashboard-actions">
+            <button class="primary" type="button">Подключиться</button>
+            <button type="button">Пауза</button>
+            <button type="button">Остановить</button>
+        </div>
+
+        <div class="jobs-card">
+            <h2>Задания на этом устройстве</h2>
+            <div class="jobs-scroll">
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Задание</th>
+                            <th>Этап</th>
+                            <th>Прогресс</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                job-3a4b5c
+                                <small>site-main · media.transcode</small>
+                            </td>
+                            <td>Кодирование</td>
+                            <td>
+                                <div class="job-progress">
+                                    <progress value="65" max="100"></progress>
+                                    <span>65%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                job-7d8e9f
+                                <small>site-blog · media.transcribe</small>
+                            </td>
+                            <td>Распознавание</td>
+                            <td>
+                                <div class="job-progress">
+                                    <progress value="20" max="100"></progress>
+                                    <span>20%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="hint">Новые задания назначает сервер. Общая очередь доступна в панели диспетчера.</p>
+        </div>
+
+        <details class="jobs-card">
+            <summary>
+                <span>Сборка GitHub</span>
+                <span class="ci-dot" data-phase="idle"></span>
+                <span>Не запущены</span>
+            </summary>
+            <p class="hint">Нажмите «Настройки» → «Сборки GitHub» для настройки.</p>
+        </details>
+    </main>
+</body>
+</html>

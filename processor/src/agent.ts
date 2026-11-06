@@ -99,6 +99,7 @@ export class Agent {
       config.cpuThresholdPercent = applied.cpuThresholdPercent;
       config.memoryThresholdPercent = applied.memoryThresholdPercent;
       config.diskThresholdPercent = applied.diskThresholdPercent;
+      config.vramThresholdPercent = applied.vramThresholdPercent ?? 80;
       config.threshold = Math.min(
         applied.cpuThresholdPercent,
         applied.memoryThresholdPercent,
@@ -1251,6 +1252,7 @@ async function applyConfigure(agent: Agent, settings: any) {
       settings.cpuThresholdPercent,
       settings.memoryThresholdPercent,
       settings.diskThresholdPercent,
+      settings.vramThresholdPercent ?? 80,
     ].some((n) => !Number.isInteger(n) || n < 1 || n > 80) ||
     th < 1 ||
     th > 80
@@ -1262,6 +1264,7 @@ async function applyConfigure(agent: Agent, settings: any) {
   agent.config.cpuThresholdPercent = settings.cpuThresholdPercent;
   agent.config.memoryThresholdPercent = settings.memoryThresholdPercent;
   agent.config.diskThresholdPercent = settings.diskThresholdPercent;
+  agent.config.vramThresholdPercent = settings.vramThresholdPercent ?? 80;
   const { workDirectory: ignoredRemotePath, autostart: ignoredRemoteAutostart, ...remoteSettings } = settings;
   agent.journal.state.appliedSettings = remoteSettings;
   agent.journal.save();

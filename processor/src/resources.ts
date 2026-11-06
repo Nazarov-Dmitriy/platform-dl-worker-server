@@ -72,10 +72,12 @@ export function slotBudget(
   disk: number,
   pressure: string,
   available: boolean,
+  vramUsedPercent: number | null = null,
 ) {
   return !c.paused &&
     available &&
     pressure === "NORMAL" &&
+    (vramUsedPercent === null || vramUsedPercent < (c.vramThresholdPercent ?? 80)) &&
     usedMemory < (c.memoryThresholdPercent ?? c.threshold) &&
     cpu < (c.cpuThresholdPercent ?? c.threshold) &&
     disk < (c.diskThresholdPercent ?? c.threshold)
@@ -192,6 +194,7 @@ export class Resources {
         disk,
         pressure,
         available,
+        gpuInfo && gpuInfo.totalBytes > 0 ? 100 * gpuInfo.usedBytes / gpuInfo.totalBytes : null,
       ),
       paused: c.paused,
       workDiskAvailable: available,

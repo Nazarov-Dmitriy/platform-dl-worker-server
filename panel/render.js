@@ -81,7 +81,7 @@ function vramMeter(total, used) {
   fill.classList.add("vram");
   fill.style.width = pct + "%";
   track.append(fill);
-  const label = node("span", used.toFixed(1).replace(".", ",") + " / " + total.toFixed(1).replace(".", ",") + " ГБ");
+  const label = node("span", (used / 1024 ** 3).toFixed(1).replace(".", ",") + " / " + (total / 1024 ** 3).toFixed(1).replace(".", ",") + " ГБ");
   n.append(track, label);
   return n;
 }
@@ -89,7 +89,11 @@ function vramCell(usage) {
   if (!usage) return node("span", "—", "muted");
   const total = usage.vramTotalBytes;
   const used = usage.vramUsedBytes;
-  return vramMeter(total, used);
+  if (total == null || total <= 0 || used == null)
+    return node("span", "—", "muted");
+  const usedGb = (used / 1024 ** 3).toFixed(1).replace(".", ",");
+  const totalGb = (total / 1024 ** 3).toFixed(1).replace(".", ",");
+  return node("span", usedGb + " / " + totalGb + " ГБ");
 }
 function date(value) {
   const d = new Date(value);
@@ -159,25 +163,25 @@ function renderDevices(target, devices) {
     [
       "Устройство",
       "Подключение",
-      "Ресурсы",
+      "CPU, %",
+      "RAM, %",
+      "VRAM, ГБ",
       "Роль",
       ...(manage ? ["Действие"] : []),
     ],
     devices.map((d) => {
       const cpu = d.online ? meter(d.usage?.cpuPercent) : node("span", "—", "muted");
       const ram = d.online ? meter(d.usage?.memoryUsedPercent) : node("span", "—", "muted");
-      const vram = vramCell(d.usage);
-      const resources = node("div", null, "resources-cell");
-      resources.append(cpu, ram, vram);
-      const gpuName = d.usage?.gpuName || "";
-      const subtitle = gpuName ? d.id + " · " + gpuName : d.id;
+      const vram = d.online ? vramMeter(d.usage?.vramTotalBytes, d.usage?.vramUsedBytes) : node("span", "—", "muted");
       return [
-        titleCell(d.name, subtitle, "monitor"),
+        titleCell(d.name, d.id, "monitor"),
         badge(
           !d.enabled ? "Отключено" : d.online ? "В сети" : "Не в сети",
           !d.enabled ? "" : d.online ? "good" : "",
         ),
-        resources,
+        cpu,
+        ram,
+        vram,
         d.priority > 0 ? "Основной" : "Помощник",
         ...(manage ? [deviceManageButton(d)] : []),
       ];

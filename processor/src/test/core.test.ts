@@ -697,6 +697,19 @@ test("resource thresholds remain independent", () => {
   assert.equal(slotBudget(c, 100, 50, 20, 20, "NORMAL", true), 0);
   assert.equal(slotBudget(c, 100, 20, 70, 20, "NORMAL", true), 0);
 });
+test("VRAM threshold stops new work at the limit and recovers below it", () => {
+  const c = { maxParallel: 2, reserveMemoryBytes: 0, taskMemoryBytes: 1,
+    threshold: 80, paused: false, vramThresholdPercent: 75 } as Config;
+  const budget = (vram: number | null) => slotBudget(c, 100, 20, 20, 20, "NORMAL", true, vram);
+  assert.equal(budget(74.9), 2);
+  assert.equal(budget(75), 0);
+  assert.equal(budget(95), 0);
+  assert.equal(budget(null), 2);
+  assert.equal(budget(30), 2);
+  delete c.vramThresholdPercent;
+  assert.equal(budget(80), 0);
+});
+
 test("confirmed device settings survive restart without overriding the local work folder", async (t) => {
   const { Agent } = await import("../agent.js");
   const dir = mkdtempSync(join(tmpdir(), "persisted-settings-"));

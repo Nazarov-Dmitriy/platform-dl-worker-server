@@ -236,7 +236,8 @@ def build():
                                "maxParallel": {"type": "integer", "minimum": 1, "maximum": 64},
                                "cpuThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 100},
                                "memoryThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 100},
-                               "diskThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 100}},
+                               "diskThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 100},
+                               "vramThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 80}},
                               ["paused", "maxParallel", "cpuThresholdPercent",
                                "memoryThresholdPercent", "diskThresholdPercent"])})]}
     assignment = {"jobId": UUID, "fence": ref("Fence")}
