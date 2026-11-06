@@ -21,7 +21,7 @@ test("unknown hardware, offline devices and unverified requirements never claim 
   for (const env of [null, {}, { ...windows, online: false }, { ...windows, accelerator: "unknown" }, { ...windows, vramTotalBytes: null }])
     assert.equal(assess(model, env).level, "unknown");
   assert.equal(assess({ ...model, memoryRequirementsVerified: false }, windows).level, "unknown");
-  assert.equal(assess({ ...model, memoryRequirementsVerified: false }, { ...windows, vramTotalBytes: 8 * GiB }).label, "Ниже ориентира");
+  assert.equal(assess({ ...model, memoryRequirementsVerified: false }, { ...windows, vramTotalBytes: 8 * GiB }).label, "Можно установить");
 });
 test("CPU-capable models do not require a GPU; unsupported platforms are rejected", () => {
   assert.equal(assess({ ...model, accelerators: ["cpu"] }, { ...windows, accelerator: "unknown", vramTotalBytes: null }).level, "ok");

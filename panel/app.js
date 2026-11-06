@@ -172,8 +172,8 @@ function renderModelResources() {
     ["Система", [env?.os || d.os, env?.architecture || d.architecture].filter(Boolean).join(" · ") || "Неизвестна"],
     ["Видеокарта", env?.gpuName || "Не определена"],
     ["Ускорение GPU", ({ cuda: "NVIDIA · CUDA, движок проверяется отдельно", metal: "Apple · Metal", unknown: "Не проверено" })[env?.accelerator] || "Не проверено"],
-    ["RAM", byteSize(env?.memoryBytes) + " · свободно " + byteSize(env?.freeMemoryBytes)],
-    ["Память GPU", env?.accelerator === "metal" ? "Общая с RAM" : byteSize(env?.vramTotalBytes) + " · свободно " + byteSize(env?.freeVramBytes)],
+    ["RAM", memoryRatio(env?.memoryBytes, env?.freeMemoryBytes)],
+    ["VRAM", env?.accelerator === "metal" ? "Общая с RAM" : memoryRatio(env?.vramTotalBytes, env?.freeVramBytes)],
     ["Свободно на диске", byteSize(env?.freeDiskBytes)],
   ] : []);
 }

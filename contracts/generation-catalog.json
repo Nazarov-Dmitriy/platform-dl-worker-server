@@ -1,5 +1,107 @@
 [
   {
+    "id": "flux2-klein-4b-q4",
+    "revision": "q4-8a2bc5024f2eab1c",
+    "executor": "stable-diffusion.cpp",
+    "purpose": "GENERATION",
+    "os": [
+      "windows",
+      "darwin"
+    ],
+    "architectures": [
+      "amd64",
+      "arm64"
+    ],
+    "accelerators": [
+      "cuda",
+      "metal"
+    ],
+    "recognitionLanguages": [],
+    "translationDirections": [],
+    "downloadBytes": 5437803708,
+    "minimumRamBytes": 0,
+    "minimumVramBytes": 0,
+    "sha256": "8a2bc5024f2eab1c89da401a59abc3e6b47150311e0542818644d356c3d7fae7",
+    "downloadUrl": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF",
+    "license": "Apache-2.0",
+    "descriptionSource": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF",
+    "operations": [],
+    "files": [
+      {
+        "path": "transformer/model.gguf",
+        "bytes": 2604311104,
+        "sha256": "0b25d143c8469b342bc5af3bce92b783bf6b0636d285f7b2f75e38af63af9a15",
+        "url": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/a09d5bb51ac4000ccd9643d10e9db3ed14200508/flux-2-klein-4b-Q4_K_M.gguf"
+      },
+      {
+        "path": "text_encoder/model.gguf",
+        "bytes": 2497281312,
+        "sha256": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
+        "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf"
+      },
+      {
+        "path": "vae/model.safetensors",
+        "bytes": 336211292,
+        "sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3",
+        "url": "https://huggingface.co/Comfy-Org/flux2-klein-4B/resolve/5b3abca5c0dc1ecd4eaf3340868d09063fc1c965/split_files/vae/flux2-vae.safetensors"
+      }
+    ],
+    "description": "Основной предложенный вариант. Генерация иллюстраций и редактирование по референсу; сжатие Q4.",
+    "sizeTier": "SMALL",
+    "memoryRequirementsVerified": false
+  },
+  {
+    "id": "z-image-turbo-q4",
+    "revision": "q4-c4a3b1d6903ca907",
+    "executor": "stable-diffusion.cpp",
+    "purpose": "GENERATION",
+    "os": [
+      "windows",
+      "darwin"
+    ],
+    "architectures": [
+      "amd64",
+      "arm64"
+    ],
+    "accelerators": [
+      "cuda",
+      "metal"
+    ],
+    "recognitionLanguages": [],
+    "translationDirections": [],
+    "downloadBytes": 6682716004,
+    "minimumRamBytes": 0,
+    "minimumVramBytes": 0,
+    "sha256": "c4a3b1d6903ca9072c04b6b009b4be702c51ab20010a6a9cc17b9bc813943a17",
+    "downloadUrl": "https://huggingface.co/unsloth/Z-Image-Turbo-GGUF",
+    "license": "Apache-2.0",
+    "descriptionSource": "https://huggingface.co/unsloth/Z-Image-Turbo-GGUF",
+    "operations": [],
+    "files": [
+      {
+        "path": "transformer/model.gguf",
+        "bytes": 3850130496,
+        "sha256": "4ab6bceb1f0b82c9e725f123848018eac662a6fc1d467c019e13e701afb7b55c",
+        "url": "https://huggingface.co/unsloth/Z-Image-Turbo-GGUF/resolve/b40f712c569ecfff42f2307dcc43399ae1d71318/z-image-turbo-Q4_K_M.gguf"
+      },
+      {
+        "path": "text_encoder/model.gguf",
+        "bytes": 2497281120,
+        "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+        "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+      },
+      {
+        "path": "vae/model.safetensors",
+        "bytes": 335304388,
+        "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38",
+        "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/6fc90a3b1b653e935a0d175e260736de25b84df5/split_files/vae/ae.safetensors"
+      }
+    ],
+    "description": "Основной предложенный вариант для фотографий и иллюстраций; сжатие Q4.",
+    "sizeTier": "MEDIUM",
+    "memoryRequirementsVerified": false
+  },
+  {
     "id": "flux2-klein-4b",
     "revision": "e7b7dc27f91deacad38e78976d1f2b499d76a294",
     "executor": "diffusers",

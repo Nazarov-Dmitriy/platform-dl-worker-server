@@ -70,6 +70,16 @@
           <p class="hint" id="envHint">Запустите обработчик, чтобы приложение увидело железо и список моделей.</p>
         </div>
         <div class="card">
+          <h2>Движок генерации изображений</h2>
+          <p class="hint" id="generationEngineStatus">Проверьте готовность движка.</p>
+          <div class="actions">
+            <button type="button" id="checkGeneration">Проверить движок</button>
+            <button type="button" id="installGeneration" class="primary" hidden>Установить движок</button>
+            <span class="spinner" id="generationSpinner" hidden aria-label="Выполняется"></span>
+          </div>
+          <p class="hint" id="generationEngineHint">Установка не требует Python. Проверка запуска движка не заменяет проверку генерации с моделью.</p>
+        </div>
+        <div class="card">
           <h2>Что обрабатывать на этом компьютере</h2>
           <p class="hint">Отметьте задачи — ниже останутся только подходящие модели.</p>
           <div class="tasks">

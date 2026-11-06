@@ -211,6 +211,10 @@ function byteSize(bytes) {
     ? gb.toFixed(1).replace(".", ",") + " ГБ"
     : Math.round(bytes / 1024 ** 2) + " МБ";
 }
+function memoryRatio(total, free) {
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(free)) return "—";
+  return (Math.max(0, total - free) / 1024 ** 3).toFixed(1).replace(".", ",") + "/" + (total / 1024 ** 3).toFixed(1).replace(".", ",") + " ГБ";
+}
 // Every catalog entry is a file on huggingface.co; the repository page is the
 // model card, which is what an operator needs in order to read about it.
 function modelCard(model) {
@@ -229,6 +233,10 @@ function modelCard(model) {
 // raw catalog fields.
 function modelNeeds(model) {
   const parts = [byteSize(model.downloadBytes)];
+  if (model.purpose === "GENERATION") {
+    parts.push(model.executor === "stable-diffusion.cpp" ? "Q4 · предложенная модель" : "полный пакет");
+    return parts.join(" · ");
+  }
   if (model.minimumRamBytes)
     parts.push((model.memoryRequirementsVerified === false ? "Ориентир RAM " : "ОЗУ от ") + byteSize(model.minimumRamBytes));
   if (model.minimumVramBytes)
@@ -273,7 +281,7 @@ function modelPurposeCell(model) {
   cell.append(tags, node("span", modelNeeds(model), "cell-meta"));
   if (model.sizeTier) cell.append(node("span", ({SMALL: "Лёгкая", MEDIUM: "Средняя", LARGE: "Тяжёлая"})[model.sizeTier], "cell-meta"));
   if (model.description) cell.append(node("span", model.description, "model-description"));
-  if (model.purpose === "GENERATION") cell.append(node("span", "Полный пакет Safetensors. Память — предварительный ориентир; запуск генерации пока недоступен.", "model-description"));
+  if (model.purpose === "GENERATION") cell.append(node("span", "Включены веса, текстовый кодировщик и VAE. Запуск генерации ещё не проверен.", "model-description"));
   return cell;
 }
 function modelCompatibilityCell(model) {
@@ -345,7 +353,7 @@ function renderModels(target, models) {
   table(
     target,
     ["Модель", "Назначение", "Совместимость", "Источник", ""],
-    models.map((m) => [
+    [...models].sort((a, b) => Number(b.executor === "stable-diffusion.cpp") - Number(a.executor === "stable-diffusion.cpp") || a.downloadBytes - b.downloadBytes).map((m) => [
       titleCell(m.id, m.revision, "box"),
       modelPurposeCell(m),
       modelCompatibilityCell(m),

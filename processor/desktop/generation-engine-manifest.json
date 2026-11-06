@@ -1,0 +1,36 @@
+{
+  "version": "master-1052-f5df5f8",
+  "source": "https://github.com/leejet/stable-diffusion.cpp/releases/tag/master-1052-f5df5f8",
+  "builds": {
+    "win32-x64-cuda": {
+      "accelerator": "cuda",
+      "label": "Windows · NVIDIA CUDA",
+      "executable": "sd-cli.exe",
+      "archives": [
+        {
+          "url": "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1052-f5df5f8/sd-master-f5df5f8-bin-win-cuda12-x64.zip",
+          "bytes": 363293049,
+          "sha256": "607b0336e245f5731d7693fa0ff79f1a98f8cc5a45b9678a41407788b23e2fea"
+        },
+        {
+          "url": "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1052-f5df5f8/cudart-sd-bin-win-cu12-x64.zip",
+          "bytes": 563452046,
+          "sha256": "fe20366827d357c00797eebb58244dddab7fd9a348d70090c3871004c320f38d"
+        }
+      ]
+    },
+    "darwin-arm64-metal": {
+      "accelerator": "metal",
+      "minimumMacOS": "26.0",
+      "label": "macOS · Apple Metal",
+      "executable": "sd-cli",
+      "archives": [
+        {
+          "url": "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1052-f5df5f8/sd-master-f5df5f8-bin-Darwin-macOS-26.6.2-arm64.zip",
+          "bytes": 37747681,
+          "sha256": "2592c4abd774e53cbc9c2b767d45439de01d516824b935d3c76a2530240b7a25"
+        }
+      ]
+    }
+  }
+}

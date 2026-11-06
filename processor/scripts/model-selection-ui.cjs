@@ -62,7 +62,7 @@ async function main() {
     await page.selectOption("#modelDeviceSelect", "windows-test");
     assert.match(await page.locator("#modelDeviceResources").innerText(), /RTX 5060 Ti/);
     assert.match(await page.locator("#catalog").innerText(), /Лёгкая/);
-    assert.match(await page.locator("#catalog").innerText(), /Ниже ориентира/);
+    assert.match(await page.locator("#catalog").innerText(), /Можно установить/);
     await page.locator("#catalog button").filter({ hasText: /^Установить$/ }).first().click();
     await page.waitForFunction(() => document.querySelector("#catalog").textContent.includes("Установка запрошена"));
     assert.equal(installs, 1);
@@ -85,18 +85,33 @@ async function main() {
     await desktop.addInitScript(({ status }) => {
       window.processor = {
         state: async () => ({ settings: { tokenSet: true, modelTasks: ["generation"], readiness: { video: { ok: true }, speech: { ok: true } } }, status }),
-        onStatus: () => {}, onCiStatus: () => {}, ciState: async () => ({ repos: [] }),
-        processing: async input => input, readiness: async () => ({ ok: true }),
+        onStatus: callback => { window.sendTestStatus = callback; }, onCiStatus: () => {}, ciState: async () => ({ repos: [] }),
+        processing: async input => input,
+        readiness: async capability => capability === "generation"
+          ? { ok: false, supported: true, version: "test-pinned", label: "Windows · NVIDIA CUDA", downloadBytes: 900000000, message: "Установите движок генерации." }
+          : { ok: true },
+        install: async capability => {
+          if (capability !== "generation") throw Error("unexpected capability");
+          window.testEngineInstalled = true;
+          return { ok: true, supported: true, message: "Движок запускается. Генерация с моделью ещё не проверена." };
+        },
         model: async () => {},
       };
     }, { status });
     await desktop.goto(origin + "/processor/desktop/index.html");
     await desktop.locator("#openModels").click();
     await desktop.locator("#modelGroups .model-row").first().waitFor();
-    assert.equal(await desktop.locator("#modelGroups .model-row").count(), 3);
+    assert.equal(await desktop.locator("#modelGroups .model-row").count(), 5);
     assert.match(await desktop.locator("#envGrid").innerText(), /RTX 5060 Ti/);
+    assert.match(await desktop.locator("#envGrid").innerText(), /2,0\/16,0 ГБ/);
+    assert.match(await desktop.locator("#envGrid").innerText(), /8,0\/32,0 ГБ/);
     assert.equal(await desktop.locator('#modelGroups input[type="radio"]:enabled').count(), 0);
+    assert.equal(await desktop.locator("#installGeneration").isDisabled(), true);
     await desktop.screenshot({ path: path.join(assets, "model-selection-desktop.png"), fullPage: true });
+    await desktop.evaluate(() => window.sendTestStatus({ phase: "stopped", connected: false, running: 0, paused: false }));
+    await desktop.locator("#installGeneration").click();
+    await desktop.waitForFunction(() => window.testEngineInstalled === true);
+    await desktop.locator("#generationEngineStatus").filter({ hasText: "Движок запускается" }).waitFor();
     assert.deepEqual(errors, []);
     console.log("PASS: website, desktop, mobile, install request, Mac memory and compact resource column.");
   } finally {

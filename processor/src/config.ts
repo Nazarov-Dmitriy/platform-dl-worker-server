@@ -25,6 +25,7 @@ export type Config = {
   catalogExtra?: string;
   allowTestModels?: boolean;
   whisperCpp?: string;
+  stableDiffusion?: string;
   tokenFile?: string;
   tlsCaFile?: string;
   configFile?: string;
@@ -53,6 +54,7 @@ export function loadConfig(path: string): Config {
     "catalogExtra",
     "allowTestModels",
     "whisperCpp",
+    "stableDiffusion",
     "tokenFile",
     "tlsCaFile",
   ];
@@ -127,6 +129,7 @@ export function loadConfig(path: string): Config {
     tlsCaFile,
     configFile: resolve(path),
     whisperCpp: typeof v.whisperCpp === "string" ? v.whisperCpp : undefined,
+    stableDiffusion: typeof v.stableDiffusion === "string" ? v.stableDiffusion : undefined,
   };
   for (const k of [
     "maxParallel",

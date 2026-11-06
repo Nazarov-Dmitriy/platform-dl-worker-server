@@ -28,6 +28,7 @@ const { pathToFileURL } = require("node:url");
 const { pipeline } = require("node:stream/promises");
 const https = require("node:https");
 const { validateProcessing, validateModelTasks, remapWorkDirModels } = require("./processing.cjs");
+const generationEngine = require("./generation-engine.cjs");
 const { availableParallelism, tmpdir } = require("node:os");
 const { validateSettings } = require("./settings.cjs");
 const { createLoginController, NAME } = require("./login.cjs");
@@ -195,13 +196,13 @@ function currentWhisperCpp() {
   return undefined;
 }
 function checkReadiness(capability) {
-  if (capability !== "video" && capability !== "speech")
+  if (capability !== "video" && capability !== "speech" && capability !== "generation")
     throw Error("Неизвестная проверка готовности.");
   const result =
-    capability === "video"
+    capability === "generation" ? generationEngine.readiness(saved) : capability === "video"
       ? videoReadiness()
       : speechReadiness(currentWhisperCpp());
-  const entry = { ok: result.ok, missing: result.missing, checkedAt: Date.now() };
+  const entry = { ...result, checkedAt: Date.now() };
   if (capability === "speech" && saved.whisperBuild)
     entry.build = saved.whisperBuild;
   saved.readiness = { ...(saved.readiness || {}), [capability]: entry };
@@ -270,6 +271,41 @@ async function installVideo() {
   );
   refreshWindowsPath();
   return checkReadiness("video");
+}
+async function installGeneration() {
+  emit({ generationInstall: { phase: "downloading", progress: 0 } });
+  let lastProgress = 0;
+  try {
+    const engine = await generationEngine.install(directory, {
+      onProgress: progress => {
+        if (Date.now() - lastProgress > 250 || progress.phase !== "downloading") {
+          lastProgress = Date.now();
+          emit({ generationInstall: progress });
+        }
+      },
+    });
+    // Switch the saved executable only after extraction and a successful launch.
+    saved.generationEngine = engine;
+    atomic("settings.json", JSON.stringify(saved, null, 2));
+    const configPath = join(directory, "config.json");
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf8"));
+      atomic("config.json", JSON.stringify({ ...config, stableDiffusion: engine.executable }, null, 2));
+    }
+    emit({ generationInstall: { phase: "ready", progress: 1 } });
+    return checkReadiness("generation");
+  } catch (error) {
+    emit({ generationInstall: { phase: "error", progress: 0 } });
+    const messages = {
+      GENERATION_INSUFFICIENT_DISK: "Недостаточно места на диске для движка и распаковки.",
+      GENERATION_PLATFORM_UNSUPPORTED: "Нужны Windows x64 с NVIDIA или Mac с Apple Silicon.",
+      GENERATION_MACOS_VERSION: "Для официальной сборки движка нужна macOS 26 или новее. Скачивание не началось.",
+      GENERATION_EXECUTABLE_UNAVAILABLE: "Движок не запустился. Проверьте драйвер NVIDIA или совместимость версии macOS.",
+      GENERATION_HASH_MISMATCH: "Архив не прошёл проверку целостности. Повторите установку.",
+      GENERATION_INSTALL_BUSY: "Движок уже устанавливается. Дождитесь завершения.",
+    };
+    throw Error(messages[error.message] || "Не удалось установить движок генерации. Проверьте соединение и повторите попытку.");
+  }
 }
 const whisperCpuZipUrl =
   "https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip";
@@ -631,6 +667,7 @@ else {
       if (child) throw Error("Остановите обработчик перед установкой зависимостей.");
       if (capability === "video") return installVideo();
       if (capability === "speech") return installSpeech();
+      if (capability === "generation") return installGeneration();
       throw Error("Неизвестная зависимость.");
     });
     handle("processor:state", () => ({
@@ -697,6 +734,7 @@ else {
             workDir: settings.workDir,
             ...validateProcessing({ ...saved, ...input }),
             ...(saved.whisperCpp ? { whisperCpp: saved.whisperCpp } : {}),
+            ...(saved.generationEngine ? { stableDiffusion: saved.generationEngine.executable } : {}),
             paused: false,
             localSettings: true,
           },

@@ -90,6 +90,23 @@ function drawReadiness() {
   drawCapabilityReadiness("speech", savedReadiness.speech);
   paintDot("chipVideo", readinessPhase(savedReadiness.video));
   paintDot("chipSpeech", readinessPhase(savedReadiness.speech));
+  drawGenerationReadiness();
+}
+function drawGenerationReadiness() {
+  const entry = savedReadiness.generation;
+  const progress = current.generationInstall;
+  const installing = progress && ["downloading", "extracting", "checking"].includes(progress.phase);
+  $("generationEngineStatus").textContent = installing
+    ? ({ downloading: "Скачиваем движок — " + Math.round((progress.progress || 0) * 100) + "%", extracting: "Распаковываем движок…", checking: "Проверяем запуск движка…" })[progress.phase]
+    : entry?.message || "Проверьте готовность движка.";
+  $("installGeneration").hidden = !entry || entry.ok || entry.supported === false;
+  $("installGeneration").disabled = busy || installing || current.phase === "connected" || current.phase === "connecting" || current.phase === "stopping";
+  $("installGeneration").title = $("installGeneration").disabled && !installing ? "Перед установкой остановите обработчик." : "";
+  $("checkGeneration").disabled = busy || installing;
+  $("generationSpinner").hidden = !installing;
+  $("generationEngineHint").textContent = entry
+    ? [entry.label, entry.version, entry.downloadBytes ? "Загрузка движка: " + bytes(entry.downloadBytes) : ""].filter(Boolean).join(" · ") + ". После установки движка потребуется модель; запуск генерации заданий ещё не реализован."
+    : "Движок выбирается для Windows/NVIDIA или Apple Silicon/Metal. Модели устанавливаются отдельно.";
 }
 function refreshSpeechBuild() {
   const hint = $("speechModeHint");
@@ -292,6 +309,7 @@ function draw(status) {
   $("stop").disabled = !active || busy;
   $("pause").textContent = status.paused ? "Продолжить" : "Пауза";
   drawModels(status.models);
+  drawGenerationReadiness();
   warnAboutModels(status.models);
 }
 
@@ -331,6 +349,11 @@ function bytes(n) {
   return gb >= 1
     ? gb.toFixed(1).replace(".", ",") + " ГБ"
     : Math.round(n / 1024 ** 2) + " МБ";
+}
+function memoryRatio(total, free) {
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(free)) return "—";
+  const used = Math.max(0, total - free);
+  return (used / 1024 ** 3).toFixed(1).replace(".", ",") + "/" + (total / 1024 ** 3).toFixed(1).replace(".", ",") + " ГБ";
 }
 function chosenTasks() {
   const out = [];
@@ -375,11 +398,13 @@ function modelRow(entry, view, group) {
   name.textContent = entry.id;
   const meta = document.createElement("span");
   meta.className = "meta";
-  meta.textContent =
-    bytes(entry.downloadBytes) +
+  meta.textContent = generation
+    ? "Загрузка " + bytes(entry.downloadBytes) + " · " + (entry.executor === "stable-diffusion.cpp" ? "Q4 · предложенная модель" : "полный пакет")
+    : bytes(entry.downloadBytes) +
     (entry.memoryRequirementsVerified === false ? " · ориентир RAM " : " · ОЗУ от ") + bytes(entry.minimumRamBytes) +
     (entry.minimumVramBytes ? " · VRAM от " + bytes(entry.minimumVramBytes) : "") +
     " · версия " + entry.revision;
+  meta.title = "Ревизия: " + entry.revision;
   who.append(name, meta);
   const info = document.createElement("span");
   info.className = "meta";
@@ -390,7 +415,7 @@ function modelRow(entry, view, group) {
   who.append(info, fit);
   if (generation) {
     const runtime = document.createElement("span"); runtime.className = "meta";
-    runtime.textContent = "Полный пакет Safetensors, без сжатия. Память — предварительный ориентир. Доступна установка, запуск генерации пока недоступен.";
+    runtime.textContent = "В комплект входят веса, текстовый кодировщик и VAE. Можно установить; генерация ещё не проверена.";
     who.append(runtime);
   }
   if (!fits) {
@@ -461,9 +486,9 @@ function drawModels(view) {
   $("envGrid").replaceChildren();
   [["Система", [env.os, env.architecture].filter(Boolean).join(" · ") || "—"],
    ["Видеокарта", env.gpuName || "Не определена"],
-   ["Ускорение GPU", ({ cuda: "NVIDIA · CUDA (движок проверяется отдельно)", metal: "Apple · Metal", unknown: "Не проверено", cpu: "CPU" })[env.accelerator] || "Не проверено"],
-   ["Память GPU", env.accelerator === "metal" ? "Общая с RAM" : bytes(env.vramTotalBytes) + " · свободно " + bytes(env.freeVramBytes)],
-   ["Оперативная память", bytes(env.memoryBytes) + " · свободно " + bytes(env.freeMemoryBytes)],
+   ["Ускорение GPU", ({ cuda: "CUDA", metal: "Metal", unknown: "Не проверено", cpu: "CPU" })[env.accelerator] || "Не проверено"],
+   ["VRAM", env.accelerator === "metal" ? "Общая с RAM" : memoryRatio(env.vramTotalBytes, env.freeVramBytes)],
+   ["RAM", memoryRatio(env.memoryBytes, env.freeMemoryBytes)],
    ["Ядер процессора", String(env.cpuCores)],
    ["Свободно в рабочей папке", env.diskReady ? bytes(env.freeDiskBytes) : "папка недоступна"],
    ["Рабочая папка", env.workDir || "—"],
@@ -485,7 +510,8 @@ function drawModels(view) {
   modelGroups
     .filter((g) => g.tasks.some((task) => tasks.includes(task)))
     .forEach((g) => {
-      const entries = view.catalog.filter((m) => m.purpose === g.purpose);
+      const entries = view.catalog.filter((m) => m.purpose === g.purpose).sort((a, b) =>
+        Number(b.executor === "stable-diffusion.cpp") - Number(a.executor === "stable-diffusion.cpp") || a.downloadBytes - b.downloadBytes);
       const box = document.createElement("div");
       box.className = "model-group";
       const title = document.createElement("h3");
@@ -580,6 +606,8 @@ $("checkSpeech").onclick = () =>
     async () => setCapabilityReadiness("speech", await window.processor.readiness("speech")),
     $("speechSpinner"),
   );
+$("checkGeneration").onclick = () => action(async () => setCapabilityReadiness("generation", await window.processor.readiness("generation")));
+$("installGeneration").onclick = () => action(async () => setCapabilityReadiness("generation", await window.processor.install("generation")));
 $("installSpeech").onclick = () =>
   action(
     async () => setCapabilityReadiness("speech", await window.processor.install("speech")),
@@ -628,6 +656,7 @@ window.processor
       $("fingerprint").hidden = false;
     }
     draw(status);
+    void window.processor.readiness("generation").then(entry => setCapabilityReadiness("generation", entry)).catch(error => notice(error.message));
     // Auto-check readiness if it was never run, so the install button is visible.
     if (!savedReadiness.video) {
       void action(

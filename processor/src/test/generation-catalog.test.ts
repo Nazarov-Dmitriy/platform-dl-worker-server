@@ -13,18 +13,18 @@ import { parseNvidiaMemory } from "../resources.js";
 
 test("generation packages include pinned complete manifests and verified download sizes", () => {
   const entries = bundledCatalog.filter(m => m.purpose === "GENERATION");
-  assert.equal(entries.length, 3);
-  assert.deepEqual(entries.map(m => m.sizeTier), ["SMALL", "MEDIUM", "LARGE"]);
+  assert.equal(entries.length, 5);
+  assert.deepEqual(entries.slice(0, 2).map(m => m.executor), ["stable-diffusion.cpp", "stable-diffusion.cpp"]);
   for (const entry of entries) {
     assert.equal(entry.memoryRequirementsVerified, false);
     assert.ok(entry.files && entry.files.length <= 32);
     assert.equal(sha256Canonical(entry.files), entry.sha256);
     assert.equal(entry.files.reduce((n, f) => n + f.bytes, 0), entry.downloadBytes);
-    for (const prefix of ["text_encoder/", "tokenizer/", "transformer/", "vae/"])
+    for (const prefix of (entry.executor === "stable-diffusion.cpp" ? ["text_encoder/", "transformer/", "vae/"] : ["text_encoder/", "tokenizer/", "transformer/", "vae/"]))
       assert.ok(entry.files.some(f => f.path.startsWith(prefix)));
     for (const file of entry.files) {
       assert.match(file.sha256, /^[0-9a-f]{64}$/);
-      assert.ok(file.url.includes("/resolve/" + entry.revision + "/"));
+      assert.match(file.url, /\/resolve\/[a-f0-9]{40}\//);
     }
   }
 });

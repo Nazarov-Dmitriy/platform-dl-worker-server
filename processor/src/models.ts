@@ -41,7 +41,7 @@ export async function installModel(
   )
     throw new Error("MODEL_PLATFORM_UNSUPPORTED");
   if (
-    !(entry.purpose === "GENERATION" && entry.executor === "diffusers") &&
+    !(entry.purpose === "GENERATION" && ["diffusers", "stable-diffusion.cpp"].includes(entry.executor)) &&
     !["whisper.cpp", "transformers-js", "catalog-test"].includes(entry.executor)
   )
     throw new Error("EXECUTOR_UNAVAILABLE");

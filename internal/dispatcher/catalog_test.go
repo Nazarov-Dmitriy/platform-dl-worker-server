@@ -286,7 +286,7 @@ func TestGenerationCatalogIsDownloadOnlyAndComplete(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if count != 3 {
+	if count != 5 {
 		t.Fatalf("generation models: %d", count)
 	}
 }

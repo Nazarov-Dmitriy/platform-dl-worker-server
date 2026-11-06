@@ -427,7 +427,9 @@ fieldset:disabled {
    card rather than a table row that has to keep columns aligned. */
 .heading-actions { display: flex; gap: 10px; }
 #modelsScreen .card { margin-bottom: 20px; }
-.env-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
+.env-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 24px; }
+@media (max-width: 750px) { .env-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .env-grid { grid-template-columns: minmax(0, 1fr); } }
 .env-grid div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .env-grid .k { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .env-grid .v { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

@@ -10,6 +10,8 @@
       return { level: "no", label: "Не подходит", reason: "Эта ОС не поддерживается моделью." };
     if (model.architectures?.length && !model.architectures.includes(env.architecture))
       return { level: "no", label: "Не подходит", reason: "Архитектура процессора не поддерживается." };
+    if (model.purpose === "GENERATION" && model.memoryRequirementsVerified === false)
+      return { level: "unknown", label: "Можно установить", reason: "Запуск генерации на этом устройстве ещё не проверен. Требования памяти уточняются тестом." };
     const estimated = model.memoryRequirementsVerified === false;
     const no = (reason) => ({ level: estimated ? "unknown" : "no", label: estimated ? "Ниже ориентира" : "Не подходит", reason });
     if (model.minimumRamBytes > env.memoryBytes)
