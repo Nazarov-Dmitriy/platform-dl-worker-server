@@ -19,6 +19,22 @@
 - [x] **Фронт / панель или приложение** — интерфейс и состояния по [плану](../model-management-plan.md#этап-2--интерфейс-и-поставка).
 - [x] **Тестирование / приёмка** — [чеклист](../../testing/model-management.md) закрыт.
 
+## Ресурсы: CPU, RAM, VRAM — 2026-11-06
+
+Закрыта по решению владельца. Бэк: `vramThresholdPercent` в схеме и настройках устройств, `parseNvidiaMemory` с `nvidia-smi`, отправка GPU-метрик на сервер, VRAM-порог в scheduler. Панель: столбцы CPU/RAM/VRAM в таблице устройств, memory ratio, VRAM settings в конфиге. Desktop: отображение VRAM, GPU name, accelerator. Тесты: `vramThresholdPercent` в slot budget, schema compatibility.
+
+- [x] **Бэк / ядро** — [план](../plan/vram-detection-plan.md).
+- [x] **Фронт / панель или приложение** — интерфейс и состояния по [плану](../plan/vram-detection-plan.md#этап-2--интерфейс-и-поставка).
+- [x] **Тестирование / приёмка** — [чеклист](../../testing/vram-detection.md) закрыт.
+
+## Акселератор: CUDA / Metal / CPU — 2026-11-06
+
+Закрыта по решению владельца. Бэк: поле `accelerator` в `Usage` (cuda, metal, unknown, cpu), отправка через heartbeat, `parseNvidiaMemory` для CUDA, определение Apple Silicon GPU для Metal. Панель: ускорение GPU в ресурсах устройства (NVIDIA · CUDA, Apple · Metal, Не проверено). Desktop: отображение ускорения в env-grid, `accelerator` в `resources.ts`.
+
+- [x] **Бэк / ядро** — [план](../plan/accelerator-reporting-plan.md).
+- [x] **Фронт / панель или приложение** — интерфейс и состояния по [плану](../plan/accelerator-reporting-plan.md#этап-2--интерфейс-и-поставка).
+- [x] **Тестирование / приёмка** — [чеклист](../../testing/accelerator-reporting.md) закрыт.
+
 ## Базовый Windows/видео этап — 2026-10-28
 
 Закрыт по решению владельца. Диспетчер VPS, подключение сайта, сохранение настроек,
