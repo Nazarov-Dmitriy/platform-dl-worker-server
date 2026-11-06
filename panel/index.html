@@ -167,7 +167,7 @@
                   <div class="option-list">
                     <label class="check-field"><input type="checkbox" name="transcode" />Обработка видео</label><label
                       class="check-field"><input type="checkbox" name="transcribe" />Распознавание речи</label><label
-                      class="check-field"><input type="checkbox" name="subtitles" />Субтитры</label>
+                      class="check-field"><input type="checkbox" name="subtitles" />Субтитры</label><label class="check-field"><input type="checkbox" name="generate" />Генерация изображений</label>
                   </div>
                 </fieldset>
                 <p class="caption">Сайт сможет заказывать только отмеченные виды работ. Изменение действует сразу,
@@ -202,7 +202,7 @@
                         <label class="check-field"><input type="checkbox" name="transcode" checked />Обработка
                           видео</label><label class="check-field"><input type="checkbox"
                             name="transcribe" />Распознавание речи</label><label class="check-field"><input
-                            type="checkbox" name="subtitles" />Субтитры</label>
+                            type="checkbox" name="subtitles" />Субтитры</label><label class="check-field"><input type="checkbox" name="generate" />Генерация изображений</label>
                       </div>
                     </fieldset>
                     <div class="form-actions">
@@ -252,11 +252,11 @@
               <label class="field">Выберите устройство<select id="deviceSelect"></select></label>
               <div class="actions" id="deviceDetail"></div>
               <form id="devicePriorityForm" class="form-grid">
-                <label class="field">Роль устройства<select id="devicePriority">
+                <label class="field">Роль устройства<select id="devicePriority" aria-describedby="devicePriorityHint">
                     <option value="0">Помощник</option>
                     <option value="100">Основной</option>
                   </select></label>
-                <p class="muted caption">Основных и помощников может быть несколько, независимо от ОС. Помощники
+                <p id="devicePriorityHint" class="muted caption full">Основных и помощников может быть несколько, независимо от ОС. Помощники
                   получают новые задания, если подходящие основные заняты, на паузе, перегружены или недоступны. Без
                   основных помощники работают самостоятельно. Смена роли не прерывает текущие задания.</p>
                 <div class="actions"><button type="submit" class="button" id="saveDevicePriority">Сохранить
@@ -299,6 +299,8 @@
                       class="field">Порог использования RAM, %<input name="memoryThresholdPercent" type="number" min="1"
                         max="80" value="80" required /></label><label class="field">Порог заполнения диска, %<input
                         name="diskThresholdPercent" type="number" min="1" max="80" value="80" required /></label>
+                    <label class="field">Порог использования VRAM, %<input name="vramThresholdPercent" type="number" min="1" max="80" value="80" required /></label>
+                    <p class="muted caption full">При достижении порога VRAM устройство не принимает новые задания. Текущие продолжают выполняться. Порог применяется, когда воркер передаёт измерение видеопамяти; на Apple Silicon используется контроль общей RAM.</p>
                   </div>
                   <fieldset class="form-options">
                     <legend>Режим работы</legend>

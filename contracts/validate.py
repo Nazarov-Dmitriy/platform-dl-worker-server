@@ -55,7 +55,7 @@ def semantic(definition, value):
             value["params"] if value["type"] == "media.subtitles" else None)
         if sub is not None:
             assert sub["includeOriginal"] or sub["targetLanguages"], "No requested subtitle output"
-        if value["source"]["kind"] == "HLS":
+        if value.get("source", {}).get("kind") == "HLS":
             parts = value["source"]["files"]
             assert len({p["path"] for p in parts}) == len(parts), "Duplicate source path"
             assert sum(p["bytes"] for p in parts) == value["source"]["bytes"]

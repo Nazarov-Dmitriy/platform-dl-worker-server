@@ -11,6 +11,7 @@ let pendingLaunch = {};
 let configured = false;
 let savedReadiness = {};
 let whisperBuild = undefined;
+let cachedModelsView;
 // Three screens now, so the switch names one instead of toggling a flag.
 function screen(name) {
   const which = name === true ? "settings" : name === false ? "dashboard" : name;
@@ -91,6 +92,23 @@ function drawReadiness() {
   paintDot("chipVideo", readinessPhase(savedReadiness.video));
   paintDot("chipSpeech", readinessPhase(savedReadiness.speech));
   drawGenerationReadiness();
+  drawDependencyInstallHints();
+}
+function drawInstallReason(buttonId, hintId, installing = false) {
+  const button = $(buttonId), hint = $(hintId);
+  const reason = installing ? "Дождитесь завершения установки."
+    : current.phase === "stopping" ? "Дождитесь остановки обработчика — затем установка станет доступна."
+    : current.connected || ["connected", "connecting"].includes(current.phase)
+      ? "Для установки сначала остановите обработчик в разделе «К заданиям». Закрывать приложение не нужно."
+      : busy ? "Дождитесь завершения текущего действия — затем установка станет доступна." : "";
+  button.disabled = !!reason;
+  button.title = reason;
+  hint.textContent = reason;
+  hint.hidden = button.hidden || !reason;
+}
+function drawDependencyInstallHints() {
+  drawInstallReason("installVideo", "videoInstallReason");
+  drawInstallReason("installSpeech", "speechInstallReason");
 }
 function drawGenerationReadiness() {
   const entry = savedReadiness.generation;
@@ -100,12 +118,11 @@ function drawGenerationReadiness() {
     ? ({ downloading: "Скачиваем движок — " + Math.round((progress.progress || 0) * 100) + "%", extracting: "Распаковываем движок…", checking: "Проверяем запуск движка…" })[progress.phase]
     : entry?.message || "Проверьте готовность движка.";
   $("installGeneration").hidden = !entry || entry.ok || entry.supported === false;
-  $("installGeneration").disabled = busy || installing || current.phase === "connected" || current.phase === "connecting" || current.phase === "stopping";
-  $("installGeneration").title = $("installGeneration").disabled && !installing ? "Перед установкой остановите обработчик." : "";
+  drawInstallReason("installGeneration", "generationInstallReason", installing);
   $("checkGeneration").disabled = busy || installing;
   $("generationSpinner").hidden = !installing;
   $("generationEngineHint").textContent = entry
-    ? [entry.label, entry.version, entry.downloadBytes ? "Загрузка движка: " + bytes(entry.downloadBytes) : ""].filter(Boolean).join(" · ") + ". После установки движка потребуется модель; запуск генерации заданий ещё не реализован."
+    ? [entry.label, entry.version, entry.downloadBytes ? "Загрузка движка: " + bytes(entry.downloadBytes) : ""].filter(Boolean).join(" · ") + ". После установки движка установите и выберите рабочую Q4-модель."
     : "Движок выбирается для Windows/NVIDIA или Apple Silicon/Metal. Модели устанавливаются отдельно.";
 }
 function refreshSpeechBuild() {
@@ -217,7 +234,7 @@ $("autostart").onchange = () => {
   });
 };
 const stages = {
-  WAITING_SOURCE: "Ожидаем доступ к исходному файлу", DOWNLOADING: "Скачивание исходного файла",
+  GENERATING: "Генерация изображения", WAITING_SOURCE: "Ожидаем доступ к исходному файлу", DOWNLOADING: "Скачивание исходного файла",
   TRANSCODING: "Обработка видео", TRANSCRIBING: "Распознавание речи",
   TRANSLATING: "Перевод", UPLOADING: "Загрузка результата",
   WAITING_UPLOAD: "Ожидаем разрешение на загрузку",
@@ -310,6 +327,7 @@ function draw(status) {
   $("pause").textContent = status.paused ? "Продолжить" : "Пауза";
   drawModels(status.models);
   drawGenerationReadiness();
+  drawDependencyInstallHints();
   warnAboutModels(status.models);
 }
 
@@ -337,7 +355,7 @@ function warnAboutModels(view) {
 // The site decides what may be installed; this screen decides nothing, it only
 // shows what the worker reported and asks it to act.
 const modelGroups = [
-  { purpose: "GENERATION", title: "Генерация изображений", tasks: ["generation"], hint: "Выберите по ресурсам компьютера. Доступна загрузка; запуск генерации появится отдельно." },
+  { purpose: "GENERATION", title: "Генерация изображений", tasks: ["generation"], hint: "Выберите по ресурсам компьютера. Выберите рабочую модель; готовые модели будут доступны подключённым сайтам." },
   { purpose: "RECOGNITION", title: "Распознавание речи", tasks: ["speech", "subs"],
     hint: "Нужна одна. Выберите, какой работать." },
   { purpose: "TRANSLATION", title: "Перевод", tasks: ["subs"],
@@ -379,12 +397,13 @@ function modelRow(entry, view, group) {
   const row = document.createElement("div");
   row.className = "model-row" + (active ? " chosen" : "");
 
-  if (group && !generation) {
+  if (group) {
     const radio = document.createElement("input");
     radio.type = "radio";
     radio.name = "use-" + group.purpose;
     radio.checked = active;
-    radio.disabled = generation || !installed || !fits || busy;
+    radio.disabled = generation && entry.executor !== "stable-diffusion.cpp" || !installed || !fits || busy || !current.connected;
+    if (generation && entry.executor !== "stable-diffusion.cpp") radio.title = "Для установленного движка выберите предложенную Q4-модель.";
     radio.setAttribute("aria-label", "Работать моделью " + entry.id);
     radio.onclick = () =>
       action(() => window.processor.model("activate", entry.id, entry.revision));
@@ -415,7 +434,9 @@ function modelRow(entry, view, group) {
   who.append(info, fit);
   if (generation) {
     const runtime = document.createElement("span"); runtime.className = "meta";
-    runtime.textContent = "В комплект входят веса, текстовый кодировщик и VAE. Можно установить; генерация ещё не проверена.";
+    runtime.textContent = entry.executor === "stable-diffusion.cpp"
+      ? "В комплект входят веса, текстовый кодировщик и VAE. После установки выберите модель рабочей."
+      : "Этот полный пакет можно хранить. Установленный движок запускает предложенные Q4-модели.";
     who.append(runtime);
   }
   if (!fits) {
@@ -443,11 +464,24 @@ function modelRow(entry, view, group) {
     const install = document.createElement("button");
     install.type = "button";
     install.textContent = "Установить — " + bytes(entry.downloadBytes);
-    install.disabled = busy || !!view.fetching || !diskFits;
-    if (!diskFits) install.title = "Недостаточно места в рабочей папке или папка недоступна.";
+    const blockedReason = !current.connected
+      ? "Для установки модели подключите обработчик к серверу в разделе «К заданиям»."
+      : busy ? "Дождитесь завершения текущего действия."
+      : view.fetching ? "Дождитесь завершения загрузки другой модели."
+      : !diskFits ? "Недостаточно места в рабочей папке или папка недоступна." : "";
+    install.disabled = !!blockedReason;
+    install.title = blockedReason;
     install.onclick = () =>
       action(() => window.processor.model("install", entry.id, entry.revision));
     side.append(install);
+    if (blockedReason) {
+      const reason = document.createElement("span");
+      reason.className = "meta";
+      reason.id = "model-install-reason-" + entry.id + "-" + entry.revision;
+      reason.textContent = blockedReason;
+      install.setAttribute("aria-describedby", reason.id);
+      side.append(reason);
+    }
   }
   if (installed) {
     const remove = document.createElement("button");
@@ -471,6 +505,14 @@ function modelRow(entry, view, group) {
   return row;
 }
 function drawModels(view) {
+  if (view) cachedModelsView = view;
+  else if (cachedModelsView) view = { ...cachedModelsView, fetching: undefined, error: "" };
+  if (view && ["stopped", "error"].includes(current.phase)) view = { ...view, fetching: undefined };
+  const connectionNotice = $("modelConnectionNotice");
+  connectionNotice.hidden = !!current.connected;
+  connectionNotice.textContent = current.phase === "stopped"
+    ? "Для установки моделей подключите обработчик к серверу в разделе «К заданиям»."
+    : "Нет связи с сервером. Сохранённый каталог может быть устаревшим. Дождитесь подключения обработчика.";
   const host = $("modelGroups");
   const done = $("modelsInstalled");
   if (!view) {

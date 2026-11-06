@@ -250,7 +250,8 @@ def build():
                                "maxParallel": {"type": "integer", "minimum": 1, "maximum": 64},
                                "cpuThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 100},
                                "memoryThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 100},
-                               "diskThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 100}},
+                               "diskThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 100},
+                               "vramThresholdPercent": {"type": "integer", "minimum": 1, "maximum": 80}},
                               ["paused", "maxParallel", "cpuThresholdPercent",
                                "memoryThresholdPercent", "diskThresholdPercent"])})]}
     assignment = {"jobId": UUID, "fence": ref("Fence")}
@@ -369,6 +370,8 @@ def build():
                          "nextCursor": {"type": ["string", "null"]}})
     # Optional: absent on the per-device listing, present on the fleet catalog.
     d["ModelPage"]["properties"]["placements"] = arr(ref("ModelPlacement"), 0, 10000)
+    from generation_schema import extend
+    extend(d)
     schema = {"$schema": "https://json-schema.org/draft/2020-12/schema",
               "$id": "https://worker.invalid/contracts/2.0/protocol.schema.json",
               "title": "Media worker protocol 2.0 (design contract)", "$defs": d}
@@ -389,6 +392,7 @@ def build():
     paths = {}
     specs = [
         ("/api/v2/site/capabilities", "get", "getCapabilities", None, "Capabilities", [200, 401, 403]),
+        ("/api/v2/site/generation/models", "get", "getGenerationModels", None, "GenerationModelPage", [200, 401, 403]),
         ("/api/v2/site/jobs", "post", "submitJob", "JobRequest", "JobView", [200, 202, 400, 401, 403, 409, 413, 429, 503]),
         ("/api/v2/site/jobs", "get", "listJobs", None, "JobPage", [200, 401, 403]),
         ("/api/v2/site/jobs/{id}", "get", "getJob", None, "JobView", [200, 401, 403, 404, 410]),

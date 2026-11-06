@@ -64,6 +64,7 @@
       </section>
       <section id="modelsScreen" hidden>
         <div class="screen-heading"><h1>Модели</h1><button id="modelsBack" type="button">К заданиям</button></div>
+        <p id="modelConnectionNotice" class="notice" role="status" hidden></p>
         <div class="card">
           <h2>Этот компьютер</h2>
           <div class="env-grid" id="envGrid"></div>
@@ -74,9 +75,10 @@
           <p class="hint" id="generationEngineStatus">Проверьте готовность движка.</p>
           <div class="actions">
             <button type="button" id="checkGeneration">Проверить движок</button>
-            <button type="button" id="installGeneration" class="primary" hidden>Установить движок</button>
+            <button type="button" id="installGeneration" class="primary" aria-describedby="generationInstallReason" hidden>Установить движок</button>
             <span class="spinner" id="generationSpinner" hidden aria-label="Выполняется"></span>
           </div>
+          <p class="hint" id="generationInstallReason" role="status" hidden></p>
           <p class="hint" id="generationEngineHint">Установка не требует Python. Проверка запуска движка не заменяет проверку генерации с моделью.</p>
         </div>
         <div class="card">
@@ -85,7 +87,7 @@
           <div class="tasks">
             <label class="task-row"><input type="checkbox" id="taskSpeech" checked><span><b>Распознавание речи</b><br><span class="hint">Звук в текст. Нужна одна модель распознавания.</span></span></label>
             <label class="task-row"><input type="checkbox" id="taskSubs"><span><b>Субтитры</b><br><span class="hint">Распознавание плюс перевод. Нужны обе модели сразу.</span></span></label>
-            <label class="task-row"><input type="checkbox" id="taskGeneration"><span><b>Генерация изображений</b><br><span class="hint">Можно скачать модели заранее. Запуск генерации появится отдельно.</span></span></label>
+            <label class="task-row"><input type="checkbox" id="taskGeneration"><span><b>Генерация изображений</b><br><span class="hint">Генерация по описанию; поддержка референса зависит от выбранной модели.</span></span></label>
           </div>
           <p class="hint">Видео обрабатывается без моделей, одним ffmpeg.</p>
         </div>
@@ -234,9 +236,10 @@
               <p class="hint" id="videoReadinessMessage"></p>
               <div class="actions">
                 <button type="button" id="checkVideo">Проверить готовность</button>
-                <button type="button" id="installVideo" class="primary" hidden>Установить нужные зависимости</button>
+                <button type="button" id="installVideo" class="primary" aria-describedby="videoInstallReason" hidden>Установить нужные зависимости</button>
                 <span class="spinner" id="videoSpinner" hidden aria-label="Выполняется"></span>
               </div>
+              <p class="hint" id="videoInstallReason" role="status" hidden></p>
             </div>
           </fieldset>
           <fieldset class="mode-options"><legend>Распознавание речи</legend>
@@ -250,9 +253,10 @@
               <p class="hint" id="speechReadinessMessage"></p>
               <div class="actions">
                 <button type="button" id="checkSpeech">Проверить готовность</button>
-                <button type="button" id="installSpeech" class="primary" hidden>Установить нужные зависимости</button>
+                <button type="button" id="installSpeech" class="primary" aria-describedby="speechInstallReason" hidden>Установить нужные зависимости</button>
                 <span class="spinner" id="speechSpinner" hidden aria-label="Выполняется"></span>
               </div>
+              <p class="hint" id="speechInstallReason" role="status" hidden></p>
             </div>
           </fieldset>
         </div>

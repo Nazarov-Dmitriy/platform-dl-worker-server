@@ -43,13 +43,18 @@ async function main() {
     page.on("pageerror", error => errors.push(error.message));
     await page.addInitScript(() => localStorage.setItem("worker.theme", "dark"));
     let installs = 0;
+    let configuration;
+    const siteFixture = { id: "site-test", name: "Test site", revision: 1, enabled: true, weight: 1, operations: ["media.transcode"] };
     await page.route("**/api/**", route => {
       const url = route.request().url();
       let body = { items: [], nextCursor: null };
       if (url.endsWith("/session")) body = { role: "OWNER", csrfToken: "fixture", manageSites: true };
       else if (url.endsWith("/devices")) body = { items: devices };
+      else if (url.endsWith("/sites")) body = { items: [siteFixture] };
+      else if (url.endsWith("/sites/site-test")) { Object.assign(siteFixture, route.request().postDataJSON()); body = siteFixture; }
+      else if (url.includes("/jobs")) body = { jobs: [], nextCursor: null };
       else if (url.endsWith("/models")) body = { models: catalog, placements: [] };
-      else if (url.endsWith("/commands")) { installs++; body = { requestId: "fixture-command", status: "PENDING" }; }
+      else if (url.endsWith("/commands")) { const input = route.request().postDataJSON(); if (input.type === "CONFIGURE") configuration = input.settings; else installs++; body = { requestId: "fixture-command", status: "PENDING" }; }
       else if (url.includes("/commands/")) body = { status: "RUNNING", progress: 0.25 };
       else if (url.endsWith("/settings")) body = { os: "windows", architecture: "amd64" };
       else if (url.endsWith("/ops")) body = { queued: 0, running: 0 };
@@ -73,12 +78,28 @@ async function main() {
     assert.equal(await page.locator("#deviceList th").count(), 5);
     assert.equal(await page.locator("#deviceList th").nth(2).textContent(), "CPU / RAM / VRAM");
     assert.equal(await page.locator("#deviceList .resources-cell").first().locator(":scope > *").count(), 3);
+    await page.locator('[name="vramThresholdPercent"]').fill("70");
+    await page.locator('#configureForm button').click();
+    await page.waitForFunction(() => document.getElementById("commandOut").textContent.includes("Команда отправлена"));
+    assert.equal(configuration.vramThresholdPercent, 70);
+    const role = await page.locator("#devicePriority").boundingBox();
+    const hint = await page.locator("#devicePriorityHint").boundingBox();
+    assert.ok(hint.y >= role.y + role.height, "role description must appear below its select");
+    await page.screenshot({ path: path.join(assets, "device-vram-settings.png"), fullPage: true });
     await page.screenshot({ path: path.join(assets, "model-resources-column.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(origin + "/panel/#models");
     await page.locator("#catalog tbody tr").first().waitFor();
     await page.selectOption("#modelDeviceSelect", "windows-test");
     await page.screenshot({ path: path.join(assets, "model-selection-mobile.png"), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(origin + "/panel/#sites");
+    await page.locator("#sites .site-settings-button").first().click();
+    await page.locator('#siteOpsForm [name="generate"]').check();
+    await page.locator('#siteOpsForm button[type="submit"],#siteOpsForm .form-actions button').first().click();
+    await page.locator("#siteOpsOut").filter({ hasText: "Операции сохранены" }).waitFor();
+    assert.ok(siteFixture.operations.includes("media.generate"));
+    await page.screenshot({ path: path.join(assets, "site-generation-permission.png"), fullPage: true });
 
     const desktop = await browser.newPage({ viewport: { width: 1100, height: 1000 } });
     desktop.on("pageerror", error => errors.push(error.message));
@@ -107,8 +128,20 @@ async function main() {
     assert.match(await desktop.locator("#envGrid").innerText(), /8,0\/32,0 ГБ/);
     assert.equal(await desktop.locator('#modelGroups input[type="radio"]:enabled').count(), 0);
     assert.equal(await desktop.locator("#installGeneration").isDisabled(), true);
+    assert.match(await desktop.locator("#generationInstallReason").innerText(), /сначала остановите обработчик/);
+    assert.equal(await desktop.locator("#generationInstallReason").isVisible(), true);
     await desktop.screenshot({ path: path.join(assets, "model-selection-desktop.png"), fullPage: true });
+    await desktop.evaluate(() => window.sendTestStatus({ ...current, connected: true, paused: true }));
+    assert.equal(await desktop.locator("#modelGroups .side button").first().isEnabled(), true);
+    await desktop.evaluate(() => window.sendTestStatus({ ...current, phase: "connecting", connected: false }));
+    assert.match(await desktop.locator("#modelConnectionNotice").innerText(), /каталог может быть устаревшим/);
+    assert.equal(await desktop.locator("#modelGroups .side button").first().isDisabled(), true);
     await desktop.evaluate(() => window.sendTestStatus({ phase: "stopped", connected: false, running: 0, paused: false }));
+    assert.equal(await desktop.locator("#modelGroups .model-row").count(), 5);
+    assert.equal(await desktop.locator("#modelGroups .side button").first().isDisabled(), true);
+    assert.match(await desktop.locator("#modelGroups").innerText(), /подключите обработчик к серверу/);
+    await desktop.screenshot({ path: path.join(assets, "model-selection-disconnected.png"), fullPage: true });
+    assert.equal(await desktop.locator("#generationInstallReason").isVisible(), false);
     await desktop.locator("#installGeneration").click();
     await desktop.waitForFunction(() => window.testEngineInstalled === true);
     await desktop.locator("#generationEngineStatus").filter({ hasText: "Движок запускается" }).waitFor();

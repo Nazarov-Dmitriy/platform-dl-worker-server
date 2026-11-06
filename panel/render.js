@@ -122,6 +122,7 @@ const operations = {
   "media.transcode": "Обработка видео",
   "media.transcribe": "Распознавание речи",
   "media.subtitles": "Субтитры",
+  "media.generate": "Генерация изображений",
 };
 function renderJobs(target, jobs, hasSite) {
   if (!jobs.length)
@@ -258,6 +259,7 @@ const jobOperations = {
   "media.transcode": "Обработка видео",
   "media.transcribe": "Распознавание речи",
   "media.subtitles": "Субтитры",
+  "media.generate": "Генерация изображений",
 };
 // Where the entry came from: the repository page carries the model card an
 // operator reads before adding or replacing anything.

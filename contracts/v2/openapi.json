@@ -2317,6 +2317,48 @@
           }
         }
       }
+    },
+    "/api/v2/site/generation/models": {
+      "get": {
+        "operationId": "getGenerationModels",
+        "security": [
+          {
+            "SiteToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/GenerationModelPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

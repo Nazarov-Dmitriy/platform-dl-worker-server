@@ -172,13 +172,14 @@ type Pair struct {
 	Target string `json:"target"`
 }
 type Capability struct {
-	Code                  string   `json:"code"`
-	RecognitionLanguages  []string `json:"recognitionLanguages"`
-	TranslationDirections []Pair   `json:"translationDirections"`
-	AutoDetect            bool     `json:"autoDetect"`
-	Formats               []string `json:"formats"`
-	Availability          string   `json:"availability"`
-	ProfilePolicies       []string `json:"profilePolicies"`
+	GenerationModels      []GenerationModel `json:"generationModels,omitempty"`
+	Code                  string            `json:"code"`
+	RecognitionLanguages  []string          `json:"recognitionLanguages"`
+	TranslationDirections []Pair            `json:"translationDirections"`
+	AutoDetect            bool              `json:"autoDetect"`
+	Formats               []string          `json:"formats"`
+	Availability          string            `json:"availability"`
+	ProfilePolicies       []string          `json:"profilePolicies"`
 }
 type Usage struct {
 	MemoryTotalBytes   int64    `json:"memoryTotalBytes,omitempty"`
@@ -302,6 +303,7 @@ type AdminActor struct {
 	ManageSites     bool
 }
 type DeviceSettings struct {
+	VramThresholdPercent   int    `json:"vramThresholdPercent,omitempty"`
 	WorkDirectory          string `json:"workDirectory,omitempty"`
 	Paused                 bool   `json:"paused"`
 	Autostart              bool   `json:"autostart,omitempty"`
@@ -372,7 +374,7 @@ func NewValidator() (*Validator, error) {
 		return nil, e
 	}
 	v := &Validator{schemas: map[string]*jsonschema.Schema{}}
-	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck", "ModelEntry", "AdminCommand", "CommandView", "Login", "Session", "AdminSite", "AdminDevice", "AdminAccount", "AdminAccountUpdate", "AdminSiteView", "AdminDeviceView", "AdminAccountView", "TokenCreate", "IssuedToken", "TokenPage", "ModelPage"} {
+	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck", "ModelEntry", "AdminCommand", "CommandView", "Login", "Session", "AdminSite", "AdminDevice", "AdminAccount", "AdminAccountUpdate", "AdminSiteView", "AdminDeviceView", "AdminAccountView", "TokenCreate", "IssuedToken", "TokenPage", "ModelPage", "GenerationModel", "GenerationModelPage"} {
 		s, e := c.Compile("schema.json#/$defs/" + name)
 		if e != nil {
 			return nil, e
@@ -406,6 +408,9 @@ func (v *Validator) Request(raw []byte) (JobRequest, []byte, string, error) {
 	}
 	if e = json.Unmarshal(canonical, &r); e != nil {
 		return r, nil, "", e
+	}
+	if r.Type == "media.generate" && r.Source.Kind != "" && (r.Source.Kind != "FILE" || !contains([]string{"image/png", "image/jpeg"}, r.Source.ContentType) || r.Source.Bytes > 32<<20) {
+		return r, nil, "", problem(400, "INVALID_SOURCE", "Generation reference must be a PNG/JPEG FILE up to 32 MiB")
 	}
 	r.ID = strings.ToLower(r.ID)
 	r.Source.Revision = strings.ToLower(r.Source.Revision)

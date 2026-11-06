@@ -215,7 +215,7 @@ func (s *Store) CreateSite(ctx context.Context, name string, weight int, ops []s
 	}
 	seen := map[string]bool{}
 	for _, op := range ops {
-		if seen[op] || !contains([]string{"media.transcode", "media.transcribe", "media.subtitles"}, op) {
+		if seen[op] || !contains([]string{"media.transcode", "media.transcribe", "media.subtitles", "media.generate"}, op) {
 			return v, problem(400, "INVALID_SITE", "Unknown or duplicate operation")
 		}
 		seen[op] = true
@@ -238,7 +238,7 @@ func (s *Store) SetSite(ctx context.Context, id string, enabled bool, weight int
 	if len(operations) == 1 {
 		seen := map[string]bool{}
 		for _, op := range operations[0] {
-			if seen[op] || !contains([]string{"media.transcode", "media.transcribe", "media.subtitles"}, op) {
+			if seen[op] || !contains([]string{"media.transcode", "media.transcribe", "media.subtitles", "media.generate"}, op) {
 				return problem(400, "INVALID_SITE", "Unknown or duplicate operation")
 			}
 			seen[op] = true
@@ -295,17 +295,23 @@ func (s *Store) SetDevice(ctx context.Context, id string, enabled bool) error {
 	})
 }
 func (s *Store) checkCaps(caps []Capability) error {
-	if len(caps) > 3 {
+	if len(caps) > 4 {
 		return problem(400, "INVALID_CAPABILITIES", "Too many operations")
 	}
 	seen := map[string]bool{}
 	for _, c := range caps {
+		if c.Code == "media.generate" && len(c.GenerationModels) == 0 {
+			return problem(400, "INVALID_CAPABILITIES", "Generation requires model profiles")
+		}
 		if seen[c.Code] {
 			return problem(400, "INVALID_CAPABILITIES", "Duplicate operation")
 		}
 		seen[c.Code] = true
 		if e := s.validator.Check("OperationCapability", encode(c)); e != nil {
 			return e
+		}
+		if len(c.GenerationModels) > 0 && (c.Code != "media.generate" || !generationProfilesValid(c.GenerationModels)) {
+			return problem(400, "INVALID_CAPABILITIES", "Invalid generation model profiles")
 		}
 	}
 	return nil
@@ -511,6 +517,29 @@ func (s *Store) Submit(ctx context.Context, site string, raw []byte) (JobView, b
 		var allowed []string
 		if e = json.Unmarshal([]byte(ops), &allowed); e != nil {
 			return e
+		}
+		if req.Type == "media.generate" {
+			if !contains(allowed, req.Type) {
+				return problem(403, "OPERATION_FORBIDDEN", "Image generation is not permitted for this site")
+			}
+			models, err := s.readyGenerationModels(tx)
+			if err != nil {
+				return err
+			}
+			var params generationParams
+			_ = json.Unmarshal(req.Params, &params)
+			found := false
+			for _, m := range models {
+				if m.ID == params.ModelID && m.Revision == params.ModelRevision && m.ProfileRevision == params.ProfileRevision {
+					found = true
+					if !validateGenerationInputs(m, params.Inputs) || req.Source.Kind != "" && !m.AcceptsReference {
+						return problem(400, "INVALID_GENERATION_PARAMETERS", "Parameters do not match the selected model profile")
+					}
+				}
+			}
+			if !found {
+				return problem(409, "MODEL_UNAVAILABLE", "Selected model is no longer ready; refresh the model list")
+			}
 		}
 		now := s.now()
 		view = JobView{ProtocolVersion: "2.0", ID: req.ID, Type: req.Type, Status: "QUEUED", Revision: 1, UpdatedAt: stamp(now), Steps: []Step{}}

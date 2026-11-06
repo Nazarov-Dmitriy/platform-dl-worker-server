@@ -1,0 +1,30 @@
+{
+  "schema": "JobRequest",
+  "value": {
+    "protocolVersion": "2.0",
+    "id": "22222222-2222-4222-8222-222222222222",
+    "type": "media.generate",
+    "params": {
+      "modelId": "flux2-klein-4b-q4",
+      "modelRevision": "q4-8a2bc5024f2eab1c",
+      "profileRevision": "from-model-list",
+      "inputs": {
+        "prompt": "A forest at sunrise",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42
+      }
+    },
+    "maxOutputBytes": 16777216,
+    "maxDurationSeconds": 600,
+    "source": {
+      "objectName": "uploads/reference.png",
+      "revision": "33333333-3333-4333-8333-333333333333",
+      "bytes": 1024,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "contentType": "image/png",
+      "role": "UPLOAD",
+      "kind": "FILE"
+    }
+  }
+}

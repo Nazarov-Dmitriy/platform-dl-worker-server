@@ -27,6 +27,9 @@ func (s *Store) RequestSource(ctx context.Context, p Principal, session string, 
 		if e != nil {
 			return e
 		}
+		if r.request.Type == "media.generate" && r.request.Source.Kind == "" {
+			return problem(409, "INVALID_SOURCE", "Text generation has no source transfer")
+		}
 		now := s.now()
 		if a.state != "RUNNING" || a.leaseUntil <= now.UnixMilli() {
 			return problem(409, "STALE_ASSIGNMENT", "Source can be requested only with a live lease")
@@ -587,6 +590,20 @@ func validateManifest(req JobRequest, art Artifact) error {
 		}
 		if e := validateSubtitleFiles(art, paths); e != nil {
 			return e
+		}
+	}
+	if req.Type == "media.generate" {
+		if len(art.Manifest.Files) != 1 || art.Manifest.Files[0].Kind != "IMAGE" || art.Manifest.Files[0].ContentType != "image/png" {
+			return problem(400, "INVALID_REQUEST", "Generation must return one PNG image")
+		}
+		found := false
+		for _, step := range art.Manifest.Steps {
+			if step.Name == "generation" && step.Status == "SUCCEEDED" && step.Error == nil {
+				found = true
+			}
+		}
+		if !found {
+			return problem(400, "INVALID_REQUEST", "Generation step must succeed")
 		}
 	}
 	if req.Type == "media.transcribe" {

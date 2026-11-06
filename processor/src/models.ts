@@ -16,6 +16,7 @@ import { allowedModelURL, lookupCatalog, type ModelEntry } from "./catalog.js";
 import { modelsDir } from "./files.js";
 import type { Journal, InstalledModel } from "./journal.js";
 import { execFileSync } from "node:child_process";
+import { generationReady } from "./generation.js";
 import { sha256Canonical } from "./jcs.js";
 import { sha256File } from "./transfer.js";
 
@@ -128,9 +129,10 @@ export function modelReady(
   model: InstalledModel,
   whisperCpp?: string,
   ffmpeg = "ffmpeg",
+  stableDiffusion?: string,
 ) {
   if (!existsSync(model.path)) return false;
-  if (model.purpose === "GENERATION") return false; // Downloadable; generation executor is not shipped yet.
+  if (model.purpose === "GENERATION") return generationReady(model, stableDiffusion);
   if (model.executor === "catalog-test") return true;
   if (model.executor === "transformers-js")
     return [
@@ -163,13 +165,17 @@ export function activateModel(
   revision: string,
   whisperCpp?: string,
   ffmpeg?: string,
+  stableDiffusion?: string,
 ) {
   const model = journal.state.models.find(
     (m) => m.id === id && m.revision === revision,
   );
   if (!model || !existsSync(model.path)) throw new Error("MODEL_NOT_INSTALLED");
-  if (!modelReady(model, whisperCpp, ffmpeg))
+  if (!modelReady(model, whisperCpp, ffmpeg, stableDiffusion))
     throw new Error("EXECUTOR_UNAVAILABLE");
+  if (model.purpose === "GENERATION")
+    for (const other of journal.state.models)
+      if (other.purpose === "GENERATION" && other !== model) other.state = "INSTALLED";
   model.state = "ACTIVE";
   journal.save();
 }

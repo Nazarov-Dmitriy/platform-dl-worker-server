@@ -697,6 +697,20 @@ test("resource thresholds remain independent", () => {
   assert.equal(slotBudget(c, 100, 50, 20, 20, "NORMAL", true), 0);
   assert.equal(slotBudget(c, 100, 20, 70, 20, "NORMAL", true), 0);
 });
+test("VRAM admission respects the threshold, recovers and supports devices without telemetry", () => {
+  const c = { maxParallel: 2, reserveMemoryBytes: 0, taskMemoryBytes: 1,
+    threshold: 80, paused: false, vramThresholdPercent: 70 } as Config;
+  const budget = (percent: number | null) => slotBudget(c, 100, 20, 20, 20, "NORMAL", true, percent);
+  assert.equal(budget(69.9), 2);
+  assert.equal(budget(70), 0);
+  assert.equal(budget(95), 0);
+  assert.equal(budget(30), 2);
+  assert.equal(budget(null), 2);
+  delete c.vramThresholdPercent;
+  assert.equal(budget(79), 2);
+  assert.equal(budget(80), 0);
+});
+
 test("confirmed device settings survive restart without overriding the local work folder", async (t) => {
   const { Agent } = await import("../agent.js");
   const dir = mkdtempSync(join(tmpdir(), "persisted-settings-"));
@@ -712,6 +726,7 @@ test("confirmed device settings survive restart without overriding the local wor
     cpuThresholdPercent: 70,
     memoryThresholdPercent: 60,
     diskThresholdPercent: 80,
+    vramThresholdPercent: 72,
   };
   journal.save();
   const config = {
@@ -740,6 +755,7 @@ test("confirmed device settings survive restart without overriding the local wor
   assert.equal(agent.config.paused, true);
   assert.equal(agent.config.maxParallel, 1);
   assert.equal(agent.config.memoryThresholdPercent, 60);
+  assert.equal(agent.config.vramThresholdPercent, 72);
   const startupCalls: boolean[] = [];
   agent.config.desktopAutostart = async (enabled) => { startupCalls.push(enabled); };
   agent.journal.state.autostart = true;
@@ -747,11 +763,12 @@ test("confirmed device settings survive restart without overriding the local wor
     await agent.runCommand({
       requestId: randomUUID(), type: "CONFIGURE",
       settings: { ...extra, paused: false, autostart: false, maxParallel: 3,
-        cpuThresholdPercent: 65, memoryThresholdPercent: 55, diskThresholdPercent: 75 },
+        cpuThresholdPercent: 65, memoryThresholdPercent: 55, diskThresholdPercent: 75, vramThresholdPercent: 65 },
     } as any);
     assert.equal(agent.config.workDir, dir);
     assert.equal(agent.config.maxParallel, 3);
     assert.equal(agent.config.cpuThresholdPercent, 65);
+    assert.equal(agent.config.vramThresholdPercent, 65);
     assert.equal(agent.config.paused, false);
     assert.equal(agent.journal.state.autostart, true);
     assert.deepEqual(startupCalls, []);

@@ -353,7 +353,7 @@ on("cancelAll", "click", async () => {
 });
 on("siteForm", "submit", async (e) => {
   const fd = new FormData(e.target),
-    ops = ["transcode", "transcribe", "subtitles"]
+    ops = ["transcode", "transcribe", "subtitles", "generate"]
       .filter((k) => fd.get(k))
       .map((k) => "media." + k);
   await api("/api/v2/admin/sites", {
@@ -646,6 +646,7 @@ on("configureForm", "submit", async (e) => {
     "cpuThresholdPercent",
     "memoryThresholdPercent",
     "diskThresholdPercent",
+    "vramThresholdPercent",
   ])
     settings[key] = Number(fd.get(key));
   await sendCommand({ type: "CONFIGURE", settings });
@@ -841,6 +842,7 @@ const SITE_OPERATION_FIELDS = [
   ["transcode", "media.transcode"],
   ["transcribe", "media.transcribe"],
   ["subtitles", "media.subtitles"],
+  ["generate", "media.generate"],
 ];
 function fillSiteSettings(site) {
   state.selectedSite = site;

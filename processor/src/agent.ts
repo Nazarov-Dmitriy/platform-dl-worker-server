@@ -1,3 +1,4 @@
+import { generationProfile, generationInputsValid, generationDevice, validateGenerationReference } from "./generation.js";
 import { rootCertificates } from "node:tls";
 import { errorCode } from "./errors.js";
 import { validateHlsInput } from "./hls-input.js";
@@ -99,6 +100,7 @@ export class Agent {
       config.cpuThresholdPercent = applied.cpuThresholdPercent;
       config.memoryThresholdPercent = applied.memoryThresholdPercent;
       config.diskThresholdPercent = applied.diskThresholdPercent;
+      config.vramThresholdPercent = applied.vramThresholdPercent ?? 80;
       config.threshold = Math.min(
         applied.cpuThresholdPercent,
         applied.memoryThresholdPercent,
@@ -124,7 +126,7 @@ export class Agent {
     const key = model.path + ":" + model.executor;
     const cached = this.readiness.get(key);
     if (cached && Date.now() - cached.at < 30000) return cached.ready;
-    const ready = modelReady(model, this.config.whisperCpp, this.config.ffmpeg);
+    const ready = modelReady(model, this.config.whisperCpp, this.config.ffmpeg, this.config.stableDiffusion);
     this.readiness.set(key, { at: Date.now(), ready });
     return ready;
   }
@@ -173,6 +175,11 @@ export class Agent {
         profilePolicies: [],
       });
     }
+    const generationModels = this.journal.state.models.filter(m => m.state === "ACTIVE" && m.purpose === "GENERATION" && this.readyModel(m)).map(m => generationProfile(m)).filter(Boolean);
+    if (generationModels.length && ![...this.running.values()].some(r => r.job?.type === "media.generate")) out.push({
+      code: "media.generate", recognitionLanguages: [], translationDirections: [], autoDetect: false,
+      formats: ["png"], availability: "ONLINE", profilePolicies: [], generationModels,
+    });
     return out;
   }
   hasRecognition() {
@@ -329,7 +336,10 @@ export class Agent {
       if (b.jobId !== b.job.id) throw new Error("OFFER_JOB_MISMATCH");
       const usage = this.usage();
       const job = b.job;
-      const canRun =
+      const selectedGeneration = job.type === "media.generate" && this.journal.state.models.find(m => m.id === job.params.modelId && m.revision === job.params.modelRevision && m.state === "ACTIVE" && this.readyModel(m));
+      const selectedProfile = selectedGeneration && generationProfile(selectedGeneration);
+      const canGenerate = !!selectedProfile && selectedProfile.profileRevision === job.params.profileRevision && generationInputsValid(selectedProfile, job.params.inputs) && (!job.source || selectedProfile.acceptsReference) && ![...this.running.values()].some(r => r.job?.type === "media.generate");
+      const canRun = canGenerate ||
         (this.config.testExecutor && job.type === "media.transcode") ||
         (this.ffmpeg && job.type === "media.transcode") ||
         (this.hasRecognition() &&
@@ -337,7 +347,7 @@ export class Agent {
       const ready =
         canRun &&
         this.running.size < usage.availableSlots &&
-        usage.freeDiskBytes >= job.source.bytes + job.maxOutputBytes &&
+        usage.freeDiskBytes >= (job.source?.bytes || 0) + job.maxOutputBytes &&
         usage.workDiskAvailable;
       if (!ready) {
         this.queue(
@@ -368,7 +378,7 @@ export class Agent {
         accept,
         started: false,
         job: b.job,
-        diskBytes: b.job.source.bytes + b.job.maxOutputBytes,
+        diskBytes: (b.job.source?.bytes || 0) + b.job.maxOutputBytes,
       };
       this.journal.state.attempts.push(attempt);
       this.journal.save();
@@ -608,6 +618,7 @@ export class Agent {
           cmd.modelRevision!,
           this.config.whisperCpp,
           this.config.ffmpeg,
+          this.config.stableDiffusion,
         );
       } else if (cmd.type === "MODEL_DELETE") {
         deleteModel(
@@ -632,7 +643,7 @@ export class Agent {
   }
   async runJob(r: Running) {
     const job = r.job || r.attempt.job;
-    if (!job || !["FILE", "HLS"].includes(job.source.kind))
+    if (!job || job.type !== "media.generate" && !["FILE", "HLS"].includes(job.source?.kind))
       throw new TransferError(
         "UNSUPPORTED_SOURCE",
         "Unsupported source kind",
@@ -648,6 +659,8 @@ export class Agent {
     );
     r.attempt.dir = dir;
     this.journal.save();
+    let dest = join(dir, "source.bin");
+    if (job.source) {
     await this.durable(
       r,
       frame("job.source.request", {
@@ -655,7 +668,7 @@ export class Agent {
         fence: r.attempt.fence,
       }),
     );
-    let dest = join(dir, "source.bin");
+    dest = join(dir, "source.bin");
     r.progress = 0;
     r.stage = "WAITING_SOURCE";
     let downloadedBytes = 0;
@@ -704,6 +717,7 @@ export class Agent {
         );
       });
     }
+    }
     if (!r.lease.valid())
       throw new TransferError("LEASE_EXPIRED", "Lease expired", false, true);
     const files: {
@@ -718,6 +732,34 @@ export class Agent {
     let packaged: any;
     const outDir = join(dir, "out");
     mkdirSync(outDir, { recursive: true, mode: 0o700 });
+    if (job.type === "media.generate") {
+      const model = this.journal.state.models.find(m => m.state === "ACTIVE" && m.id === job.params.modelId && m.revision === job.params.modelRevision);
+      const profile = model && generationProfile(model);
+      if (!model || !profile || profile.profileRevision !== job.params.profileRevision || !generationInputsValid(profile, job.params.inputs) || job.source && !profile.acceptsReference) throw new Error("INVALID_GENERATION_PARAMETERS");
+      const device = generationDevice(this.config.stableDiffusion);
+      if (!device) throw new Error("EXECUTOR_UNAVAILABLE");
+      if (job.source) validateGenerationReference(dest);
+      r.stage = "GENERATING";
+      let generated = false;
+      await new Promise<void>((resolve, reject) => {
+        r.executor = new Executor(3600000, r.lease, m => {
+          if (r.ending) return;
+          if (m.type === "progress") { r.progress = 0.1 + (m.progress || 0) * 0.7; r.activity = m.sequence; }
+          if (m.type === "generated") { generated = true; resolve(); }
+          if (m.type === "failed" || m.type === "executor-error") reject(new Error(m.code || "GENERATION_FAILED"));
+        }, new URL("./generation-child.js", import.meta.url), {
+          executable: this.config.stableDiffusion, device, modelPath: model.path, inputs: job.params.inputs,
+          steps: model.id === "flux2-klein-4b-q4" ? 4 : 8, reference: job.source ? dest : undefined,
+          outDir, maxDurationSeconds: job.maxDurationSeconds, maxOutputBytes: job.maxOutputBytes,
+          reserveDiskBytes: this.config.reserveDiskBytes,
+          maxVramGiB: (this.usage().vramTotalBytes || 0) * (this.config.vramThresholdPercent ?? 80) / 100 / 1024 ** 3,
+        });
+        r.executor.child.once("exit", () => { if (!generated && !r.ending) reject(new Error("GENERATION_FAILED")); });
+      });
+      const image = join(outDir, "image.png");
+      files.push({ path: "image.png", bytes: statSync(image).size, sha256: await sha256File(image), contentType: "image/png", kind: "IMAGE" });
+      steps.push({ name: "generation", status: "SUCCEEDED" });
+    }
     if (job.type === "media.transcode") {
       r.stage = "TRANSCODING";
       const hlsDir = join(outDir, "hls");
@@ -1251,6 +1293,7 @@ async function applyConfigure(agent: Agent, settings: any) {
       settings.cpuThresholdPercent,
       settings.memoryThresholdPercent,
       settings.diskThresholdPercent,
+      settings.vramThresholdPercent ?? 80,
     ].some((n) => !Number.isInteger(n) || n < 1 || n > 80) ||
     th < 1 ||
     th > 80
@@ -1262,6 +1305,7 @@ async function applyConfigure(agent: Agent, settings: any) {
   agent.config.cpuThresholdPercent = settings.cpuThresholdPercent;
   agent.config.memoryThresholdPercent = settings.memoryThresholdPercent;
   agent.config.diskThresholdPercent = settings.diskThresholdPercent;
+  agent.config.vramThresholdPercent = settings.vramThresholdPercent ?? 80;
   const { workDirectory: ignoredRemotePath, autostart: ignoredRemoteAutostart, ...remoteSettings } = settings;
   agent.journal.state.appliedSettings = remoteSettings;
   agent.journal.save();

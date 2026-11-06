@@ -509,6 +509,91 @@
             "params"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocolVersion": {
+              "const": "2.0"
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "source": {
+              "$ref": "#/$defs/Source"
+            },
+            "maxOutputBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "maxDurationSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "clientReference": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "processingPrefix": {
+              "type": "string",
+              "maxLength": 700,
+              "pattern": "^(?!.*\\.\\.)(?!.*//)companies/[A-Za-z0-9_-]+/(?:courses|channels)/[A-Za-z0-9_./-]+/processing/$"
+            },
+            "type": {
+              "const": "media.generate"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "modelId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "modelRevision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "profileRevision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "inputs": {
+                  "type": "object",
+                  "maxProperties": 32,
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number",
+                      "boolean"
+                    ],
+                    "maxLength": 4000
+                  }
+                }
+              },
+              "required": [
+                "modelId",
+                "modelRevision",
+                "profileRevision",
+                "inputs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocolVersion",
+            "id",
+            "maxOutputBytes",
+            "maxDurationSeconds",
+            "type",
+            "params"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -662,7 +747,8 @@
             "PLAYLIST",
             "SEGMENT",
             "SUBTITLE",
-            "TRANSCRIPT"
+            "TRANSCRIPT",
+            "IMAGE"
           ]
         },
         "language": {
@@ -1196,7 +1282,8 @@
           "enum": [
             "media.transcode",
             "media.transcribe",
-            "media.subtitles"
+            "media.subtitles",
+            "media.generate"
           ]
         },
         "status": {
@@ -1244,7 +1331,8 @@
             "WAITING_UPLOAD",
             "UPLOADING",
             "WAITING_PUBLICATION",
-            "STOPPING"
+            "STOPPING",
+            "GENERATING"
           ]
         },
         "lastProgressAt": {
@@ -1446,7 +1534,8 @@
           "enum": [
             "media.transcode",
             "media.transcribe",
-            "media.subtitles"
+            "media.subtitles",
+            "media.generate"
           ]
         },
         "recognitionLanguages": {
@@ -1478,7 +1567,8 @@
               "text",
               "vtt",
               "srt",
-              "hls"
+              "hls",
+              "png"
             ]
           },
           "minItems": 1,
@@ -1503,6 +1593,13 @@
           "minItems": 0,
           "maxItems": 2,
           "uniqueItems": true
+        },
+        "generationModels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GenerationModel"
+          },
+          "maxItems": 100
         }
       },
       "required": [
@@ -1537,7 +1634,7 @@
             "$ref": "#/$defs/OperationCapability"
           },
           "minItems": 0,
-          "maxItems": 3
+          "maxItems": 4
         }
       },
       "required": [
@@ -1827,11 +1924,12 @@
             "enum": [
               "media.transcode",
               "media.transcribe",
-              "media.subtitles"
+              "media.subtitles",
+              "media.generate"
             ]
           },
           "minItems": 0,
-          "maxItems": 3,
+          "maxItems": 4,
           "uniqueItems": true
         },
         "description": {
@@ -2001,6 +2099,11 @@
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 100
+                },
+                "vramThresholdPercent": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 80
                 }
               },
               "required": [
@@ -2159,7 +2262,7 @@
                 "$ref": "#/$defs/OperationCapability"
               },
               "minItems": 0,
-              "maxItems": 3
+              "maxItems": 4
             },
             "usage": {
               "$ref": "#/$defs/Usage"
@@ -2344,7 +2447,7 @@
                 "$ref": "#/$defs/OperationCapability"
               },
               "minItems": 0,
-              "maxItems": 3
+              "maxItems": 4
             }
           },
           "required": [
@@ -2606,7 +2709,8 @@
                 "WAITING_UPLOAD",
                 "UPLOADING",
                 "WAITING_PUBLICATION",
-                "STOPPING"
+                "STOPPING",
+                "GENERATING"
               ]
             },
             "progress": {
@@ -3319,11 +3423,12 @@
             "enum": [
               "media.transcode",
               "media.transcribe",
-              "media.subtitles"
+              "media.subtitles",
+              "media.generate"
             ]
           },
           "minItems": 0,
-          "maxItems": 3,
+          "maxItems": 4,
           "uniqueItems": true
         },
         "weight": {
@@ -3613,11 +3718,12 @@
             "enum": [
               "media.transcode",
               "media.transcribe",
-              "media.subtitles"
+              "media.subtitles",
+              "media.generate"
             ]
           },
           "minItems": 0,
-          "maxItems": 3,
+          "maxItems": 4,
           "uniqueItems": true
         },
         "weight": {
@@ -3694,7 +3800,7 @@
             "$ref": "#/$defs/OperationCapability"
           },
           "minItems": 0,
-          "maxItems": 3
+          "maxItems": 4
         },
         "os": {
           "enum": [
@@ -3891,11 +3997,12 @@
             "enum": [
               "media.transcode",
               "media.transcribe",
-              "media.subtitles"
+              "media.subtitles",
+              "media.generate"
             ]
           },
           "minItems": 0,
-          "maxItems": 3,
+          "maxItems": 4,
           "uniqueItems": true
         },
         "source": {
@@ -4049,6 +4156,155 @@
       "required": [
         "models",
         "nextCursor"
+      ],
+      "additionalProperties": false
+    },
+    "GenerationParameter": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_]{0,63}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "default": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ],
+          "maxLength": 4000
+        },
+        "minimum": {
+          "type": "number",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "maximum": {
+          "type": "number",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "step": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4000
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ],
+            "maxLength": 4000
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "type",
+        "required"
+      ],
+      "additionalProperties": false
+    },
+    "GenerationModel": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "profileRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "parameterCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "acceptsReference": {
+          "type": "boolean"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GenerationParameter"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "profileRevision",
+        "name",
+        "description",
+        "acceptsReference",
+        "parameters"
+      ],
+      "additionalProperties": false
+    },
+    "GenerationModelPage": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "2.0"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GenerationModel"
+          },
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "models"
       ],
       "additionalProperties": false
     }

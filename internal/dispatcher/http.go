@@ -43,6 +43,7 @@ func HandlerWithSecureCookies(s *Store, secure bool) http.Handler {
 		h.reply(w, 200, v)
 	})
 	h.mux.HandleFunc("GET /api/v2/site/capabilities", h.site(h.capabilities))
+	h.mux.HandleFunc("GET /api/v2/site/generation/models", h.site(h.generationModels))
 	h.mux.HandleFunc("POST /api/v2/site/jobs", h.site(h.submit))
 	h.mux.HandleFunc("GET /api/v2/site/jobs", h.site(h.list))
 	h.mux.HandleFunc("GET /api/v2/site/jobs/{id}", h.site(h.get))

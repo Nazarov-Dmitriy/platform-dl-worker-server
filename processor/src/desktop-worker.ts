@@ -50,6 +50,7 @@ function modelsView() {
       id: m.id,
       revision: m.revision,
       purpose: m.purpose,
+      executor: m.executor,
       operations: m.operations ?? [],
       downloadBytes: m.downloadBytes,
       minimumRamBytes: m.minimumRamBytes,
@@ -196,6 +197,7 @@ process.on("message", async (input: any) => {
           INSUFFICIENT_MEMORY: "Для этой модели недостаточно RAM.",
           EXECUTOR_UNAVAILABLE: "Модель скачана, но движок её запуска пока недоступен.",
           MODEL_FETCH_BUSY: "Дождитесь завершения текущей загрузки модели.",
+          MODEL_SERVER_UNAVAILABLE: "Для установки модели подключите обработчик к серверу в разделе «К заданиям».",
           MODEL_IN_USE: "Модель используется. Дождитесь завершения заданий.",
         };
         modelError = messages[code] || "Не удалось выполнить действие с моделью. Проверьте соединение, рабочую папку и повторите попытку.";
@@ -251,12 +253,14 @@ async function runModel(input: any) {
       revision,
       agent.config.whisperCpp,
       agent.config.ffmpeg,
+      agent.config.stableDiffusion,
     );
     agent.nextHeartbeat = 0;
     status("Модель выбрана рабочей.");
     return;
   }
   if (input.action !== "install") throw Error("UNKNOWN_MODEL_ACTION");
+  if (!agent.session) throw Error("MODEL_SERVER_UNAVAILABLE");
   if (fetching) throw Error("MODEL_FETCH_BUSY");
   if (!entry) throw Error("MODEL_NOT_IN_CATALOG");
   const usage = agent.usage();

@@ -17,6 +17,7 @@ export type Config = {
   cpuThresholdPercent?: number;
   memoryThresholdPercent?: number;
   diskThresholdPercent?: number;
+  vramThresholdPercent?: number;
   paused: boolean;
   testExecutor: boolean;
   testDurationMs: number;
@@ -46,6 +47,7 @@ export function loadConfig(path: string): Config {
     "cpuThresholdPercent",
     "memoryThresholdPercent",
     "diskThresholdPercent",
+    "vramThresholdPercent",
     "paused",
     "testExecutor",
     "testDurationMs",
@@ -116,6 +118,7 @@ export function loadConfig(path: string): Config {
     cpuThresholdPercent: v.cpuThresholdPercent ?? v.threshold ?? 80,
     memoryThresholdPercent: v.memoryThresholdPercent ?? v.threshold ?? 80,
     diskThresholdPercent: v.diskThresholdPercent ?? v.threshold ?? 80,
+    vramThresholdPercent: v.vramThresholdPercent ?? 80,
     paused: v.paused ?? false,
     allowTestModels: v.allowTestModels ?? false,
     testExecutor: v.testExecutor ?? false,
@@ -159,6 +162,7 @@ export function loadConfig(path: string): Config {
     c.cpuThresholdPercent,
     c.memoryThresholdPercent,
     c.diskThresholdPercent,
+    c.vramThresholdPercent,
   ])
     if (!Number.isInteger(threshold) || threshold! < 1 || threshold! > 80)
       throw new Error("INVALID_RESOURCE_CONFIG");

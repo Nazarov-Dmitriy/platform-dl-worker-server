@@ -15,6 +15,12 @@ func compatible(r JobRequest, caps []Capability, online bool) bool {
 		if c.Code != r.Type || c.Availability == "NOT_INSTALLED" || online && c.Availability != "ONLINE" {
 			continue
 		}
+		if r.Type == "media.generate" {
+			if generationCompatible(r, c) {
+				return true
+			}
+			continue
+		}
 		if r.Type == "media.transcode" {
 			var p struct {
 				Profile struct {
@@ -800,6 +806,18 @@ func (s *Store) Capabilities(ctx context.Context, site string) (map[string]any, 
 		out := []Capability{}
 		for _, op := range allowed {
 			c := aggregated[op]
+			if op == "media.generate" {
+				models, err := s.readyGenerationModels(tx)
+				if err != nil {
+					return err
+				}
+				c.GenerationModels = models
+				c.Formats = []string{"png"}
+				c.Availability = "NOT_INSTALLED"
+				if len(models) > 0 {
+					c.Availability = "ONLINE"
+				}
+			}
 			sort.Strings(c.RecognitionLanguages)
 			sort.Strings(c.Formats)
 			sort.Strings(c.ProfilePolicies)

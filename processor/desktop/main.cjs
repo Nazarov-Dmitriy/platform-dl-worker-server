@@ -184,6 +184,29 @@ function setDesktopAutostart(enabled) {
 function publicSettings() {
   return { ...validateProcessing(saved), ...saved, launch, cpuCount: availableParallelism(), tokenSet: existsSync(join(directory, "credential.bin")) };
 }
+function cachedModelsView() {
+  try {
+    const journal = JSON.parse(readFileSync(join(directory, "state", "journal.json"), "utf8"));
+    const os = require("node:os");
+    let freeDiskBytes = 0, diskReady = false;
+    if (saved.workDir) {
+      try {
+        const disk = require("node:fs").statfsSync(saved.workDir);
+        freeDiskBytes = disk.bavail * disk.bsize;
+        diskReady = true;
+      } catch {}
+    }
+    return {
+      environment: { online: false, os: process.platform === "win32" ? "windows" : process.platform,
+        architecture: process.arch === "x64" ? "amd64" : process.arch, memoryBytes: os.totalmem(),
+        freeMemoryBytes: os.freemem(), cpuCores: os.cpus().length, accelerator: "unknown",
+        workDir: saved.workDir, freeDiskBytes, diskReady },
+      catalog: (journal.catalog || []).map(({ files, ...entry }) => entry),
+      installed: (journal.models || []).map(({ id, revision, state, purpose, minimumRamBytes }) =>
+        ({ id, revision, state, purpose, minimumRamBytes })),
+    };
+  } catch { return undefined; }
+}
 function currentWhisperCpp() {
   if (saved.whisperCpp) return saved.whisperCpp;
   const configPath = join(directory, "config.json");
@@ -672,7 +695,7 @@ else {
     });
     handle("processor:state", () => ({
       settings: publicSettings(),
-      status: snapshot,
+      status: snapshot.models ? snapshot : { ...snapshot, models: cachedModelsView() },
     }));
     handle("processor:directory", async () => {
       const result = await dialog.showOpenDialog(window, {
@@ -787,6 +810,8 @@ else {
       if (!child?.connected) throw Error("Обработчик не запущен.");
       if (!["install", "activate", "delete"].includes(request?.action))
         throw Error("Неизвестное действие с моделью.");
+      if (request.action === "install" && !snapshot.connected)
+        throw Error("Для установки модели подключите обработчик к серверу в разделе «К заданиям».");
       child.send({ type: "model", ...request });
       return snapshot;
     });

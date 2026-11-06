@@ -31,7 +31,7 @@ func TestDeviceConfigurationSchemaCompatibility(t *testing.T) {
 	}
 	// Older clients may still send either local setting; both remain optional.
 	for _, extra := range []map[string]any{
-		{}, {"workDirectory": "C:/worker"}, {"autostart": false},
+		{}, {"vramThresholdPercent": 75}, {"workDirectory": "C:/worker"}, {"autostart": false},
 		{"workDirectory": "C:/worker", "autostart": true},
 	} {
 		candidate := map[string]any{}
