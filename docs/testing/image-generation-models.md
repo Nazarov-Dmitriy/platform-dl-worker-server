@@ -4,6 +4,25 @@
 
 ## Автоматические проверки
 
+### Отказ публикации без reconnect — 2026-11-06
+
+- GL-02 — `TestDeviceReconnectAfterFailedAttempt` в `internal/dispatcher/device_test.go`:
+  после FAILED и восстановления назначения приходит валидный `job.stop`, то же
+  WebSocket-соединение продолжает принимать запросы. Актуален.
+- GL-03 — `TestDevicePublicationPushUsesCompatibleTerminalMessages` там же:
+  немедленная доставка FAILED использует `job.stop`; SUCCEEDED/PARTIAL сохраняют
+  `job.publication.done`. Все сообщения проходят действующую схему. Актуален.
+- Общая отправка результата используется в HTTP push, фоновом deviceTick и reconcile.
+  Схема не расширяется: установленные Worker понимают `job.stop` и освобождают
+  удерживаемый результат. До исправления FAILED в `job.publication.done` отвергался
+  самим `deviceWrite`, затем подключение закрывалось и повторялось при reconnect.
+- У реального задания сформирован PNG 1024×1024, но сайт отклонил его ARTIFACT_INVALID:
+  у приложения нет записи в `/app`, а временная проверка использовала `/app/.tmp`.
+  Исправление сайта использует системный temp.
+- Весь пакет `go test ./internal/dispatcher -count=1` — PASS после изменений.
+- Исходники исправлены; развёртывание и перезапуск работающих сервисов не выполнялись.
+
+
 ### Продление GENERATING и отмена — 2026-11-06
 
 - [x] GL-01 — `TestGeneratingLeaseRenewalAndCancellation` в

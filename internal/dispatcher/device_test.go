@@ -179,3 +179,72 @@ func TestDeviceTLSUpgrade(t *testing.T) {
 	defer c.CloseNow()
 	wsHello(t, c, d.ID, nil)
 }
+
+func TestDeviceReconnectAfterFailedAttempt(t *testing.T) {
+	s, _, _ := openTest(t)
+	s.now = time.Now
+	site := testSite(t, s, 1)
+	device, _ := s.CreateDevice(testContext, "failed-publication", testCaps())
+	_, token, _ := s.IssueToken(testContext, "DEVICE", device.ID)
+	h := Handler(s).(*HTTP)
+	server := httptest.NewServer(h)
+	defer server.Close()
+	defer h.CloseDevices()
+	c := wsDial(t, server.URL, token)
+	wsHello(t, c, device.ID, nil)
+	job := submit(t, s, site)
+	var offered Offer
+	if err := json.Unmarshal(wsRead(t, c, "job.offer").Body, &offered); err != nil {
+		t.Fatal(err)
+	}
+	wsSend(t, c, "job.accept", UUID(), map[string]any{"jobId": job.ID, "fence": offered.Fence})
+	wsRead(t, c, "lease.granted")
+	wsSend(t, c, "job.failed", UUID(), map[string]any{"jobId": job.ID, "fence": offered.Fence, "error": APIError{Code: "ARTIFACT_INVALID", Message: "test", Permanent: true}})
+	wsRead(t, c, "protocol.ack")
+	reconnected := wsDial(t, server.URL, token)
+	wsHello(t, reconnected, device.ID, []map[string]any{{"jobId": job.ID, "fence": offered.Fence}})
+	stopped := wsRead(t, reconnected, "job.stop")
+	if err := s.validator.Check("DeviceMessage", encode(stopped)); err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		JobID  string `json:"jobId"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(stopped.Body, &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.JobID != job.ID || body.Reason != "PUBLICATION_FAILED" {
+		t.Fatalf("unexpected stop: %+v", body)
+	}
+	// A response on this same socket proves reconciliation did not disconnect it.
+	wsSend(t, reconnected, "job.status", UUID(), map[string]any{"jobId": job.ID, "fence": offered.Fence, "renewalId": UUID(), "stage": "ANALYZING", "progress": nil, "activitySequence": 0, "steps": []Step{}})
+	wsRead(t, reconnected, "protocol.error")
+}
+
+func TestDevicePublicationPushUsesCompatibleTerminalMessages(t *testing.T) {
+	for _, outcome := range []string{"FAILED", "SUCCEEDED", "PARTIAL"} {
+		t.Run(outcome, func(t *testing.T) {
+			s, _, _ := openTest(t)
+			s.now = time.Now
+			d, _ := s.CreateDevice(testContext, "publication-push", testCaps())
+			_, token, _ := s.IssueToken(testContext, "DEVICE", d.ID)
+			h := Handler(s).(*HTTP)
+			server := httptest.NewServer(h)
+			defer server.Close()
+			defer h.CloseDevices()
+			c := wsDial(t, server.URL, token)
+			wsHello(t, c, d.ID, nil)
+			delivery := PublicationDelivery{DeviceID: d.ID, JobID: UUID(), ArtifactID: UUID(), Outcome: outcome, Fence: Fence{AssignmentID: UUID(), Generation: 1, DispatcherEpoch: s.epoch}}
+			h.pushPublication(testContext, delivery)
+			kind := "job.publication.done"
+			if outcome == "FAILED" {
+				kind = "job.stop"
+			}
+			message := wsRead(t, c, kind)
+			if err := s.validator.Check("DeviceMessage", encode(message)); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

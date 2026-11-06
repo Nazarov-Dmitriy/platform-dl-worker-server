@@ -318,7 +318,7 @@ func (h *HTTP) pushPublication(ctx context.Context, d PublicationDelivery) {
 	if c == nil {
 		return
 	}
-	if h.deviceWrite(ctx, c, "job.publication.done", map[string]any{"jobId": d.JobID, "fence": d.Fence, "artifactId": d.ArtifactID, "outcome": d.Outcome}) == nil {
+	if h.devicePublication(ctx, c, d.JobID, d.Fence, d.ArtifactID, d.Outcome) == nil {
 		_ = h.store.MarkPublicationDelivered(ctx, d.JobID, d.DeviceID)
 	}
 }

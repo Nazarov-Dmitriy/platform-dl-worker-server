@@ -75,6 +75,7 @@ func (h *HTTP) deviceWrite(ctx context.Context, c *websocket.Conn, kind string, 
 	defer cancel()
 	return c.Write(ctx, websocket.MessageText, encode(frame))
 }
+
 // What this device is allowed to install. The worker used to read a file
 // placed beside it at build time, which left the site's catalog and the
 // device's idea of it with no way to agree.
@@ -175,7 +176,7 @@ func (h *HTTP) deviceConnect(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if outcome != "" {
-			if h.deviceWrite(ctx, c, "job.publication.done", map[string]any{"jobId": item.JobID, "fence": item.Fence, "artifactId": artifactID, "outcome": outcome}) != nil {
+			if h.devicePublication(ctx, c, item.JobID, item.Fence, artifactID, outcome) != nil {
 				return
 			}
 			_ = h.store.MarkPublicationDelivered(ctx, item.JobID, p.ID)
@@ -365,7 +366,7 @@ func (h *HTTP) deviceTick(ctx context.Context, p Principal, session string, c *w
 		return e
 	}
 	for _, pub := range pubs {
-		if e = h.deviceWrite(ctx, c, "job.publication.done", map[string]any{"jobId": pub.JobID, "fence": pub.Fence, "artifactId": pub.ArtifactID, "outcome": pub.Outcome}); e != nil {
+		if e = h.devicePublication(ctx, c, pub.JobID, pub.Fence, pub.ArtifactID, pub.Outcome); e != nil {
 			return e
 		}
 		if e = h.store.MarkPublicationDelivered(ctx, pub.JobID, p.ID); e != nil {
@@ -380,4 +381,13 @@ func (h *HTTP) deviceTick(ctx context.Context, p Principal, session string, c *w
 		return h.deviceWrite(ctx, c, "job.offer", offer)
 	}
 	return nil
+}
+
+// Failed publication releases held results using a message existing processors
+// already support, rather than sending an invalid successful-publication outcome.
+func (h *HTTP) devicePublication(ctx context.Context, c *websocket.Conn, jobID string, fence Fence, artifactID, outcome string) error {
+	if outcome == "FAILED" {
+		return h.deviceWrite(ctx, c, "job.stop", map[string]any{"jobId": jobID, "fence": fence, "reason": "PUBLICATION_FAILED"})
+	}
+	return h.deviceWrite(ctx, c, "job.publication.done", map[string]any{"jobId": jobID, "fence": fence, "artifactId": artifactID, "outcome": outcome})
 }
