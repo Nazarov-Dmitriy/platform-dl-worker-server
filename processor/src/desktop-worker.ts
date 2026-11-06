@@ -15,6 +15,7 @@ let agent: Agent | undefined,
 // One model is fetched at a time. A second request while one is running would
 // race for the same work directory and the same disk budget.
 let fetching: { id: string; revision: string; progress: number } | undefined;
+let modelError = "";
 
 // What the Models screen needs: this machine, what the site allows, and what
 // is already here. The screen never computes a path or a URL of its own.
@@ -25,12 +26,27 @@ function modelsView() {
   return {
     environment: {
       memoryBytes: os.totalmem(),
+      os: usage.deviceOS,
+      architecture: usage.deviceArchitecture,
+      online: true,
+      freeMemoryBytes: usage.freeMemoryBytes,
+      gpuName: usage.gpuName,
+      accelerator: usage.accelerator,
+      vramTotalBytes: usage.vramTotalBytes,
+      freeVramBytes: usage.freeVramBytes,
       cpuCores: os.cpus().length,
       freeDiskBytes: usage.freeDiskBytes,
       workDir: agent.config.workDir,
       diskReady: usage.workDiskAvailable,
     },
     catalog: agent.journal.state.catalog.map((m) => ({
+      os: m.os,
+      architectures: m.architectures,
+      accelerators: m.accelerators,
+      minimumVramBytes: m.minimumVramBytes,
+      description: m.description,
+      sizeTier: m.sizeTier,
+      memoryRequirementsVerified: m.memoryRequirementsVerified,
       id: m.id,
       revision: m.revision,
       purpose: m.purpose,
@@ -48,6 +64,7 @@ function modelsView() {
       minimumRamBytes: m.minimumRamBytes,
     })),
     fetching,
+    error: modelError,
   };
 }
 function status(message?: string) {
@@ -169,7 +186,21 @@ process.on("message", async (input: any) => {
       agent.nextHeartbeat = 0;
       status("Настройки обработки применены. Текущие задания продолжаются; режимы и потоки применятся к новым.");
     } else if (input?.type === "model" && agent) {
-      await runModel(input);
+      modelError = "";
+      try {
+        await runModel(input);
+      } catch (error) {
+        const code = error instanceof Error ? error.message : "";
+        const messages: Record<string, string> = {
+          INSUFFICIENT_DISK: "Недостаточно места в рабочей папке для установки модели.",
+          INSUFFICIENT_MEMORY: "Для этой модели недостаточно RAM.",
+          EXECUTOR_UNAVAILABLE: "Модель скачана, но движок её запуска пока недоступен.",
+          MODEL_FETCH_BUSY: "Дождитесь завершения текущей загрузки модели.",
+          MODEL_IN_USE: "Модель используется. Дождитесь завершения заданий.",
+        };
+        modelError = messages[code] || "Не удалось выполнить действие с моделью. Проверьте соединение, рабочую папку и повторите попытку.";
+      }
+      status();
     } else if (input?.type === "stop") await stop();
   } catch {
     process.send?.({
@@ -230,7 +261,7 @@ async function runModel(input: any) {
   if (!entry) throw Error("MODEL_NOT_IN_CATALOG");
   const usage = agent.usage();
   if (!usage.workDiskAvailable) throw Error("WORK_DISK_UNAVAILABLE");
-  if (entry.minimumRamBytes > os.totalmem()) throw Error("INSUFFICIENT_MEMORY");
+  if (entry.purpose !== "GENERATION" && entry.minimumRamBytes > os.totalmem()) throw Error("INSUFFICIENT_MEMORY");
   fetching = { id, revision, progress: 0 };
   status("Скачиваем «" + id + "»…");
   try {

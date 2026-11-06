@@ -35,3 +35,5 @@ processor/desktop-release/
 
 # GigaCode local config and worktrees
 .gigacode_vsc/
+
+processor/desktop/model-compatibility.js

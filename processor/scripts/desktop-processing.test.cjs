@@ -18,6 +18,7 @@ test("model task checkboxes persist as speech and subs",()=>{
  assert.deepEqual(validateModelTasks({}),["speech"]);
  assert.deepEqual(validateModelTasks({modelTasks:["speech","subs"]}),["speech","subs"]);
  assert.deepEqual(validateModelTasks({modelTasks:[]}),[]);
+ assert.deepEqual(validateModelTasks({modelTasks:["generation","speech"]}),["generation","speech"]);
  assert.throws(()=>validateModelTasks({modelTasks:["video"]}));
 });
 test("invalid resource and mode values cannot be persisted",()=>{

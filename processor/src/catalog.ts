@@ -8,10 +8,13 @@ export type ModelFile = {
 };
 export type ModelEntry = {
   files?: ModelFile[];
+  description?: string;
+  sizeTier?: "SMALL" | "MEDIUM" | "LARGE";
+  memoryRequirementsVerified?: boolean;
   id: string;
   revision: string;
   executor: string;
-  purpose: "RECOGNITION" | "TRANSLATION";
+  purpose: "RECOGNITION" | "TRANSLATION" | "GENERATION";
   os: string[];
   architectures: string[];
   accelerators: string[];
@@ -138,6 +141,7 @@ const osAll = ["windows", "darwin", "linux"];
 const arch = ["amd64", "arm64"];
 
 export const bundledCatalog: ModelEntry[] = [
+  ...JSON.parse(readFileSync(new URL("./generation-catalog.json", import.meta.url), "utf8")) as ModelEntry[],
   {
     id: "whisper-cpp-base",
     revision: "ggml-base-hf-5359861",

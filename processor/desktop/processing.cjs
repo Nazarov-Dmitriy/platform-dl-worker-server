@@ -21,7 +21,7 @@ function remapWorkDirModels(journal, fromDir, toDir) {
 function validateModelTasks(input) {
   const raw = input?.modelTasks;
   if (raw == null) return ["speech"];
-  if (!Array.isArray(raw) || raw.some((task) => task !== "speech" && task !== "subs"))
+  if (!Array.isArray(raw) || raw.some((task) => task !== "speech" && task !== "subs" && task !== "generation"))
     throw Error("Выберите задачи этого компьютера.");
   return [...new Set(raw)];
 }

@@ -53,6 +53,7 @@ func wsDial(t *testing.T, url, token string) *websocket.Conn {
 	if e != nil {
 		t.Fatal(e)
 	}
+	c.SetReadLimit(MaxMetadataBytes)
 	t.Cleanup(func() { _ = c.CloseNow() })
 	return c
 }

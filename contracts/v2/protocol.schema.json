@@ -1629,6 +1629,31 @@
         },
         "workDiskAvailable": {
           "type": "boolean"
+        },
+        "memoryTotalBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deviceOS": {
+          "enum": [
+            "windows",
+            "darwin",
+            "linux"
+          ]
+        },
+        "deviceArchitecture": {
+          "enum": [
+            "amd64",
+            "arm64"
+          ]
+        },
+        "accelerator": {
+          "enum": [
+            "cpu",
+            "cuda",
+            "metal",
+            "unknown"
+          ]
         }
       },
       "required": [
@@ -1695,7 +1720,8 @@
         "purpose": {
           "enum": [
             "RECOGNITION",
-            "TRANSLATION"
+            "TRANSLATION",
+            "GENERATION"
           ]
         },
         "os": {
@@ -1807,6 +1833,20 @@
           "minItems": 0,
           "maxItems": 3,
           "uniqueItems": true
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "sizeTier": {
+          "enum": [
+            "SMALL",
+            "MEDIUM",
+            "LARGE"
+          ]
+        },
+        "memoryRequirementsVerified": {
+          "type": "boolean"
         }
       },
       "required": [

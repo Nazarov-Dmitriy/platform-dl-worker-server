@@ -4,12 +4,21 @@ import { execFileSync, spawnSync } from "node:child_process";
 import type { Config } from "./config.js";
 import type { Journal } from "./journal.js";
 
-function parseNvidiaSmi(): { totalBytes: number; usedBytes: number } | null {
+export function parseNvidiaMemory(out: string): { name: string; totalBytes: number; usedBytes: number } | null {
+  // Report one adapter consistently: nvidia-smi's first device, never sum GPUs.
+  const line = out.trim().split(/\r?\n/)[0];
+  if (!line) return null;
+  const parts = line.split(",").map((part) => part.trim());
+  const total = Number(parts[parts.length - 2]), used = Number(parts[parts.length - 1]);
+  if (parts.length < 3 || !Number.isFinite(total) || !Number.isFinite(used) || total <= 0 || used < 0 || used > total) return null;
+  return { name: parts.slice(0, -2).join(", "), totalBytes: Math.round(total * 1024 ** 2), usedBytes: Math.round(used * 1024 ** 2) };
+}
+function parseNvidiaSmi(): ReturnType<typeof parseNvidiaMemory> {
   try {
     const out = execFileSync(
       "nvidia-smi",
       [
-        "--query-gpu=memory.total,memory.used",
+        "--query-gpu=name,memory.total,memory.used",
         "--format=csv,noheader,nounits",
       ],
       {
@@ -19,14 +28,7 @@ function parseNvidiaSmi(): { totalBytes: number; usedBytes: number } | null {
         stdio: ["ignore", "pipe", "ignore"],
       },
     );
-    const line = out.trim().split(/\r?\n/)[0];
-    if (!line) return null;
-    const parts = line.split(",").map((s) => Number(s.trim()));
-    if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
-    return {
-      totalBytes: Math.round(parts[0] * 1024 * 1024),
-      usedBytes: Math.round(parts[1] * 1024 * 1024),
-    };
+    return parseNvidiaMemory(out);
   } catch {
     return null;
   }
@@ -91,6 +93,9 @@ export function slotBudget(
 }
 export class Resources {
   previous = os.cpus();
+  private gpuInfo: ReturnType<typeof parseNvidiaMemory> = null;
+  private gpuCheckedAt = 0;
+  private gpuName: string | undefined;
   constructor(
     readonly config: Config,
     readonly journal: Journal,
@@ -162,9 +167,18 @@ export class Resources {
       available = true;
     } catch {}
     const memory = 100 * (1 - free / os.totalmem());
-    const gpuInfo = parseNvidiaSmi();
-    const gpuName = detectGpuName();
+    if (Date.now() - this.gpuCheckedAt > 10000) {
+      this.gpuInfo = parseNvidiaSmi();
+      this.gpuCheckedAt = Date.now();
+    }
+    const gpuInfo = this.gpuInfo;
+    if (this.gpuName === undefined) this.gpuName = process.platform === "darwin" && process.arch === "arm64" ? "Apple Silicon GPU" : detectGpuName();
+    const gpuName = gpuInfo?.name || this.gpuName;
     return {
+      memoryTotalBytes: os.totalmem(),
+      deviceOS: process.platform === "win32" ? "windows" : process.platform,
+      deviceArchitecture: process.arch === "x64" ? "amd64" : process.arch,
+      accelerator: gpuInfo ? "cuda" : process.platform === "darwin" && process.arch === "arm64" ? "metal" : "unknown",
       cpuPercent: cpu,
       memoryUsedPercent: memory,
       memoryPressure: pressure,

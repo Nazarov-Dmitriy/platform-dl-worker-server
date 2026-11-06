@@ -81,7 +81,7 @@ function vramMeter(total, used) {
   fill.classList.add("vram");
   fill.style.width = pct + "%";
   track.append(fill);
-  const label = node("span", used.toFixed(1).replace(".", ",") + " / " + total.toFixed(1).replace(".", ",") + " ГБ");
+  const label = node("span", (used / 1024 ** 3).toFixed(1).replace(".", ",") + " / " + (total / 1024 ** 3).toFixed(1).replace(".", ",") + " ГБ");
   n.append(track, label);
   return n;
 }
@@ -159,20 +159,21 @@ function renderDevices(target, devices) {
     [
       "Устройство",
       "Подключение",
-      "Ресурсы",
+      "CPU / RAM / VRAM",
       "Роль",
       ...(manage ? ["Действие"] : []),
     ],
     devices.map((d) => {
       const cpu = d.online ? meter(d.usage?.cpuPercent) : node("span", "—", "muted");
       const ram = d.online ? meter(d.usage?.memoryUsedPercent) : node("span", "—", "muted");
-      const vram = vramCell(d.usage);
+      const vram = d.online ? vramMeter(d.usage?.vramTotalBytes, d.usage?.vramUsedBytes) : node("span", "—", "muted");
       const resources = node("div", null, "resources-cell");
+      cpu.setAttribute("aria-label", "CPU");
+      ram.setAttribute("aria-label", "RAM");
+      vram.setAttribute("aria-label", "VRAM");
       resources.append(cpu, ram, vram);
-      const gpuName = d.usage?.gpuName || "";
-      const subtitle = gpuName ? d.id + " · " + gpuName : d.id;
       return [
-        titleCell(d.name, subtitle, "monitor"),
+        titleCell(d.name, d.id, "monitor"),
         badge(
           !d.enabled ? "Отключено" : d.online ? "В сети" : "Не в сети",
           !d.enabled ? "" : d.online ? "good" : "",
@@ -200,6 +201,7 @@ function deviceManageButton(device) {
 const purposes = {
   RECOGNITION: "Распознавание речи",
   TRANSLATION: "Перевод",
+  GENERATION: "Генерация изображений",
 };
 function byteSize(bytes) {
   if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0)
@@ -228,7 +230,9 @@ function modelCard(model) {
 function modelNeeds(model) {
   const parts = [byteSize(model.downloadBytes)];
   if (model.minimumRamBytes)
-    parts.push("ОЗУ от " + byteSize(model.minimumRamBytes));
+    parts.push((model.memoryRequirementsVerified === false ? "Ориентир RAM " : "ОЗУ от ") + byteSize(model.minimumRamBytes));
+  if (model.minimumVramBytes)
+    parts.push((model.memoryRequirementsVerified === false ? "ориентир VRAM " : "VRAM от ") + byteSize(model.minimumVramBytes));
   if (model.purpose === "RECOGNITION" && model.recognitionLanguages?.length)
     parts.push(model.recognitionLanguages.length + " языков");
   // A pairwise model lists its few directions; a multilingual one holds
@@ -265,17 +269,71 @@ function modelPurposeCell(model) {
     tags.append(node("span", jobOperations[op] || op, "model-tag")),
   );
   if (!tags.childElementCount)
-    tags.append(node("span", "Назначение не указано", "muted"));
+    tags.append(node("span", purposes[model.purpose] || "Назначение не указано", "model-tag"));
   cell.append(tags, node("span", modelNeeds(model), "cell-meta"));
+  if (model.sizeTier) cell.append(node("span", ({SMALL: "Лёгкая", MEDIUM: "Средняя", LARGE: "Тяжёлая"})[model.sizeTier], "cell-meta"));
+  if (model.description) cell.append(node("span", model.description, "model-description"));
+  if (model.purpose === "GENERATION") cell.append(node("span", "Полный пакет Safetensors. Память — предварительный ориентир; запуск генерации пока недоступен.", "model-description"));
   return cell;
+}
+function modelCompatibilityCell(model) {
+  const d = state.devices.find(d => d.id === $("modelDeviceSelect").value);
+  const result = ModelCompatibility.assess(model, ModelCompatibility.environment(d?.usage, d?.online));
+  const cell = node("div", null, "model-heading");
+  cell.append(badge(result.label, ({ok: "good", no: "danger", wait: "notice"})[result.level] || ""), node("span", result.reason, "model-description"));
+  return cell;
+}
+async function installCatalogModel(model, d, button) {
+  button.disabled = true;
+  try {
+    const result = await api("/api/v2/admin/devices/" + d.id + "/commands", { method: "POST", mutate: true,
+      body: JSON.stringify({ requestId: crypto.randomUUID(), type: "MODEL_INSTALL", modelId: model.id, modelRevision: model.revision }) });
+    button.textContent = "Установка запрошена";
+    button.title = "Запрос: " + result.requestId;
+    const poll = async () => {
+      try {
+        const command = await api("/api/v2/admin/devices/" + d.id + "/commands/" + result.requestId);
+        if (command.status === "SUCCEEDED") {
+          button.textContent = "Установлена";
+          await reloadCatalog();
+          return;
+        }
+        if (command.status === "FAILED") {
+          button.disabled = false;
+          button.textContent = "Повторить установку";
+          button.title = command.error?.message || "Не удалось установить модель.";
+          return;
+        }
+        button.textContent = command.progress == null ? "Ожидает воркер" : "Загрузка " + Math.round(command.progress * 100) + "%";
+        if (button.isConnected) setTimeout(poll, 3000);
+      } catch (error) {
+        button.textContent = "Обновите статус";
+        button.title = "Проверка статуса прервана. Обновите каталог.";
+      }
+    };
+    setTimeout(poll, 1000);
+  } catch (error) { button.disabled = false; report(error); }
 }
 function modelActionCell(model) {
   if (state.role !== "OWNER") return node("span", "", "muted");
+  const cell = node("div", null, "actions");
+  const d = state.devices.find(d => d.id === $("modelDeviceSelect").value);
+  if (d) {
+    const installed = state.placements?.some(p => p.deviceId === d.id && p.modelId === model.id && p.revision === model.revision);
+    const install = node("button", installed ? "Установлена" : "Установить", "button quiet");
+    const enoughDisk = d.usage?.workDiskAvailable && d.usage.freeDiskBytes >= model.downloadBytes + 8 * 1024 ** 2;
+    const fit = ModelCompatibility.assess(model, ModelCompatibility.environment(d.usage, d.online));
+    install.disabled = installed || !d.online || !enoughDisk || fit.level === "no";
+    if (!enoughDisk) install.title = "Недостаточно места на диске или ресурсы ещё неизвестны.";
+    install.addEventListener("click", () => installCatalogModel(model, d, install));
+    cell.append(install);
+  }
   const remove = node("button", "Убрать", "button danger");
   remove.type = "button";
   remove.disabled = !!state.modelActionKey;
   remove.addEventListener("click", () => removeCatalogModel(model));
-  return remove;
+  cell.append(remove);
+  return cell;
 }
 function renderModels(target, models) {
   if (!models.length)
@@ -286,10 +344,11 @@ function renderModels(target, models) {
     );
   table(
     target,
-    ["Модель", "Назначение", "Источник", ""],
+    ["Модель", "Назначение", "Совместимость", "Источник", ""],
     models.map((m) => [
       titleCell(m.id, m.revision, "box"),
       modelPurposeCell(m),
+      modelCompatibilityCell(m),
       modelCardLink(m) || "—",
       modelActionCell(m),
     ]),

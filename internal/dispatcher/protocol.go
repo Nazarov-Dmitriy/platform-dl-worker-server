@@ -181,6 +181,10 @@ type Capability struct {
 	ProfilePolicies       []string `json:"profilePolicies"`
 }
 type Usage struct {
+	MemoryTotalBytes   int64    `json:"memoryTotalBytes,omitempty"`
+	DeviceOS           string   `json:"deviceOS,omitempty"`
+	DeviceArchitecture string   `json:"deviceArchitecture,omitempty"`
+	Accelerator        string   `json:"accelerator,omitempty"`
 	CPUPercent         float64  `json:"cpuPercent"`
 	MemoryUsedPercent  float64  `json:"memoryUsedPercent"`
 	MemoryPressure     string   `json:"memoryPressure"`
@@ -244,27 +248,31 @@ type ModelFile struct {
 	URL    string `json:"url"`
 }
 type ModelEntry struct {
-	Files                 []ModelFile `json:"files,omitempty"`
-	ID                    string      `json:"id"`
-	Revision              string      `json:"revision"`
-	Executor              string      `json:"executor"`
-	Purpose               string      `json:"purpose"`
-	OS                    []string    `json:"os"`
-	Architectures         []string    `json:"architectures"`
-	Accelerators          []string    `json:"accelerators"`
-	RecognitionLanguages  []string    `json:"recognitionLanguages"`
-	TranslationDirections []Pair      `json:"translationDirections"`
-	DownloadBytes         int64       `json:"downloadBytes"`
-	MinimumRAMBytes       int64       `json:"minimumRamBytes"`
-	MinimumVRAMBytes      int64       `json:"minimumVramBytes"`
-	SHA256                string      `json:"sha256"`
-	DownloadURL           string      `json:"downloadUrl"`
-	License               string      `json:"license"`
-	DescriptionSource     string      `json:"descriptionSource"`
+	Description                string      `json:"description,omitempty"`
+	SizeTier                   string      `json:"sizeTier,omitempty"`
+	MemoryRequirementsVerified *bool       `json:"memoryRequirementsVerified,omitempty"`
+	Files                      []ModelFile `json:"files,omitempty"`
+	ID                         string      `json:"id"`
+	Revision                   string      `json:"revision"`
+	Executor                   string      `json:"executor"`
+	Purpose                    string      `json:"purpose"`
+	OS                         []string    `json:"os"`
+	Architectures              []string    `json:"architectures"`
+	Accelerators               []string    `json:"accelerators"`
+	RecognitionLanguages       []string    `json:"recognitionLanguages"`
+	TranslationDirections      []Pair      `json:"translationDirections"`
+	DownloadBytes              int64       `json:"downloadBytes"`
+	MinimumRAMBytes            int64       `json:"minimumRamBytes"`
+	MinimumVRAMBytes           int64       `json:"minimumVramBytes"`
+	SHA256                     string      `json:"sha256"`
+	DownloadURL                string      `json:"downloadUrl"`
+	License                    string      `json:"license"`
+	DescriptionSource          string      `json:"descriptionSource"`
 	// Catalog metadata, held in model_catalog columns rather than the stored
 	// entry, so an operator can change them without rewriting the model.
 	Operations []string `json:"operations,omitempty"`
 }
+
 // Where a catalog model actually sits: one row per device that reported a
 // successful install or activation.
 type ModelPlacement struct {

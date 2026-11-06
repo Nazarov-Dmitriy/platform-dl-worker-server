@@ -255,3 +255,38 @@ func TestDeviceReceivesCatalogOnConnect(t *testing.T) {
 		t.Fatalf("after removal the device still sees %d models", len(body.Models))
 	}
 }
+
+func TestGenerationCatalogIsDownloadOnlyAndComplete(t *testing.T) {
+	s, _, _ := openTest(t)
+	models, err := s.Models(testContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, model := range models {
+		if model.Purpose != "GENERATION" {
+			continue
+		}
+		count++
+		if len(model.Operations) != 0 {
+			t.Fatal("generation must not advertise an unimplemented operation")
+		}
+		if model.MemoryRequirementsVerified == nil || *model.MemoryRequirementsVerified {
+			t.Fatal("memory requirements must be marked provisional")
+		}
+		var size int64
+		for _, file := range model.Files {
+			size += file.Bytes
+		}
+		manifest, err := canonicalTransform(encode(model.Files))
+		if err != nil || digest(manifest) != model.SHA256 || size != model.DownloadBytes {
+			t.Fatalf("invalid package %s", model.ID)
+		}
+		if err := s.validator.Check("ModelEntry", encode(model)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count != 3 {
+		t.Fatalf("generation models: %d", count)
+	}
+}

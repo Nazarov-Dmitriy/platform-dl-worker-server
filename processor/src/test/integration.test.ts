@@ -91,6 +91,10 @@ test(
       }
     });
     const usage = {
+      memoryTotalBytes: 16 * 1024 ** 3,
+      deviceOS: "windows",
+      deviceArchitecture: "amd64",
+      accelerator: "unknown",
       cpuPercent: 10,
       memoryUsedPercent: 20,
       memoryPressure: "NORMAL",
@@ -413,6 +417,10 @@ test(
       () => {},
     );
     agent.resources.sample = () => ({
+      memoryTotalBytes: 16 * 1024 ** 3,
+      deviceOS: "windows",
+      deviceArchitecture: "amd64",
+      accelerator: "unknown",
       cpuPercent: 10,
       memoryUsedPercent: 20,
       memoryPressure: "NORMAL",
@@ -777,6 +785,10 @@ test(
       () => {},
     );
     agent.resources.sample = () => ({
+      memoryTotalBytes: 16 * 1024 ** 3,
+      deviceOS: "windows",
+      deviceArchitecture: "amd64",
+      accelerator: "unknown",
       cpuPercent: 10,
       memoryUsedPercent: 20,
       memoryPressure: "NORMAL",
@@ -1239,6 +1251,10 @@ test(
       () => {},
     );
     agent.resources.sample = () => ({
+      memoryTotalBytes: 16 * 1024 ** 3,
+      deviceOS: "windows",
+      deviceArchitecture: "amd64",
+      accelerator: "unknown",
       cpuPercent: 10,
       memoryUsedPercent: 20,
       memoryPressure: "NORMAL",

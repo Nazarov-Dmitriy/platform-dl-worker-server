@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+
+	"titunki/worker-server/contracts"
 )
 
 // Languages are taken from the OpenAI Whisper multilingual tokenizer, not a site locale list.
@@ -123,7 +125,15 @@ func baseCatalog() []ModelEntry {
 			License:     "MIT", DescriptionSource: "https://github.com/openai/whisper/blob/main/whisper/tokenizer.py",
 		},
 	}
-	return append(models, nllbEntry())
+	raw, err := contracts.Files.ReadFile("generation-catalog.json")
+	if err != nil {
+		panic(err)
+	}
+	var generation []ModelEntry
+	if err = json.Unmarshal(raw, &generation); err != nil {
+		panic(err)
+	}
+	return append(append(models, nllbEntry()), generation...)
 }
 
 // Each entry the build ships is offered once. catalog_seeded remembers that it

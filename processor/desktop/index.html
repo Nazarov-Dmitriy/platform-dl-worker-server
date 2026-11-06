@@ -9,6 +9,7 @@
     />
     <title>Worker Processor</title>
     <link rel="stylesheet" href="app.css" />
+    <script defer src="model-compatibility.js"></script>
     <script defer src="renderer.js"></script>
   </head>
   <body>
@@ -74,6 +75,7 @@
           <div class="tasks">
             <label class="task-row"><input type="checkbox" id="taskSpeech" checked><span><b>Распознавание речи</b><br><span class="hint">Звук в текст. Нужна одна модель распознавания.</span></span></label>
             <label class="task-row"><input type="checkbox" id="taskSubs"><span><b>Субтитры</b><br><span class="hint">Распознавание плюс перевод. Нужны обе модели сразу.</span></span></label>
+            <label class="task-row"><input type="checkbox" id="taskGeneration"><span><b>Генерация изображений</b><br><span class="hint">Можно скачать модели заранее. Запуск генерации появится отдельно.</span></span></label>
           </div>
           <p class="hint">Видео обрабатывается без моделей, одним ffmpeg.</p>
         </div>

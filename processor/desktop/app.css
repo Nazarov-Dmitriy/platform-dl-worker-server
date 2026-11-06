@@ -430,7 +430,7 @@ fieldset:disabled {
 .env-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
 .env-grid div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .env-grid .k { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.env-grid .v { font-variant-numeric: tabular-nums; word-break: break-all; }
+.env-grid .v { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .tasks { display: flex; flex-direction: column; gap: 4px; margin: 14px 0; }
 .task-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 9px; cursor: pointer; }
 .task-row:hover { background: var(--hover, rgba(255, 255, 255, 0.04)); }

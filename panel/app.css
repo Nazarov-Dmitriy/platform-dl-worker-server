@@ -1090,6 +1090,17 @@ tr:last-child td {
   gap: 6px;
   min-width: 0;
 }
+.model-device-context {
+  padding: 20px 22px;
+  display: grid;
+  gap: 16px;
+}
+.model-description {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 32em;
+}
 .model-tags {
   display: flex;
   flex-wrap: wrap;

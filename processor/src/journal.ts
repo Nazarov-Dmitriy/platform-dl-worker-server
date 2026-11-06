@@ -16,7 +16,7 @@ export type InstalledModel = {
   revision: string;
   state: "INSTALLED" | "ACTIVE";
   path: string;
-  purpose: "RECOGNITION" | "TRANSLATION";
+  purpose: "RECOGNITION" | "TRANSLATION" | "GENERATION";
   executor: string;
   recognitionLanguages: string[];
   translationDirections: Pair[];

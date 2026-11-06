@@ -41,6 +41,7 @@ export async function installModel(
   )
     throw new Error("MODEL_PLATFORM_UNSUPPORTED");
   if (
+    !(entry.purpose === "GENERATION" && entry.executor === "diffusers") &&
     !["whisper.cpp", "transformers-js", "catalog-test"].includes(entry.executor)
   )
     throw new Error("EXECUTOR_UNAVAILABLE");
@@ -129,6 +130,7 @@ export function modelReady(
   ffmpeg = "ffmpeg",
 ) {
   if (!existsSync(model.path)) return false;
+  if (model.purpose === "GENERATION") return false; // Downloadable; generation executor is not shipped yet.
   if (model.executor === "catalog-test") return true;
   if (model.executor === "transformers-js")
     return [

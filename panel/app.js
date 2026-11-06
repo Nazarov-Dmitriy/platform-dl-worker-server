@@ -156,6 +156,28 @@ function options(id, items, label, placeholder) {
   if (items.some((item) => item.id === previous)) select.value = previous;
   select.disabled = !items.length;
 }
+function renderModelSelection() {
+  const select = $("modelDeviceSelect"), previous = select.value;
+  select.replaceChildren(new Option("Выберите устройство", ""));
+  state.devices.forEach(d => select.append(new Option(d.name + (d.online ? " · в сети" : " · не в сети"), d.id)));
+  select.value = state.devices.some(d => d.id === previous) ? previous : state.devices.length === 1 ? state.devices[0].id : "";
+  renderModelResources();
+  renderModels("catalog", state.models);
+}
+function renderModelResources() {
+  const d = state.devices.find(d => d.id === $("modelDeviceSelect").value);
+  const env = ModelCompatibility.environment(d?.usage, d?.online);
+  details("modelDeviceResources", d ? [
+    ["Устройство", d.name + (d.online ? " · в сети" : " · не в сети")],
+    ["Система", [env?.os || d.os, env?.architecture || d.architecture].filter(Boolean).join(" · ") || "Неизвестна"],
+    ["Видеокарта", env?.gpuName || "Не определена"],
+    ["Ускорение GPU", ({ cuda: "NVIDIA · CUDA, движок проверяется отдельно", metal: "Apple · Metal", unknown: "Не проверено" })[env?.accelerator] || "Не проверено"],
+    ["RAM", byteSize(env?.memoryBytes) + " · свободно " + byteSize(env?.freeMemoryBytes)],
+    ["Память GPU", env?.accelerator === "metal" ? "Общая с RAM" : byteSize(env?.vramTotalBytes) + " · свободно " + byteSize(env?.freeVramBytes)],
+    ["Свободно на диске", byteSize(env?.freeDiskBytes)],
+  ] : []);
+}
+on("modelDeviceSelect", "change", () => { renderModelResources(); renderModels("catalog", state.models); });
 async function reload() {
   const [sites, devices, models] = await Promise.all([
     api("/api/v2/admin/sites"),
@@ -165,6 +187,7 @@ async function reload() {
   state.sites = sites.items;
   state.devices = devices.items;
   state.models = models.models;
+  state.placements = models.placements || [];
   options("jobSite", state.sites, (s) => s.name, "Нет доступных сайтов");
   options("overviewSite", state.sites, (s) => s.name, "Нет доступных сайтов");
   $("overviewSite").value = $("jobSite").value;
@@ -178,7 +201,7 @@ async function reload() {
   $("stat-online").textContent = state.devices.filter((d) => d.online).length;
   renderDevices("overviewDevices", state.devices);
   renderDevices("deviceList", state.devices);
-  renderModels("catalog", state.models);
+  renderModelSelection();
   if (state.sites.length)
     table(
       "sites",
@@ -471,18 +494,18 @@ async function sendCommand(body) {
     "Команда отправлена устройству. Применение зависит от его подключения.",
   );
 }
-// The catalog is the list of models the fleet may use. Installing one is the
-// worker's job, so nothing here talks to a device.
+// The catalog belongs to the fleet; installation requests target the selected worker.
 async function reloadCatalog() {
   const models = await api("/api/v2/admin/models");
   state.models = models.models;
-  renderModels("catalog", state.models);
+  state.placements = models.placements || [];
+  renderModelSelection();
 }
 async function removeCatalogModel(model) {
   if (state.modelActionKey) return;
   if (!confirm("Убрать «" + model.id + "» из каталога?")) return;
   state.modelActionKey = model.id + "@" + model.revision;
-  renderModels("catalog", state.models);
+  renderModelSelection();
   try {
     await api(
       "/api/v2/admin/models/" +

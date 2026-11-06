@@ -12,7 +12,7 @@ func TestSeededCatalogIsRemovable(t *testing.T) {
 	// Nothing the build ships is protected: the catalog is a list an owner
 	// edits, which is the whole reason it lives in a table.
 	for _, m := range models {
-		if len(m.Operations) == 0 {
+		if len(m.Operations) == 0 && m.Purpose != "GENERATION" {
 			t.Fatalf("seeded model has no operations: %s", m.ID)
 		}
 		if e = s.AdminDeleteModel(testContext, owner, m.ID, m.Revision); e != nil {

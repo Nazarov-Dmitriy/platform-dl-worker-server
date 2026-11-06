@@ -44,6 +44,7 @@ function fillProcessing(settings) {
   if (Array.isArray(settings.modelTasks)) {
     $("taskSpeech").checked = settings.modelTasks.includes("speech");
     $("taskSubs").checked = settings.modelTasks.includes("subs");
+    $("taskGeneration").checked = settings.modelTasks.includes("generation");
   }
   if (settings.cpuCount) {
     processingForm.elements.cpuThreads.max = settings.cpuCount;
@@ -129,6 +130,7 @@ function persistModelTasks() {
 }
 $("taskSpeech").onchange = persistModelTasks;
 $("taskSubs").onchange = persistModelTasks;
+$("taskGeneration").onchange = persistModelTasks;
 $("start").onclick = () => configured
   ? action(() => window.processor.start())
   : screen(true);
@@ -317,6 +319,7 @@ function warnAboutModels(view) {
 // The site decides what may be installed; this screen decides nothing, it only
 // shows what the worker reported and asks it to act.
 const modelGroups = [
+  { purpose: "GENERATION", title: "Генерация изображений", tasks: ["generation"], hint: "Выберите по ресурсам компьютера. Доступна загрузка; запуск генерации появится отдельно." },
   { purpose: "RECOGNITION", title: "Распознавание речи", tasks: ["speech", "subs"],
     hint: "Нужна одна. Выберите, какой работать." },
   { purpose: "TRANSLATION", title: "Перевод", tasks: ["subs"],
@@ -333,6 +336,7 @@ function chosenTasks() {
   const out = [];
   if ($("taskSpeech").checked) out.push("speech");
   if ($("taskSubs").checked) out.push("subs");
+  if ($("taskGeneration").checked) out.push("generation");
   return out;
 }
 function modelRow(entry, view, group) {
@@ -340,7 +344,10 @@ function modelRow(entry, view, group) {
     (m) => m.id === entry.id && m.revision === entry.revision,
   );
   const active = installed?.state === "ACTIVE";
-  const fits = entry.minimumRamBytes <= view.environment.memoryBytes;
+  const compatibility = ModelCompatibility.assess(entry, view.environment);
+  const fits = compatibility.level !== "no";
+  const generation = entry.purpose === "GENERATION";
+  const diskFits = view.environment.diskReady && view.environment.freeDiskBytes >= entry.downloadBytes + 8 * 1024 ** 2;
   const fetching =
     view.fetching &&
     view.fetching.id === entry.id &&
@@ -349,12 +356,12 @@ function modelRow(entry, view, group) {
   const row = document.createElement("div");
   row.className = "model-row" + (active ? " chosen" : "");
 
-  if (group) {
+  if (group && !generation) {
     const radio = document.createElement("input");
     radio.type = "radio";
     radio.name = "use-" + group.purpose;
     radio.checked = active;
-    radio.disabled = !installed || !fits || busy;
+    radio.disabled = generation || !installed || !fits || busy;
     radio.setAttribute("aria-label", "Работать моделью " + entry.id);
     radio.onclick = () =>
       action(() => window.processor.model("activate", entry.id, entry.revision));
@@ -370,9 +377,22 @@ function modelRow(entry, view, group) {
   meta.className = "meta";
   meta.textContent =
     bytes(entry.downloadBytes) +
-    " · ОЗУ от " + bytes(entry.minimumRamBytes) +
+    (entry.memoryRequirementsVerified === false ? " · ориентир RAM " : " · ОЗУ от ") + bytes(entry.minimumRamBytes) +
+    (entry.minimumVramBytes ? " · VRAM от " + bytes(entry.minimumVramBytes) : "") +
     " · версия " + entry.revision;
   who.append(name, meta);
+  const info = document.createElement("span");
+  info.className = "meta";
+  info.textContent = [({ SMALL: "Лёгкая", MEDIUM: "Средняя", LARGE: "Тяжёлая" })[entry.sizeTier], entry.description].filter(Boolean).join(" · ");
+  const fit = document.createElement("span");
+  fit.className = "meta";
+  fit.textContent = compatibility.label + ": " + compatibility.reason;
+  who.append(info, fit);
+  if (generation) {
+    const runtime = document.createElement("span"); runtime.className = "meta";
+    runtime.textContent = "Полный пакет Safetensors, без сжатия. Память — предварительный ориентир. Доступна установка, запуск генерации пока недоступен.";
+    who.append(runtime);
+  }
   if (!fits) {
     const stop = document.createElement("span");
     stop.className = "meta";
@@ -398,7 +418,8 @@ function modelRow(entry, view, group) {
     const install = document.createElement("button");
     install.type = "button";
     install.textContent = "Установить — " + bytes(entry.downloadBytes);
-    install.disabled = busy || !!view.fetching;
+    install.disabled = busy || !!view.fetching || !diskFits;
+    if (!diskFits) install.title = "Недостаточно места в рабочей папке или папка недоступна.";
     install.onclick = () =>
       action(() => window.processor.model("install", entry.id, entry.revision));
     side.append(install);
@@ -438,7 +459,11 @@ function drawModels(view) {
   $("envHint").hidden = true;
   const env = view.environment;
   $("envGrid").replaceChildren();
-  [["Оперативная память", bytes(env.memoryBytes)],
+  [["Система", [env.os, env.architecture].filter(Boolean).join(" · ") || "—"],
+   ["Видеокарта", env.gpuName || "Не определена"],
+   ["Ускорение GPU", ({ cuda: "NVIDIA · CUDA (движок проверяется отдельно)", metal: "Apple · Metal", unknown: "Не проверено", cpu: "CPU" })[env.accelerator] || "Не проверено"],
+   ["Память GPU", env.accelerator === "metal" ? "Общая с RAM" : bytes(env.vramTotalBytes) + " · свободно " + bytes(env.freeVramBytes)],
+   ["Оперативная память", bytes(env.memoryBytes) + " · свободно " + bytes(env.freeMemoryBytes)],
    ["Ядер процессора", String(env.cpuCores)],
    ["Свободно в рабочей папке", env.diskReady ? bytes(env.freeDiskBytes) : "папка недоступна"],
    ["Рабочая папка", env.workDir || "—"],
@@ -503,13 +528,13 @@ function drawModels(view) {
       shown &&
       !view.installed.some((i) => i.id === m.id && i.revision === m.revision),
   );
-  $("modelPlan").textContent = view.fetching
+  $("modelPlan").textContent = view.error || (view.fetching
     ? "Скачиваем «" + view.fetching.id + "» — " +
       Math.round((view.fetching.progress || 0) * 100) + "%"
     : missing.length
       ? "Не установлено моделей: " + missing.length +
-        ". Выбранная модель должна быть установлена и отмечена точкой."
-      : "";
+        ". Модели генерации можно скачать заранее. Модели речи после установки выберите рабочими."
+      : "");
 }
 async function action(callback, spinner) {
   if (busy) return;

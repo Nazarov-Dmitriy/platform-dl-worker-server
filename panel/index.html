@@ -6,10 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Панель управления · Worker</title>
     <script src="/panel/theme.js?v=4"></script>
-    <link rel="stylesheet" href="/panel/app.css?v=4" />
+    <link rel="stylesheet" href="/panel/app.css?v=5" />
     <script defer src="/panel/common.js?v=4"></script>
-    <script defer src="/panel/render.js?v=4"></script>
-    <script defer src="/panel/app.js?v=4"></script>
+    <script defer src="/panel/model-compatibility.js?v=5"></script>
+    <script defer src="/panel/render.js?v=5"></script>
+    <script defer src="/panel/app.js?v=5"></script>
 </head>
 
 <body>
@@ -321,6 +322,11 @@
           <div class="card">
             <div class="card-heading">
               <h2>Каталог моделей</h2>
+            </div>
+            <div class="model-device-context">
+              <label class="field">Подобрать для устройства<select id="modelDeviceSelect"><option value="">Выберите устройство</option></select></label>
+              <div id="modelDeviceResources" class="detail-list"></div>
+              <p class="muted">Совместимость по ресурсам и готовность движка проверяются отдельно. Модели генерации пока можно только установить.</p>
             </div>
             <div id="catalog"></div>
           </div>

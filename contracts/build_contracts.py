@@ -211,10 +211,19 @@ def build():
                       "encoderBusyPercent": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
                       "availableSlots": {"type": "integer", "minimum": 0, "maximum": 64},
                       "paused": {"type": "boolean"}, "workDiskAvailable": {"type": "boolean"}})
+    d["Usage"]["properties"].update({
+        "vramTotalBytes": {"type": ["integer", "null"], "minimum": 0},
+        "vramUsedBytes": {"type": ["integer", "null"], "minimum": 0},
+        "gpuName": {"type": ["string", "null"]},
+        "memoryTotalBytes": BYTES,
+        "deviceOS": {"enum": ["windows", "darwin", "linux"]},
+        "deviceArchitecture": {"enum": ["amd64", "arm64"]},
+        "accelerator": {"enum": ["cpu", "cuda", "metal", "unknown"]},
+    })
     d["ModelFile"] = obj({"path": PATH, "bytes": BYTES, "sha256": HASH,
                           "url": {"type": "string", "format": "uri"}})
     d["ModelEntry"] = obj({"id": TEXT, "revision": TEXT, "executor": TEXT,
-                           "purpose": {"enum": ["RECOGNITION", "TRANSLATION"]},
+                           "purpose": {"enum": ["RECOGNITION", "TRANSLATION", "GENERATION"]},
                            "os": arr({"enum": ["windows", "darwin", "linux"]}, 1, 3, True),
                            "architectures": arr({"enum": ["amd64", "arm64"]}, 1, 2, True),
                            "accelerators": arr({"enum": ["cpu", "cuda", "metal"]}, 1, 3, True),
@@ -223,6 +232,11 @@ def build():
                            "downloadBytes": BYTES, "minimumRamBytes": BYTES, "minimumVramBytes": BYTES,
                            "sha256": HASH, "downloadUrl": {"type": "string", "format": "uri"},
                            "license": TEXT, "descriptionSource": {"type": "string", "format": "uri"}})
+    d["ModelEntry"]["properties"].update({
+        "description": {"type": "string", "maxLength": 2000},
+        "sizeTier": {"enum": ["SMALL", "MEDIUM", "LARGE"]},
+        "memoryRequirementsVerified": {"type": "boolean"},
+    })
     d["ModelEntry"]["properties"]["files"] = arr(ref("ModelFile"), 1, 32)
     # Which job types the model serves. Absent on entries written before the
     # field existed.
