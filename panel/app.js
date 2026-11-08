@@ -848,6 +848,7 @@ function fillSiteSettings(site) {
   state.selectedSite = site;
   $("siteSettingsTitle").textContent = "Настройки сайта «" + site.name + "»";
   $("siteSettingsId").textContent = "ID: " + site.id;
+  $("siteNameInput").value = site.name;
   SITE_OPERATION_FIELDS.forEach(([name, code]) => {
     $("siteOpsForm").elements[name].checked = (site.operations || []).includes(code);
   });
@@ -887,7 +888,7 @@ on("siteOpsForm", "submit", async () => {
     mutate: true,
     headers: { "If-Match": JSON.stringify(String(site.revision)) },
     body: JSON.stringify({
-      name: site.name,
+      name: $("siteNameInput").value.trim(),
       enabled: site.enabled,
       weight: site.weight,
       operations,
