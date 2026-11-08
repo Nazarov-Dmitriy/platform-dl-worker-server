@@ -7,6 +7,8 @@ const invoke = async (channel, ...args) => {
 contextBridge.exposeInMainWorld("processor", {
   ciState: () => invoke("processor:ci-state"),
   ciSave: repos => invoke("processor:ci-save", repos),
+  ciDisk: entry => invoke("processor:ci-disk", entry),
+  ciRetarget: entry => invoke("processor:ci-retarget", entry),
   ciCheck: entry => invoke("processor:ci-check", entry),
   ciInstall: entry => invoke("processor:ci-install", entry),
   ciRegister: (entry, token) => invoke("processor:ci-register", entry, token),

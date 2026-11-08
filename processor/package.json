@@ -15,7 +15,7 @@
     "desktop:pack": "npm run build && node scripts/release.mjs --dir",
     "desktop:dist": "npm run build && node scripts/release.mjs",
     "desktop:test": "node scripts/desktop-smoke.cjs",
-    "ci:test": "node --test scripts/generation-engine.test.cjs scripts/model-compatibility.test.cjs scripts/ci-runner.test.cjs scripts/desktop-settings.test.cjs scripts/desktop-processing.test.cjs scripts/desktop-login.test.cjs",
+    "ci:test": "node --test scripts/generation-engine.test.cjs scripts/model-compatibility.test.cjs scripts/ci-runner.test.cjs scripts/ci-wsl.test.cjs scripts/desktop-settings.test.cjs scripts/desktop-processing.test.cjs scripts/desktop-login.test.cjs",
     "ci:desktop:test": "node scripts/ci-desktop.test.cjs",
     "ci:linux:test": "node scripts/ci-linux.test.cjs"
   },

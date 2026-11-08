@@ -722,6 +722,7 @@ const ciTemplate = $("ciEntryTemplate");
 const ciNotice = $("ciNotice");
 let ciRepos = [];
 let ciBusy = false;
+let ciDiskState = null;
 function ciEntryInput(root) {
   const result = { id: root.dataset.id };
   for (const key of ["repository", "distribution", "directory", "name"]) result[key] = root.querySelector(`[name="${key}"]`).value;
@@ -794,6 +795,7 @@ function renderCiList() {
     ciList.appendChild(node);
   }
   ciDrawDashboard();
+  if (ciDiskState) ciPaintDisk(ciDiskState);
 }
 async function ciAction(notice, callback) {
   if (ciBusy) return;
@@ -801,16 +803,37 @@ async function ciAction(notice, callback) {
   ciList.querySelectorAll("button,input").forEach(input => input.disabled = true);
   $("ciAdd").disabled = true;
   $("ciEnabled").disabled = true;
+  document.querySelectorAll(".ci-retarget").forEach(button => { button.disabled = true; });
   notice.textContent = "Выполняем действие…";
   try { await callback(); }
   catch (error) { notice.textContent = error.message; }
-  finally { ciBusy = false; ciList.querySelectorAll("button,input").forEach(input => input.disabled = false); $("ciAdd").disabled = false; $("ciEnabled").disabled = false; }
+  finally {
+    ciBusy = false;
+    ciList.querySelectorAll("button,input").forEach(input => input.disabled = false);
+    $("ciAdd").disabled = false;
+    $("ciEnabled").disabled = false;
+    void ciRefreshDisk().catch(() => {});
+  }
 }
 function ciCollect() {
   return ciRepos.map(repo => ciEntryInput(ciRootFor(repo.id)));
 }
 function ciReadinessNotice(root, value) {
   root.querySelector(".ci-entry-notice").textContent = value.registered ? "Окружение готово, runner зарегистрирован." : value.installed ? "Runner установлен. Введите токен и зарегистрируйте." : "Окружение готово. Можно установить runner.";
+}
+function ciPaintDisk(disk) {
+  ciDiskState = disk;
+  const broken = Boolean(disk?.needsRetarget || (disk?.supported && !disk.reachable && disk.message));
+  $("ciDisk").hidden = !broken;
+  $("ciDiskStatus").textContent = broken ? (disk.message || "") : "";
+  document.querySelectorAll(".ci-retarget").forEach(button => {
+    button.hidden = !disk?.needsRetarget;
+    button.disabled = !disk?.needsRetarget || ciBusy;
+  });
+}
+async function ciRefreshDisk() {
+  const first = ciRepos[0] && ciRootFor(ciRepos[0].id) ? ciEntryInput(ciRootFor(ciRepos[0].id)) : ciRepos[0];
+  ciPaintDisk(await window.processor.ciDisk({ distribution: first?.distribution || "Worker-CI" }));
 }
 // A status push can be missed while the page is still loading: pull the live state as well,
 // otherwise running builds keep showing as stopped.
@@ -836,6 +859,7 @@ async function ciSync() {
 }
 $("ciTab").onclick = () => {
   void ciSync().catch(() => {});
+  void ciRefreshDisk().catch(() => {});
   form.hidden = true;
   processingForm.hidden = true;
   $("startupCard").hidden = true;
@@ -844,6 +868,15 @@ $("ciTab").onclick = () => {
   $("processingTab").setAttribute("aria-pressed", "false");
   $("ciTab").setAttribute("aria-pressed", "true");
 };
+function ciRetargetNow() {
+  const first = ciRepos[0] && ciRootFor(ciRepos[0].id) ? ciEntryInput(ciRootFor(ciRepos[0].id)) : ciRepos[0];
+  return ciAction(ciNotice, async () => {
+    const disk = await window.processor.ciRetarget({ distribution: first?.distribution || "Worker-CI" });
+    ciPaintDisk(disk);
+    ciNotice.textContent = disk.message || "Путь Linux-диска обновлён.";
+  });
+}
+$("ciRetarget").onclick = () => ciRetargetNow();
 $("ciAdd").onclick = () => {
   const id = "repo-" + Math.random().toString(36).slice(2, 8);
   ciRepos.push({ id, repository: "", distribution: "Worker-CI", directory: "", name: "", enabled: true, status: { phase: "stopped", connected: false, busy: false } });
@@ -859,6 +892,7 @@ ciList.addEventListener("click", event => {
   const id = root.dataset.id;
   const entry = () => ciEntryInput(root);
   const notice = root.querySelector(".ci-entry-notice");
+  if (btn.classList.contains("ci-retarget")) return ciRetargetNow();
   if (btn.classList.contains("ci-check")) return ciAction(notice, async () => ciReadinessNotice(root, await window.processor.ciCheck(entry())));
   if (btn.classList.contains("ci-install")) return ciAction(notice, async () => ciReadinessNotice(root, await window.processor.ciInstall(entry())));
   if (btn.classList.contains("ci-register")) return ciAction(notice, async () => {

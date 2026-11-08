@@ -109,6 +109,11 @@
         <button id="ciTab" type="button" aria-pressed="false">Сборки GitHub</button>
       </nav>
       <form id="ciSettings" hidden>
+        <div id="ciDisk" class="ci-disk" hidden>
+          <span class="ci-warn-icon" aria-hidden="true">!</span>
+          <p id="ciDiskStatus" role="alert"></p>
+          <button id="ciRetarget" class="ci-retarget primary" type="button" hidden>Обновить путь</button>
+        </div>
         <div class="actions">
           <button id="ciAdd" type="button">Добавить репозиторий</button>
         </div>
@@ -121,6 +126,7 @@
             <li><b>Токен GitHub (один раз).</b> Создай fine-grained PAT с правом <code>Administration → Read</code> и добавь его в репозиторий как секрет <code>RUNNER_ADMIN_TOKEN</code>: GitHub → аватар → <b>Settings → Developer settings → Fine-grained tokens</b>.</li>
             <li><b>Репозиторий.</b> Впиши тот, который хочешь собирать на этой машине, в формате <code>владелец/репозиторий</code>. У каждой записи — своя папка runner и своё имя.</li>
             <li>Нажми «Проверить окружение» — должно показать «готово».</li>
+            <li>Если пути к диску WSL не совпадают, сверху появится предупреждение и кнопка «Обновить путь» рядом с проверкой окружения. Runner заново ставить не нужно.</li>
             <li>Если runner не установлен — нажми «Установить runner».</li>
             <li><b>Временный токен.</b> В GitHub открой репозиторий → <b>Settings → Actions → Runners → New self-hosted runner</b> → ОС Linux, x64 → скопируй значение после <code>--token</code>.</li>
             <li>Вставь токен в поле «Временный токен регистрации» и нажми «Зарегистрировать runner».</li>
@@ -144,6 +150,7 @@
             <div class="actions">
               <button class="ci-check" type="button">Проверить окружение</button>
               <button class="ci-install" type="button">Установить runner</button>
+              <button class="ci-retarget primary" type="button" hidden>Обновить путь</button>
             </div>
             <p class="ci-entry-notice hint" role="status"></p>
             <label>Временный токен регистрации GitHub<input name="registrationToken" type="password" autocomplete="off" spellcheck="false"></label>

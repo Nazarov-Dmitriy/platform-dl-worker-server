@@ -2,6 +2,7 @@ delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
 const { spawn } = require("node:child_process");
 const { EventEmitter } = require("node:events");
 const { join } = require("node:path");
+const { inspectWslDisk } = require("./ci-wsl.cjs");
 
 function validateCiSettings(input = {}, platform = process.platform) {
   const repository = String(input.repository || "").trim();
@@ -188,9 +189,9 @@ async function releasePackage(fetcher = fetch) {
 }
 
 class CiRunner extends EventEmitter {
-  constructor({ platform = process.platform, run = execute, spawnProcess = spawn, fetcher = fetch } = {}) {
+  constructor({ platform = process.platform, run = execute, spawnProcess = spawn, fetcher = fetch, inspectDisk = inspectWslDisk } = {}) {
     super();
-    Object.assign(this, { platform, run, spawnProcess, fetcher, child: null, operation: false, stopping: false, state: { phase: "stopped", connected: false, busy: false } });
+    Object.assign(this, { platform, run, spawnProcess, fetcher, inspectDisk, child: null, operation: false, stopping: false, state: { phase: "stopped", connected: false, busy: false } });
   }
   update(values) { Object.assign(this.state, values); this.emit("status", { ...this.state }); return { ...this.state }; }
   async exclusive(callback) {
@@ -199,11 +200,22 @@ class CiRunner extends EventEmitter {
     try { return await callback(); } finally { this.operation = false; }
   }
   settings(input) { return validateCiSettings(input, this.platform); }
+  diskHint(distribution) {
+    if (this.platform !== "win32" || !this.inspectDisk) return "";
+    try {
+      const disk = this.inspectDisk(distribution, { platform: this.platform });
+      return disk.needsRetarget || (!disk.reachable && disk.message) ? disk.message : "";
+    } catch { return ""; }
+  }
   async check(input) {
     const settings = this.settings(input);
-    const result = await this.run(command(settings, CHECK, [], this.platform));
+    let result;
+    try { result = await this.run(command(settings, CHECK, [], this.platform)); }
+    catch (error) {
+      throw Error(this.diskHint(settings.distribution) || error.message);
+    }
     const messages = { 41: "Нужен Linux x64.", 42: "Runner должен работать от обычного Linux-пользователя, не root.", 43: "Не хватает зависимостей: " + (result.output.match(/missing:([a-z0-9]+)/)?.[1] || "проверьте инструкцию") + ".", 44: "Нужна Java 21.", 45: "Docker Linux недоступен текущему пользователю.", 46: "Нужны Docker Compose и Buildx.", 47: "Нужна пользовательская сессия systemd. Проверьте подготовку Worker-CI и перезапустите дистрибутив." };
-    if (result.code !== 0) throw Error(messages[result.code] || "Linux не готов. Установите Ubuntu в WSL и зависимости по инструкции.");
+    if (result.code !== 0) throw Error(messages[result.code] || this.diskHint(settings.distribution) || "Linux не готов. Установите Ubuntu в WSL и зависимости по инструкции.");
     const registered = result.output.includes("registered");
     if (registered && result.output.match(/repository:([^\r\n]+)/)?.[1]?.replace(/\/$/, "").toLowerCase() !== ("https://github.com/" + settings.repository).toLowerCase())
       throw Error("Runner в этой папке зарегистрирован для другого репозитория. Укажите другую отдельную папку.");

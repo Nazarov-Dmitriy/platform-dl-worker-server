@@ -767,6 +767,11 @@ tr:last-child td {
   font-size: 13px;
   margin-bottom: 20px;
 }
+section[data-panel="sites"] hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
 .global-error {
   background: var(--danger-bg);
   color: var(--danger);

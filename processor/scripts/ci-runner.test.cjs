@@ -21,6 +21,14 @@ test("Windows uses explicit WSL distro; path and values stay positional argument
   assert.deepEqual(spec.args, ["--distribution", "Ubuntu", "--exec", "bash", "-c", "constant script", "worker-ci", input.directory, "extra"]);
   assert.equal(command(input, "constant", [], "linux").executable, "/bin/bash");
 });
+test("a moved WSL disk asks to update the path instead of reinstalling the runner", async () => {
+  const runner = new CiRunner({
+    platform: "win32",
+    run: async () => ({ code: 1, output: "" }),
+    inspectDisk: () => ({ needsRetarget: true, reachable: false, message: "Пути не совпадают: диск WSL смотрит в старую папку. Runner уже установлен — обновите путь." }),
+  });
+  await assert.rejects(runner.check(input), /Пути не совпадают/);
+});
 test("preflight errors are actionable and never expose raw stderr or server output", async () => {
   for (const code of [41, 42, 43, 44, 45, 46, 99]) {
     const runner = new CiRunner({ platform: "win32", run: async () => ({ code, output: "secret-example" }) });

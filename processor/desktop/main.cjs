@@ -39,6 +39,7 @@ const {
   detectGpu,
 } = require("./readiness.cjs");
 const { CiRunner, validateCiSettings } = require("./ci-runner.cjs");
+const { inspectWslDisk, retargetWslDisk } = require("./ci-wsl.cjs");
 let ciRepos = [{ id: "worker-build", repository: "Nazarov-Dmitriy/dream-breasts-server", distribution: "Worker-CI", directory: "/home/worker/worker-ci-runner", name: "worker-build", enabled: true }];
 const ciRunners = new Map();
 function ciRunnerFor(id) {
@@ -668,6 +669,12 @@ else {
         catch (error) { runner.update({ phase: "error", connected: false, busy: false, message: error.message }); }
       }
       return { repos: ciRepos.map(entry => ({ ...entry, status: ciRunners.get(entry.id)?.state || { phase: "stopped", connected: false, busy: false } })) };
+    });
+    handle("processor:ci-disk", input => inspectWslDisk(String(input?.distribution || ciRepos[0]?.distribution || "Worker-CI")));
+    handle("processor:ci-retarget", input => {
+      const distribution = String(input?.distribution || ciRepos[0]?.distribution || "Worker-CI");
+      const busy = [...ciRunners.values()].some(runner => runner.child || ["idle", "busy", "connecting"].includes(runner.state.phase));
+      return retargetWslDisk(distribution, { busy });
     });
     handle("processor:ci-check", input => ciRunnerFor(input.id).check(input));
     handle("processor:ci-install", input => ciRunnerFor(input.id).install(input));
