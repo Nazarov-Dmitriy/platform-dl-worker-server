@@ -113,8 +113,11 @@ func supportedByAny(tx *sql.Tx, r JobRequest) (bool, error) {
 	}
 	return false, rows.Err()
 }
+func (s *Store) admissionHealthy(u Usage) bool {
+	return !u.Paused && u.WorkDiskAvailable && u.CPUPercent < s.config.CPUThreshold && u.MemoryUsedPercent < s.config.MemoryThreshold && u.DiskUsedPercent < s.config.DiskThreshold && u.MemoryPressure == "NORMAL" && u.FreeMemoryBytes >= s.config.MinimumFreeMemory && (u.EncoderBusyPercent == nil || *u.EncoderBusyPercent < s.config.CPUThreshold)
+}
 func (s *Store) admissible(u Usage) bool {
-	return !u.Paused && u.WorkDiskAvailable && u.AvailableSlots > 0 && u.CPUPercent < s.config.CPUThreshold && u.MemoryUsedPercent < s.config.MemoryThreshold && u.DiskUsedPercent < s.config.DiskThreshold && u.MemoryPressure == "NORMAL" && u.FreeMemoryBytes >= s.config.MinimumFreeMemory && (u.EncoderBusyPercent == nil || *u.EncoderBusyPercent < s.config.CPUThreshold)
+	return s.admissionHealthy(u) && u.AvailableSlots > 0
 }
 func checkDevice(tx *sql.Tx, p Principal, session string) error {
 	var n int
@@ -215,9 +218,11 @@ func (s *Store) Heartbeat(ctx context.Context, p Principal, session string, caps
 		if e := tx.QueryRow("SELECT ready_since,last_seen FROM devices WHERE id=?", p.ID).Scan(&ready, &seen); e != nil {
 			return e
 		}
-		if !s.admissible(usage) {
+		// A full slot budget means the device is busy, not unhealthy. Keep readiness
+		// so the next queued job can start as soon as a slot returns.
+		if !s.admissionHealthy(usage) {
 			ready = 0
-		} else if ready == 0 || now.UnixMilli()-seen > s.config.OnlineTTL.Milliseconds() {
+		} else if usage.AvailableSlots > 0 && (ready == 0 || now.UnixMilli()-seen > s.config.OnlineTTL.Milliseconds()) {
 			ready = now.UnixMilli()
 		}
 		_, e := tx.Exec("UPDATE devices SET last_seen=?,ready_since=?,capabilities=?,usage=? WHERE id=?", now.UnixMilli(), ready, string(encode(caps)), string(encode(usage)), p.ID)
@@ -273,6 +278,11 @@ func (s *Store) Offer(ctx context.Context, p Principal, session string) (*Offer,
 		if booked >= usage.AvailableSlots {
 			return nil
 		}
+		var generationBusy int
+		if e := tx.QueryRow(`SELECT count(*) FROM assignments a JOIN jobs j ON j.seq=a.job_seq
+			WHERE a.device_id=? AND a.state!='CLOSED' AND json_extract(j.request,'$.type')='media.generate'`, p.ID).Scan(&generationBusy); e != nil {
+			return e
+		}
 
 		var priority int
 		if e := tx.QueryRow("SELECT priority FROM devices WHERE id=?", p.ID).Scan(&priority); e != nil {
@@ -298,6 +308,9 @@ func (s *Store) Offer(ctx context.Context, p Principal, session string) (*Offer,
 			if e = json.Unmarshal(raw, &c.request); e != nil {
 				rows.Close()
 				return e
+			}
+			if c.request.Type == "media.generate" && generationBusy > 0 {
+				continue
 			}
 			if _, ok := candidates[c.site]; !ok && compatible(c.request, caps, true) && usage.FreeDiskBytes >= c.request.Source.Bytes && usage.FreeDiskBytes-c.request.Source.Bytes >= c.request.MaxOutputBytes && !preferredCanRun(preferred, c.request) {
 				copy := c

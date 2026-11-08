@@ -144,3 +144,72 @@ func TestGenerationRejectsUnknownInputsAndUnavailableModels(t *testing.T) {
 		t.Fatal("unavailable model was accepted")
 	}
 }
+func TestGenerationQueuesWhileDeviceIsBusy(t *testing.T) {
+	s, _, _ := openTest(t)
+	site, err := s.CreateSite(testContext, "generation-queue", 1, []string{"media.generate"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	device, session := testDevice(t, s)
+	model := generationTestModel("selected")
+	usage := testUsage()
+	usage.AvailableSlots = 2
+	if err = s.Heartbeat(testContext, device, session, generationTestCaps(model), usage); err != nil {
+		t.Fatal(err)
+	}
+	first := generationTestJob(model)
+	if _, _, err = s.Submit(testContext, site.ID, encode(first)); err != nil {
+		t.Fatal(err)
+	}
+	assigned := offer(t, s, device, session)
+	if _, err = s.Accept(testContext, device, session, assigned.Fence, UUID()); err != nil {
+		t.Fatal(err)
+	}
+	busy := usage
+	busy.AvailableSlots = 0
+	if err = s.Heartbeat(testContext, device, session, generationTestCaps(model), busy); err != nil {
+		t.Fatal(err)
+	}
+	page, err := s.GenerationModels(testContext, site.ID)
+	if err != nil || len(page["models"].([]GenerationModel)) != 1 {
+		t.Fatal("busy model was hidden", err, page)
+	}
+	second := generationTestJob(model)
+	view, created, err := s.Submit(testContext, site.ID, encode(second))
+	if err != nil || !created || view.Status != "QUEUED" {
+		t.Fatalf("second job was not queued: %+v created=%v err=%v", view, created, err)
+	}
+	if next, err := s.Offer(testContext, device, session); err != nil || next != nil {
+		t.Fatal("offered while the device has no free slot", next, err)
+	}
+	if err = s.Heartbeat(testContext, device, session, generationTestCaps(model), usage); err != nil {
+		t.Fatal(err)
+	}
+	if next, err := s.Offer(testContext, device, session); err != nil || next != nil {
+		t.Fatal("second generation was offered onto a busy device", next, err)
+	}
+	waiting, err := s.Get(testContext, site.ID, second.ID)
+	if err != nil || waiting.Status != "QUEUED" {
+		t.Fatalf("queued job changed: %+v %v", waiting, err)
+	}
+	raw := encode(map[string]string{"protocolVersion": "2.0", "requestId": UUID(), "reason": "USER_CANCEL"})
+	cancelled, err := s.Control(testContext, site.ID, second.ID, "cancel", raw)
+	if err != nil || cancelled.Status != "CANCELLED" {
+		t.Fatalf("queued cancel failed: %+v %v", cancelled, err)
+	}
+	running, err := s.Get(testContext, site.ID, first.ID)
+	if err != nil || running.Status != "RUNNING" {
+		t.Fatalf("cancel disturbed the running generation: %+v %v", running, err)
+	}
+	third := generationTestJob(model)
+	if view, _, err = s.Submit(testContext, site.ID, encode(third)); err != nil || view.Status != "QUEUED" {
+		t.Fatal(view, err)
+	}
+	if err = s.Fail(testContext, device, session, assigned.Fence, APIError{Code: "TEST_FINISHED", Message: "test terminal result", Permanent: true}, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	next := offer(t, s, device, session)
+	if next.JobID != third.ID {
+		t.Fatalf("freed device offered %s, want %s", next.JobID, third.ID)
+	}
+}

@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -151,10 +150,10 @@ func generationProfilesValid(models []GenerationModel) bool {
 	return true
 }
 
-// No model-specific rules: a whole advertised profile must satisfy the request.
+// Installed models stay listed while the device is online, including when it is busy.
+// Slot, CPU and memory admission is enforced later, when a queued job is offered.
 func (s *Store) readyGenerationModels(tx *sql.Tx) ([]GenerationModel, error) {
-	rows, err := tx.Query(`SELECT d.capabilities,d.usage,d.last_seen,d.ready_since,
- (SELECT count(*) FROM assignments a WHERE a.device_id=d.id AND a.state!='CLOSED')
+	rows, err := tx.Query(`SELECT d.capabilities,d.usage,d.last_seen
  FROM devices d WHERE d.enabled=1 AND d.deleted=0 AND d.session_id!=''
  AND EXISTS(SELECT 1 FROM tokens t WHERE t.id=d.session_token AND t.principal_id=d.id AND t.purpose='DEVICE' AND t.revoked=0)`)
 	if err != nil {
@@ -167,9 +166,8 @@ func (s *Store) readyGenerationModels(tx *sql.Tx) ([]GenerationModel, error) {
 	now := s.now()
 	for rows.Next() {
 		var capsRaw, usageRaw string
-		var last, ready int64
-		var booked int
-		if err = rows.Scan(&capsRaw, &usageRaw, &last, &ready, &booked); err != nil {
+		var last int64
+		if err = rows.Scan(&capsRaw, &usageRaw, &last); err != nil {
 			return nil, err
 		}
 		var caps []Capability
@@ -177,7 +175,7 @@ func (s *Store) readyGenerationModels(tx *sql.Tx) ([]GenerationModel, error) {
 		if json.Unmarshal([]byte(capsRaw), &caps) != nil || json.Unmarshal([]byte(usageRaw), &usage) != nil {
 			continue
 		}
-		if last == 0 || now.UnixMilli()-last > s.config.OnlineTTL.Milliseconds() || ready == 0 || now.Sub(time.UnixMilli(ready)) < s.config.AdmissionStable || !s.admissible(usage) || booked >= usage.AvailableSlots {
+		if last == 0 || now.UnixMilli()-last > s.config.OnlineTTL.Milliseconds() || usage.Paused || !usage.WorkDiskAvailable {
 			continue
 		}
 		for _, cap := range caps {

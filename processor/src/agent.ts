@@ -176,7 +176,7 @@ export class Agent {
       });
     }
     const generationModels = this.journal.state.models.filter(m => m.state === "ACTIVE" && m.purpose === "GENERATION" && this.readyModel(m)).map(m => generationProfile(m)).filter(Boolean);
-    if (generationModels.length && ![...this.running.values()].some(r => r.job?.type === "media.generate")) out.push({
+    if (generationModels.length) out.push({
       code: "media.generate", recognitionLanguages: [], translationDirections: [], autoDetect: false,
       formats: ["png"], availability: "ONLINE", profilePolicies: [], generationModels,
     });
@@ -336,14 +336,35 @@ export class Agent {
       if (b.jobId !== b.job.id) throw new Error("OFFER_JOB_MISMATCH");
       const usage = this.usage();
       const job = b.job;
-      const selectedGeneration = job.type === "media.generate" && this.journal.state.models.find(m => m.id === job.params.modelId && m.revision === job.params.modelRevision && m.state === "ACTIVE" && this.readyModel(m));
-      const selectedProfile = selectedGeneration && generationProfile(selectedGeneration);
-      const canGenerate = !!selectedProfile && selectedProfile.profileRevision === job.params.profileRevision && generationInputsValid(selectedProfile, job.params.inputs) && (!job.source || selectedProfile.acceptsReference) && ![...this.running.values()].some(r => r.job?.type === "media.generate");
-      const canRun = canGenerate ||
+      const selectedGeneration =
+        job.type === "media.generate" &&
+        this.journal.state.models.find(
+          (m) =>
+            m.id === job.params.modelId &&
+            m.revision === job.params.modelRevision &&
+            m.state === "ACTIVE" &&
+            this.readyModel(m),
+        );
+      const selectedProfile =
+        selectedGeneration && generationProfile(selectedGeneration);
+      const isGeneration = job.type === "media.generate";
+      const generationValid =
+        !!selectedProfile &&
+        selectedProfile.profileRevision === job.params.profileRevision &&
+        generationInputsValid(selectedProfile, job.params.inputs) &&
+        (!job.source || selectedProfile.acceptsReference);
+      const generationBusy = [...this.running.values()].some(
+        (r) => r.job?.type === "media.generate",
+      );
+      const canGenerate =
+        generationValid && !generationBusy;
+      const canRun =
+        canGenerate ||
         (this.config.testExecutor && job.type === "media.transcode") ||
         (this.ffmpeg && job.type === "media.transcode") ||
         (this.hasRecognition() &&
-          (job.type === "media.transcribe" || job.type === "media.subtitles"));
+          (job.type === "media.transcribe" ||
+            job.type === "media.subtitles"));
       const ready =
         canRun &&
         this.running.size < usage.availableSlots &&
@@ -355,7 +376,7 @@ export class Agent {
             jobId: b.jobId,
             fence: b.fence,
             error: {
-              code: canRun
+              code: canRun || (isGeneration && generationValid && generationBusy)
                 ? "RESOURCES_UNAVAILABLE"
                 : job.type === "media.transcode"
                   ? "FFMPEG_UNAVAILABLE"

@@ -63,6 +63,7 @@ test("generation executes a native child, uploads a PNG and awaits publication w
     const running: any = { job, lease, processing: { generationMode: mode, cpuThreads: 4, maxParallel: 2 }, ending: false, progress: 0, activity: 0, grants: [], acks: new Set(), transferAbort: new AbortController(),
       attempt: { jobId: job.id, fence: { assignmentId: randomUUID(), generation: 1, dispatcherEpoch: randomUUID() }, started: true } };
     journal.state.attempts.push(running.attempt); agent.running.set(running.attempt.fence.assignmentId, running);
+    assert.ok(agent.caps().some(c => c.code === "media.generate"), "installed model stays advertised while generation is running");
     await agent.runJob(running);
     assert.equal(frames.some(f => f.type === "job.source.request"), withReference);
     const artifact = frames.find(f => f.type === "job.artifact.propose").body.artifact;
