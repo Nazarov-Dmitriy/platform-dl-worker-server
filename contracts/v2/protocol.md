@@ -353,7 +353,7 @@ ModelEntry может включать optional files (ModelFile): path, bytes, 
 
 Windows startup is a local application preference. CONFIGURE does not require autostart; legacy autostart values are accepted but ignored by processors 0.7.4+.
 
-UPLOAD transfer requests include uploadPrefix, the exact object prefix accepted by the dispatcher. Sites append the manifest-relative path unchanged.
+UPLOAD transfer requests include uploadPrefix, the exact object prefix accepted by the dispatcher. Sites append the manifest-relative path unchanged. The prefix may be up to 1000 characters (same as objectName) so an owner processingPrefix plus attempt/fence still fits.
 
 
 ### Хранение временного результата по владельцу

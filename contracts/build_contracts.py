@@ -127,7 +127,8 @@ def build():
         obj({"id": UUID, "kind": const("SOURCE"), "fence": ref("Fence"),
              "sourceRevision": UUID}),
         obj({"id": UUID, "kind": const("UPLOAD"), "fence": ref("Fence"),
-             "uploadPrefix": {**PATH, "pattern": PATH["pattern"][:-1] + "/$"},
+             "uploadPrefix": {"type": "string", "maxLength": 1000,
+                              "pattern": PATH["pattern"][:-1] + "/$"},
              "artifact": ref("Artifact")}),
     ]}
     d["Link"] = obj({"path": PATH, "objectName": TEXT, "url": {"type": "string", "format": "uri"},

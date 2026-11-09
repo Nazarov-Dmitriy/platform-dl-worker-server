@@ -25,6 +25,30 @@ func TestOwnedStoragePrefixIsValidatedAndBoundToAttempt(t *testing.T) {
 	}
 }
 
+func TestChannelOwnerUploadPrefixFitsTransferPage(t *testing.T) {
+	s, _, _ := openTest(t)
+	req := testJob(t)
+	req.ID = "197d8f8a-d01d-4f4f-8688-420c2e9324b5"
+	req.ProcessingPrefix = "companies/osnovnaya-kompaniya/channels/e2e-acceptance-uuid-review-offerdeletion-1122be43/posts/novyj-vypusk-58872511/processing/"
+	f := Fence{AssignmentID: "9e6b4de3-bcf2-412d-8518-57628bbcbf8b", Generation: 1,
+		DispatcherEpoch: "34461a2c-71aa-4182-91ea-7791702f03ea"}
+	prefix := uploadPrefix(UUID(), req.ID, f, req)
+	if len(prefix) != 241 {
+		t.Fatalf("fixture length %d", len(prefix))
+	}
+	art := testArtifact(t, f)
+	page := map[string]any{
+		"protocolVersion": "2.0",
+		"requests": []TransferRequest{{
+			ID: UUID(), Kind: "UPLOAD", Fence: f, UploadPrefix: prefix, Artifact: &art,
+		}},
+		"nextCursor": nil,
+	}
+	if err := s.validator.Check("TransferPage", encode(page)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestOwnedUploadGrantCannotEscapeItsDeclaredOwnerOrFence(t *testing.T) {
 	req := testJob(t)
 	req.ProcessingPrefix = "companies/company/channels/channel/posts/post/processing/"

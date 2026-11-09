@@ -921,7 +921,7 @@
             },
             "uploadPrefix": {
               "type": "string",
-              "maxLength": 240,
+              "maxLength": 1000,
               "pattern": "^(?!.*(?:^|/)\\.{1,2}(?:/|$))[A-Za-z0-9_-]+(?:[./][A-Za-z0-9_-]+)*/$"
             },
             "artifact": {
