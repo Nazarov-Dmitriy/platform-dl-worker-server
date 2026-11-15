@@ -50,6 +50,17 @@ import {
   type Cue,
   type Transcript,
 } from "./speech.js";
+import {
+  applyTranslatedCues,
+  cloneDocument,
+  listCues,
+  parseVttDocument,
+  serializeVttDocument,
+  translationBatchCues,
+  translationPayloads,
+  translationShapeRetries,
+  type VttDocument,
+} from "./vtt.js";
 type Running = {
   attempt: Attempt;
   job?: any;
@@ -146,16 +157,16 @@ export class Agent {
         m.purpose === "TRANSLATION" &&
         this.readyModel(m),
     );
+    const langs = [...new Set(rec.flatMap((m) => m.recognitionLanguages))];
+    langs.sort();
+    const pairs = [
+      ...new Map(
+        tr
+          .flatMap((m) => m.translationDirections)
+          .map((p) => [p.source + ":" + p.target, p]),
+      ).values(),
+    ];
     if (rec.length) {
-      const langs = [...new Set(rec.flatMap((m) => m.recognitionLanguages))];
-      langs.sort();
-      const pairs = [
-        ...new Map(
-          tr
-            .flatMap((m) => m.translationDirections)
-            .map((p) => [p.source + ":" + p.target, p]),
-        ).values(),
-      ];
       out.push({
         code: "media.transcribe",
         recognitionLanguages: langs,
@@ -165,14 +176,21 @@ export class Agent {
         availability: "ONLINE",
         profilePolicies: [],
       });
+    }
+    if (rec.length || tr.length) {
+      const inputKinds = [
+        ...(rec.length ? ["video"] : []),
+        ...(tr.length ? ["vtt"] : []),
+      ];
       out.push({
         code: "media.subtitles",
-        recognitionLanguages: langs,
+        recognitionLanguages: rec.length ? langs : [],
         translationDirections: pairs,
-        autoDetect: true,
+        autoDetect: !!rec.length,
         formats: ["vtt"],
         availability: "ONLINE",
         profilePolicies: [],
+        inputKinds,
       });
     }
     const generationModels = this.journal.state.models.filter(m => m.state === "ACTIVE" && m.purpose === "GENERATION" && this.readyModel(m)).map(m => generationProfile(m)).filter(Boolean);
@@ -189,6 +207,17 @@ export class Agent {
         m.purpose === "RECOGNITION" &&
         this.readyModel(m),
     );
+  }
+  hasTranslation() {
+    return this.journal.state.models.some(
+      (m) =>
+        m.state === "ACTIVE" &&
+        m.purpose === "TRANSLATION" &&
+        this.readyModel(m),
+    );
+  }
+  vttTranslateJob(job: any) {
+    return job?.type === "media.subtitles" && job?.params?.input === "vtt";
   }
   usage() {
     const usage = this.resources.sample();
@@ -358,13 +387,15 @@ export class Agent {
       );
       const canGenerate =
         generationValid && !generationBusy;
+      const vttTranslate = this.vttTranslateJob(job);
       const canRun =
         canGenerate ||
         (this.config.testExecutor && job.type === "media.transcode") ||
         (this.ffmpeg && job.type === "media.transcode") ||
+        (vttTranslate && this.hasTranslation()) ||
         (this.hasRecognition() &&
           (job.type === "media.transcribe" ||
-            job.type === "media.subtitles"));
+            (job.type === "media.subtitles" && !vttTranslate)));
       const ready =
         canRun &&
         this.running.size < usage.availableSlots &&
@@ -833,7 +864,9 @@ export class Agent {
       job.params?.subtitles ||
       job.params?.includeOriginal ||
       job.params?.targetLanguages;
-    if (wantSubs || job.type === "media.transcribe") {
+    if (this.vttTranslateJob(job)) {
+      await this.addVttTranslation(r, job, dest, outDir, files, steps);
+    } else if (wantSubs || job.type === "media.transcribe") {
       await this.addSpeech(
         r,
         job,
@@ -951,6 +984,84 @@ export class Agent {
           reject(new Error(r.ending ? "CANCELLED" : "SPEECH_EXECUTOR_EXITED"));
       });
     });
+  }
+  async addVttTranslation(
+    r: Running,
+    job: any,
+    source: string,
+    outDir: string,
+    files: any[],
+    steps: any[],
+  ) {
+    this.log("SUBTITLE_TRANSLATE");
+    r.stage = "ANALYZING";
+    const sourceLanguage = job.params?.sourceLanguage;
+    const targets: string[] = [...(job.params?.targetLanguages || [])];
+    if (!sourceLanguage || sourceLanguage === "auto" || !targets.length)
+      throw new TransferError("INVALID_REQUEST", "VTT translation needs an explicit source language and targets", false, true);
+    if (targets.includes(sourceLanguage))
+      throw new TransferError("INVALID_REQUEST", "Cannot translate a subtitle track onto its source language", false, true);
+    let doc: VttDocument;
+    try {
+      doc = parseVttDocument(readFileSync(source, "utf8"));
+    } catch (e) {
+      const code = errorCode(e, "INVALID_SUBTITLE_SOURCE");
+      throw new TransferError(code, "Subtitle source is not a usable VTT track", false, true);
+    }
+    const cues = listCues(doc);
+    r.stage = "TRANSLATING";
+    mkdirSync(join(outDir, "subtitles"), { recursive: true, mode: 0o700 });
+    for (const lang of targets) {
+      if (r.ending || !r.lease.valid()) throw new Error("CANCELLED");
+      try {
+        const model = selectTranslation(this.journal.state.models, sourceLanguage, lang);
+        if (!model) throw new Error("TRANSLATION_UNAVAILABLE");
+        let translatedDoc: VttDocument | undefined;
+        let lastError: unknown;
+        for (let attempt = 0; attempt <= translationShapeRetries; attempt++) {
+          if (r.ending || !r.lease.valid()) throw new Error("CANCELLED");
+          try {
+            const raw = await this.speechTask(r, {
+              operation: "translate",
+              cues: translationPayloads(cues),
+              source: sourceLanguage,
+              target: lang,
+              model,
+              batchSize: translationBatchCues,
+            });
+            const items = (Array.isArray(raw) ? raw : []).map((item: any, i: number) => ({
+              id: item.id || cues[i]?.implicitId,
+              text: item.text,
+            }));
+            translatedDoc = applyTranslatedCues(cloneDocument(doc), items);
+            lastError = undefined;
+            break;
+          } catch (e) {
+            lastError = e;
+            if (errorCode(e, "TRANSLATE_FAILED") !== "TRANSLATION_SHAPE_MISMATCH") throw e;
+          }
+        }
+        if (!translatedDoc) throw lastError || new Error("TRANSLATION_SHAPE_MISMATCH");
+        const path = "subtitles/" + lang + ".vtt";
+        writeUtf8(join(outDir, path), serializeVttDocument(translatedDoc));
+        files.push(await fileEntry(join(outDir, path), path, "SUBTITLE", "text/vtt", lang));
+        steps.push({ name: "subtitles", language: lang, status: "SUCCEEDED" });
+      } catch (e) {
+        const code = errorCode(e, "TRANSLATE_FAILED");
+        steps.push({
+          name: "subtitles",
+          language: lang,
+          status: "FAILED",
+          error: {
+            code,
+            message: "Subtitle translation failed for " + lang,
+            permanent: false,
+          },
+        });
+      }
+    }
+    if (!files.some((f) => f.kind === "SUBTITLE"))
+      throw new TransferError("TRANSLATE_FAILED", "No subtitle languages were translated", false, false);
   }
   async addSpeech(
     r: Running,

@@ -51,10 +51,19 @@ def semantic(definition, value):
         semantic("Manifest", value["manifest"])
         assert sha256(canonical(value["manifest"])).hexdigest() == value["manifestSha256"], "Manifest hash mismatch"
     elif definition == "JobRequest":
-        sub = value["params"].get("subtitles") if value["type"] == "media.transcode" else (
-            value["params"] if value["type"] == "media.subtitles" else None)
-        if sub is not None:
-            assert sub["includeOriginal"] or sub["targetLanguages"], "No requested subtitle output"
+        if value["type"] == "media.subtitles" and value["params"].get("input") == "vtt":
+            assert value["params"]["sourceLanguage"] != "auto", "VTT translation cannot autodetect language"
+            assert value["params"]["sourceLanguage"] not in value["params"]["targetLanguages"], "Source language cannot be a translation target"
+            assert value["source"]["kind"] == "FILE" and value["source"]["contentType"] == "text/vtt", "VTT jobs need a FILE text/vtt source"
+            assert value["source"]["bytes"] <= 2097152, "VTT source exceeds maxSubtitleSourceBytes"
+            assert "speech" not in value["params"], "VTT translation does not accept speech recognition params"
+        else:
+            sub = value["params"].get("subtitles") if value["type"] == "media.transcode" else (
+                value["params"] if value["type"] == "media.subtitles" else None)
+            if sub is not None:
+                assert sub["includeOriginal"] or sub["targetLanguages"], "No requested subtitle output"
+                if value["type"] == "media.subtitles":
+                    assert value["source"].get("contentType") != "text/vtt", "Video subtitle jobs cannot use a VTT source"
         if value.get("source", {}).get("kind") == "HLS":
             parts = value["source"]["files"]
             assert len({p["path"] for p in parts}) == len(parts), "Duplicate source path"
@@ -154,6 +163,10 @@ def main():
     assert defaults["transferRetriesAfterFirstAttempt"] == len(defaults["transferRetryBackoffSeconds"])
     assert defaults["maxManifestFiles"] == definitions["Manifest"]["properties"]["files"]["maxItems"]
     assert defaults["transferGrantPageSize"] == definitions["TransferGrant"]["properties"]["links"]["maxItems"]
+    assert defaults["maxSubtitleSourceBytes"] == 2097152
+    assert defaults["maxSubtitleCues"] == 5000
+    assert defaults["translationBatchCues"] == 16
+    assert defaults["translationShapeRetries"] == 2
     print(f"OK: schemas, {len(operations)} HTTP operations/references, {counts}, "
           f"{len(scenarios['traces'])} state traces, {len(scenarios['leaseCases'])} lease cases, "
           f"{len(scenarios['monotonicDeadlineCases'])} delayed-grant cases")

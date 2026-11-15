@@ -2,7 +2,10 @@
 
 Этап 7, 2026-10-13. Node.js 22.12+ (закреплено в package.json engines и образе тестов
 `node:22.19.0-bookworm-slim`). Без `ffmpeg`/`ffprobe` нет media.transcode.
-`media.transcribe`/`media.subtitles` появляются после ACTIVE моделей.
+`media.transcribe` появляется после ACTIVE модели распознавания.
+`media.subtitles` с `inputKinds=video` — после ASR; `inputKinds=vtt` — после ACTIVE
+модели перевода, без ffmpeg/whisper. Видео-ветка `media.subtitles` по-прежнему
+требует распознавание.
 `testExecutor: true` только для транспорта и никогда не даёт READY.
 
 ## Подготовка

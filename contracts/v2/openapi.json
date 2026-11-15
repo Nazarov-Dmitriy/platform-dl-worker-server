@@ -52,6 +52,66 @@
         }
       }
     },
+    "/api/v2/site/generation/models": {
+      "get": {
+        "operationId": "getGenerationModels",
+        "security": [
+          {
+            "SiteToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/GenerationModelPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ]
+      }
+    },
     "/api/v2/site/jobs": {
       "post": {
         "operationId": "submitJob",
@@ -2314,48 +2374,6 @@
         "responses": {
           "204": {
             "description": "Session revoked"
-          }
-        }
-      }
-    },
-    "/api/v2/site/generation/models": {
-      "get": {
-        "operationId": "getGenerationModels",
-        "security": [
-          {
-            "SiteToken": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "See normative protocol.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "./protocol.schema.json#/$defs/GenerationModelPage"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "See normative protocol.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "./protocol.schema.json#/$defs/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "See normative protocol.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "./protocol.schema.json#/$defs/Error"
-                }
-              }
-            }
           }
         }
       }

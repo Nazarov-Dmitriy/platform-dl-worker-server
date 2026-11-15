@@ -5,6 +5,49 @@ function node(tag, text, cls) {
   if (cls) n.className = cls;
   return n;
 }
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.append(area);
+  area.select();
+  document.execCommand("copy");
+  area.remove();
+}
+function tokenCode(token) {
+  const row = node("div", null, "token-row");
+  const code = node("code", token, "code");
+  const button = node("button", null, "button icon-only quiet token-copy");
+  button.type = "button";
+  button.title = "Скопировать";
+  button.setAttribute("aria-label", "Скопировать токен");
+  button.innerHTML = icon("copy");
+  let resetTimer = 0;
+  button.addEventListener("click", async () => {
+    try {
+      await copyText(token);
+    } catch {
+      return;
+    }
+    button.innerHTML = icon("check");
+    button.title = "Скопировано";
+    button.setAttribute("aria-label", "Токен скопирован");
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => {
+      button.innerHTML = icon("copy");
+      button.title = "Скопировать";
+      button.setAttribute("aria-label", "Скопировать токен");
+    }, 1500);
+  });
+  row.append(code, button);
+  return row;
+}
 function badge(text, tone = "") {
   const n = node("span", null, "badge " + tone);
   n.append(node("span", null, "dot"), document.createTextNode(text));

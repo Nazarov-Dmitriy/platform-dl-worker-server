@@ -2,8 +2,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { InstalledModel } from "./journal.js";
+import { listCues, parseVttDocument } from "./vtt.js";
 
-export type Cue = { start: number; end: number; text: string };
+export type Cue = { start: number; end: number; text: string; id?: string };
 export type Transcript = { language: string; text: string; cues: Cue[] };
 
 export function selectRecognition(
@@ -195,34 +196,12 @@ export function parseWhisperJson(raw: any, requested = "auto"): Transcript {
 }
 
 export function parseVtt(raw: string): Cue[] {
-  const cues: Cue[] = [];
-  const blocks = raw
-    .replace(/^\uFEFF/, "")
-    .replace(/\r\n?/g, "\n")
-    .split(/\n\n+/);
-  for (const block of blocks) {
-    const lines = block.trim().split(/\n/);
-    const time = lines.find((l) => l.includes("-->"));
-    if (!time) continue;
-    const [start, end] = time.split("-->").map((s) => parseStamp(s.trim()));
-    const text = lines
-      .filter((l) => !l.includes("-->") && !/^\d+$/.test(l) && l !== "WEBVTT")
-      .join(" ")
-      .trim();
-    if (text) cues.push({ start, end, text });
-  }
-  return cues;
-}
-
-function parseStamp(v: string) {
-  const m = /(\d+):(\d+):(\d+)[.,](\d+)/.exec(v);
-  if (!m) return 0;
-  return (
-    Number(m[1]) * 3600 +
-    Number(m[2]) * 60 +
-    Number(m[3]) +
-    Number(m[4].padEnd(3, "0").slice(0, 3)) / 1000
-  );
+  return listCues(parseVttDocument(raw)).map((c) => ({
+    start: c.start,
+    end: c.end,
+    text: c.text,
+    id: c.id || undefined,
+  }));
 }
 
 export function formatStamp(seconds: number) {
@@ -261,10 +240,13 @@ export function translateCues(
         code: "TRANSLATION_UNAVAILABLE",
       });
     const table = pack.map?.[target] || {};
-    return cues.map((c) => ({
+    const mapped = cues.map((c) => ({
       ...c,
-      text: table[c.text] || `[${target}] ${c.text}`,
+      text: table[c.text] || table[c.id || ""] || `[${target}] ${c.text}`,
     }));
+    if (pack.dropCues) return mapped.slice(0, Math.max(0, mapped.length - 1));
+    if (pack.reorderCues) return [...mapped].reverse();
+    return mapped;
   }
   throw new Error("EXECUTOR_UNAVAILABLE");
 }

@@ -32,5 +32,9 @@
   "maxManifestFiles": 10000,
   "transferGrantPageSize": 256,
   "maxUrlBytes": 16384,
-  "containerMemoryTargetMiB": 256
+  "containerMemoryTargetMiB": 256,
+  "maxSubtitleSourceBytes": 2097152,
+  "maxSubtitleCues": 5000,
+  "translationBatchCues": 16,
+  "translationShapeRetries": 2
 }

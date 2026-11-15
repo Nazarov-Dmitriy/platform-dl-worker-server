@@ -65,16 +65,25 @@ try {
       });
       result = [];
       try {
-        for (const cue of w.cues) {
-          const output = await translator(cue.text, {
-            max_new_tokens: 256,
-            src_lang: srcLang,
-            tgt_lang: tgtLang,
-          } as any);
-          const text = (output as any)[0]?.translation_text;
-          if (typeof text !== "string" || !text.trim())
-            throw new Error("EMPTY_TRANSLATION");
-          result.push({ ...cue, text });
+        const batchSize = Math.max(1, Number(w.batchSize) || 16);
+        for (let i = 0; i < w.cues.length; i += batchSize) {
+          const batch = w.cues.slice(i, i + batchSize);
+          for (const cue of batch) {
+            const payload = cue.text?.trim() ? cue.text : "";
+            if (!payload) {
+              result.push({ ...cue, id: cue.id, text: cue.text || "" });
+              continue;
+            }
+            const output = await translator(payload, {
+              max_new_tokens: 256,
+              src_lang: srcLang,
+              tgt_lang: tgtLang,
+            } as any);
+            const text = (output as any)[0]?.translation_text;
+            if (typeof text !== "string" || !text.trim())
+              throw new Error("EMPTY_TRANSLATION");
+            result.push({ ...cue, id: cue.id, text });
+          }
         }
       } finally {
         await translator.dispose();

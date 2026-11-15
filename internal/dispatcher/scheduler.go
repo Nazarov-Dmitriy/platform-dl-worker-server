@@ -33,16 +33,19 @@ func compatible(r JobRequest, caps []Capability, online bool) bool {
 			}
 			continue
 		}
-		var p struct {
-			SourceLanguage string `json:"sourceLanguage"`
-			Speech         struct {
-				SourceLanguage string `json:"sourceLanguage"`
-			} `json:"speech"`
-			IncludeOriginal bool     `json:"includeOriginal"`
-			TargetLanguages []string `json:"targetLanguages"`
-			Formats         []string `json:"formats"`
+		p := parseSubtitleParams(r.Params)
+		if r.Type == "media.subtitles" && p.Input == "vtt" {
+			if !contains(capInputKinds(c), "vtt") || !subtitleFormatsOK(p.Formats, c.Formats) {
+				continue
+			}
+			if translationSupported(c, p.SourceLanguage, p.TargetLanguages) {
+				return true
+			}
+			continue
 		}
-		_ = json.Unmarshal(r.Params, &p)
+		if r.Type == "media.subtitles" && !contains(capInputKinds(c), "video") {
+			continue
+		}
 		lang := p.SourceLanguage
 		if r.Type == "media.subtitles" {
 			lang = p.Speech.SourceLanguage
@@ -56,13 +59,7 @@ func compatible(r JobRequest, caps []Capability, online bool) bool {
 			}
 			continue
 		}
-		formatOK := true
-		for _, format := range p.Formats {
-			if !contains(c.Formats, format) {
-				formatOK = false
-			}
-		}
-		if !formatOK {
+		if !subtitleFormatsOK(p.Formats, c.Formats) {
 			continue
 		}
 		sources := []string{lang}
@@ -70,22 +67,7 @@ func compatible(r JobRequest, caps []Capability, online bool) bool {
 			sources = c.RecognitionLanguages
 		}
 		for _, source := range sources {
-			all := true
-			for _, target := range p.TargetLanguages {
-				if target == source {
-					continue
-				}
-				pairOK := false
-				for _, pair := range c.TranslationDirections {
-					if pair.Source == source && pair.Target == target {
-						pairOK = true
-					}
-				}
-				if !pairOK {
-					all = false
-				}
-			}
-			if all {
+			if translationSupported(c, source, p.TargetLanguages) {
 				return true
 			}
 		}
@@ -808,6 +790,13 @@ func (s *Store) Capabilities(ctx context.Context, site string) (map[string]any, 
 						current.TranslationDirections = append(current.TranslationDirections, pair)
 					}
 				}
+				if cap.Code == "media.subtitles" {
+					for _, kind := range capInputKinds(cap) {
+						if !contains(current.InputKinds, kind) {
+							current.InputKinds = append(current.InputKinds, kind)
+						}
+					}
+				}
 				aggregated[cap.Code] = current
 			}
 		}
@@ -834,6 +823,7 @@ func (s *Store) Capabilities(ctx context.Context, site string) (map[string]any, 
 			sort.Strings(c.RecognitionLanguages)
 			sort.Strings(c.Formats)
 			sort.Strings(c.ProfilePolicies)
+			sort.Strings(c.InputKinds)
 			sort.Slice(c.TranslationDirections, func(i, j int) bool {
 				return c.TranslationDirections[i].Source+c.TranslationDirections[i].Target < c.TranslationDirections[j].Source+c.TranslationDirections[j].Target
 			})

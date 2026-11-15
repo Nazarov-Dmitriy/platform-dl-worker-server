@@ -87,6 +87,11 @@ def build():
     d["SubtitleParams"] = obj({"speech": ref("SpeechParams"), "includeOriginal": {"type": "boolean"},
                                "targetLanguages": arr(LANG, 0, 100, True),
                                "formats": arr({"enum": ["vtt", "srt"]}, 1, 2, True)})
+    d["VttTranslateParams"] = obj({
+        "input": const("vtt"),
+        "sourceLanguage": LANG,
+        "targetLanguages": arr(LANG, 1, 100, True),
+        "formats": arr({"enum": ["vtt"]}, 1, 1, True)})
     base = {"protocolVersion": const(VERSION), "id": UUID, "source": ref("Source"),
             "maxOutputBytes": {**BYTES, "minimum": 0},
             "maxDurationSeconds": {"type": "integer", "minimum": 1},
@@ -97,7 +102,7 @@ def build():
     for operation, params in [
         ("media.transcode", obj({"profile": ref("Profile"), "subtitles": ref("SubtitleParams")}, ["profile"])),
         ("media.transcribe", ref("SpeechParams")),
-        ("media.subtitles", ref("SubtitleParams")),
+        ("media.subtitles", {"oneOf": [ref("SubtitleParams"), ref("VttTranslateParams")]}),
     ]:
         variants.append(obj({**base, "type": const(operation), "params": params},
                             ["protocolVersion", "id", "source", "maxOutputBytes",
@@ -201,6 +206,7 @@ def build():
                                     "formats": arr({"enum": ["text", "vtt", "srt", "hls"]}, 1, 4, True),
                                     "availability": {"enum": ["ONLINE", "OFFLINE", "NOT_INSTALLED"]},
                                     "profilePolicies": arr({"enum": ["X264_EXACT", "HARDWARE_ALLOWED"]}, 0, 2, True)})
+    d["OperationCapability"]["properties"]["inputKinds"] = arr({"enum": ["video", "vtt"]}, 0, 2, True)
     d["Capabilities"] = obj({"protocolVersion": const(VERSION), "revision": TEXT,
                              "checkedAt": DATE, "operations": arr(ref("OperationCapability"), 0, 3)})
     d["Usage"] = obj({"cpuPercent": {"type": "number", "minimum": 0, "maximum": 100},
@@ -515,6 +521,11 @@ def build():
                                     "source": {**job["source"], "role": "PUBLISHED_MEDIA", "contentType": "audio/mpeg"}}),
         ("job-subtitles", "JobRequest", {**job, "type": "media.subtitles", "params": subtitles,
                                         "source": {**job["source"], "role": "PUBLISHED_MEDIA"}}),
+        ("job-subtitles-vtt", "JobRequest", {**job, "type": "media.subtitles",
+            "source": {**job["source"], "objectName": "uploads/ru.vtt", "bytes": 80,
+                       "contentType": "text/vtt", "role": "PUBLISHED_MEDIA"},
+            "params": {"input": "vtt", "sourceLanguage": "ru", "targetLanguages": ["en"],
+                       "formats": ["vtt"]}}),
         ("partial", "JobView", view),
         ("capabilities", "Capabilities", {"protocolVersion": VERSION, "revision": "1", "checkedAt": now, "operations": [cap]}),
         ("transfer-grant", "TransferGrant", grant),
@@ -583,6 +594,15 @@ def build():
     bad("wrong-version", "DeviceMessage", changed)
     changed = deepcopy(grant); changed["links"][0]["expiresAt"] = "not-a-date"
     bad("invalid-expiry", "TransferGrant", changed)
+    vtt_job = {**job, "type": "media.subtitles",
+               "source": {**job["source"], "objectName": "uploads/ru.vtt", "bytes": 80,
+                          "contentType": "text/vtt", "role": "PUBLISHED_MEDIA"},
+               "params": {"input": "vtt", "sourceLanguage": "ru", "targetLanguages": ["en"],
+                          "formats": ["vtt"]}}
+    changed = deepcopy(vtt_job); changed["params"]["sourceLanguage"] = "auto"
+    bad("vtt-auto-source", "JobRequest", changed)
+    changed = deepcopy(vtt_job); changed["params"]["targetLanguages"] = []
+    bad("vtt-empty-targets", "JobRequest", changed)
     for name, definition, value in bads:
         dump(ROOT / f"fixtures/invalid/{name}.json", {"schema": definition, "value": value})
     semantic_bads = []
@@ -599,6 +619,13 @@ def build():
     changed = deepcopy(job); changed["params"]["subtitles"]["includeOriginal"] = False
     changed["params"]["subtitles"]["targetLanguages"] = []
     semantic_bad("empty-subtitles", "JobRequest", changed)
+    changed = deepcopy(vtt_job); changed["params"]["targetLanguages"] = ["ru"]
+    semantic_bad("vtt-source-among-targets", "JobRequest", changed)
+    changed = deepcopy(vtt_job); changed["source"]["contentType"] = "video/mp4"
+    semantic_bad("vtt-job-video-source", "JobRequest", changed)
+    changed = deepcopy(job); changed["type"] = "media.subtitles"; changed["params"] = subtitles
+    changed["source"] = {**job["source"], "role": "PUBLISHED_MEDIA", "contentType": "text/vtt"}
+    semantic_bad("video-subtitles-vtt-source", "JobRequest", changed)
     changed = deepcopy(view); changed["status"] = "SUCCEEDED"
     semantic_bad("success-with-failed-step", "JobView", changed)
     changed = deepcopy(grant); changed["links"].append(deepcopy(changed["links"][0]))

@@ -346,6 +346,46 @@
       ],
       "additionalProperties": false
     },
+    "VttTranslateParams": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "const": "vtt"
+        },
+        "sourceLanguage": {
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+        },
+        "targetLanguages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+          },
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true
+        },
+        "formats": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "vtt"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "input",
+        "sourceLanguage",
+        "targetLanguages",
+        "formats"
+      ],
+      "additionalProperties": false
+    },
     "JobRequest": {
       "oneOf": [
         {
@@ -496,7 +536,14 @@
               "const": "media.subtitles"
             },
             "params": {
-              "$ref": "#/$defs/SubtitleParams"
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SubtitleParams"
+                },
+                {
+                  "$ref": "#/$defs/VttTranslateParams"
+                }
+              ]
             }
           },
           "required": [
@@ -525,12 +572,13 @@
             },
             "maxOutputBytes": {
               "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
+              "minimum": 1,
+              "maximum": 1073741824
             },
             "maxDurationSeconds": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "maximum": 3600
             },
             "clientReference": {
               "type": "string",
@@ -1594,6 +1642,18 @@
           "maxItems": 2,
           "uniqueItems": true
         },
+        "inputKinds": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "video",
+              "vtt"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
         "generationModels": {
           "type": "array",
           "items": {
@@ -1687,27 +1747,6 @@
           ],
           "minimum": 0
         },
-        "vramTotalBytes": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "minimum": 0
-        },
-        "vramUsedBytes": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "minimum": 0
-        },
-        "gpuName": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "maxLength": 200
-        },
         "encoderBusyPercent": {
           "type": [
             "number",
@@ -1727,9 +1766,30 @@
         "workDiskAvailable": {
           "type": "boolean"
         },
+        "vramTotalBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "vramUsedBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "gpuName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "memoryTotalBytes": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "deviceOS": {
           "enum": [
@@ -1760,6 +1820,8 @@
         "diskUsedPercent",
         "freeMemoryBytes",
         "freeDiskBytes",
+        "freeVramBytes",
+        "encoderBusyPercent",
         "availableSlots",
         "paused",
         "workDiskAvailable"
@@ -1910,6 +1972,20 @@
           "type": "string",
           "format": "uri"
         },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "sizeTier": {
+          "enum": [
+            "SMALL",
+            "MEDIUM",
+            "LARGE"
+          ]
+        },
+        "memoryRequirementsVerified": {
+          "type": "boolean"
+        },
         "files": {
           "type": "array",
           "items": {
@@ -1931,20 +2007,6 @@
           "minItems": 0,
           "maxItems": 4,
           "uniqueItems": true
-        },
-        "description": {
-          "type": "string",
-          "maxLength": 2000
-        },
-        "sizeTier": {
-          "enum": [
-            "SMALL",
-            "MEDIUM",
-            "LARGE"
-          ]
-        },
-        "memoryRequirementsVerified": {
-          "type": "boolean"
         }
       },
       "required": [

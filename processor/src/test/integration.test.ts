@@ -1453,3 +1453,314 @@ test(
     );
   },
 );
+test(
+  "VTT translation runs on a translation-only device without recognition",
+  { skip: !executable, timeout: 60000 },
+  async (t) => {
+    const { createHash } = await import("node:crypto");
+    const { createServer } = await import("node:http");
+    const { writeFileSync } = await import("node:fs");
+    const root = mkdtempSync(join(tmpdir(), "processor-vtt-"));
+    const db = join(root, "dispatcher.db");
+    const cli = (...args: string[]) =>
+      JSON.parse(
+        execFileSync(executable!, [...args, "-db", db], {
+          encoding: "utf8",
+          windowsHide: true,
+        }),
+      );
+    const vtt = Buffer.from(
+      "WEBVTT\n\nintro\n00:00:00.000 --> 00:00:01.000 align:start\nHello from catalog test.\n",
+      "utf8",
+    );
+    const translatePack = Buffer.from(
+      JSON.stringify({
+        failTargets: ["uk"],
+        map: {},
+      }),
+      "utf8",
+    );
+    const objects = new Map<string, Buffer>();
+    objects.set("uploads/ru.vtt", vtt);
+    objects.set("models/translate.json", translatePack);
+    const storage = createServer((req, res) => {
+      const key = decodeURIComponent((req.url || "/").slice(1));
+      if (req.method === "GET") {
+        const body = objects.get(key);
+        if (!body) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        res.writeHead(200);
+        res.end(body);
+        return;
+      }
+      if (req.method === "PUT") {
+        const chunks: Buffer[] = [];
+        req.on("data", (c) => chunks.push(c));
+        req.on("end", () => {
+          objects.set(key, Buffer.concat(chunks));
+          res.writeHead(200);
+          res.end();
+        });
+        return;
+      }
+      res.writeHead(405);
+      res.end();
+    });
+    await new Promise<void>((r) => storage.listen(0, "127.0.0.1", r));
+    const storagePort = (storage.address() as net.AddressInfo).port;
+    const translateUrl = `http://127.0.0.1:${storagePort}/models/translate.json`;
+    const entry = {
+      id: "catalog-test-translate",
+      revision: "test-1",
+      executor: "catalog-test",
+      purpose: "TRANSLATION",
+      os: ["windows", "darwin", "linux"],
+      architectures: ["amd64", "arm64"],
+      accelerators: ["cpu"],
+      recognitionLanguages: [],
+      translationDirections: [
+        { source: "ru", target: "en" },
+        { source: "ru", target: "uk" },
+      ],
+      downloadBytes: translatePack.length,
+      minimumRamBytes: 1,
+      minimumVramBytes: 0,
+      sha256: createHash("sha256").update(translatePack).digest("hex"),
+      downloadUrl: translateUrl,
+      license: "MIT",
+      descriptionSource: translateUrl,
+    };
+    writeFileSync(join(root, "catalog.json"), JSON.stringify([entry]));
+    const site = cli(
+      "site-create",
+      "-name",
+      "vtt",
+      "-operations",
+      "media.transcode,media.transcribe,media.subtitles",
+    );
+    const siteToken = cli("token-issue", "-purpose", "SITE", "-id", site.id).token;
+    const device = cli("device-create", "-name", "vtt-device");
+    const deviceToken = cli("token-issue", "-purpose", "DEVICE", "-id", device.id).token;
+    cli("catalog-import", "-catalog", join(root, "catalog.json"));
+    for (const type of ["MODEL_INSTALL", "MODEL_ACTIVATE"] as const) {
+      const requestId = randomUUID();
+      writeFileSync(
+        join(root, type + ".json"),
+        JSON.stringify({
+          requestId,
+          type,
+          modelId: entry.id,
+          modelRevision: entry.revision,
+        }),
+      );
+      cli("command-enqueue", "-id", device.id, "-command", join(root, type + ".json"));
+    }
+    const port = await freePort();
+    const base = `http://127.0.0.1:${port}`;
+    let agent: Agent | undefined;
+    const server = spawn(
+      executable!,
+      [
+        "serve", "-db", db, "-listen", `127.0.0.1:${port}`,
+        "-lease", "60s", "-heartbeat", "1s", "-stop-safety", "1s", "-admission-stable", "0s",
+      ],
+      { stdio: "ignore", windowsHide: true },
+    );
+    t.after(async () => {
+      await agent?.close();
+      server.kill();
+      storage.close();
+      await delay(300);
+      rmSync(root, { recursive: true, force: true });
+    });
+    await until(async () => {
+      try {
+        return (await fetch(base + "/healthz")).ok;
+      } catch {
+        return false;
+      }
+    });
+    const work = join(root, "work");
+    mkdirSync(work);
+    const config: Config = {
+      url: base.replace("http:", "ws:") + "/api/v2/device/connect",
+      deviceId: device.id,
+      stateDir: join(root, "state"),
+      workDir: work,
+      maxParallel: 1,
+      reserveMemoryBytes: 0,
+      taskMemoryBytes: 1,
+      reserveDiskBytes: 0,
+      threshold: 80,
+      paused: false,
+      testExecutor: false,
+      testDurationMs: 3000,
+      ffmpeg: "ffmpeg-must-not-run",
+      ffprobe: "ffprobe-must-not-run",
+      whisperCpp: "whisper-must-not-run",
+      catalogExtra: join(root, "catalog.json"),
+      allowTestModels: true,
+    };
+    agent = new Agent(config, deviceToken, new Journal(config.stateDir), () => {});
+    agent.resources.sample = () => ({
+      memoryTotalBytes: 16 * 1024 ** 3,
+      deviceOS: "windows",
+      deviceArchitecture: "amd64",
+      accelerator: "unknown",
+      cpuPercent: 10,
+      memoryUsedPercent: 20,
+      memoryPressure: "NORMAL",
+      diskUsedPercent: 10,
+      freeMemoryBytes: 8 * 1024 ** 3,
+      freeDiskBytes: 100 * 1024 ** 3,
+      freeVramBytes: null,
+      vramTotalBytes: null,
+      vramUsedBytes: null,
+      gpuName: null,
+      encoderBusyPercent: null,
+      availableSlots: 1,
+      paused: false,
+      workDiskAvailable: true,
+    });
+    agent.start();
+    await until(() => !!agent?.session);
+    await until(
+      () => !!agent?.journal.state.models.some((m) => m.state === "ACTIVE" && m.id === entry.id),
+      20000,
+    );
+    await delay(1500);
+    const headers = {
+      Authorization: `Bearer ${siteToken}`,
+      "Content-Type": "application/json",
+    };
+    const videoJob = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../../../contracts/fixtures/valid/job-subtitles.json", import.meta.url)),
+        "utf8",
+      ),
+    ).value;
+    videoJob.id = randomUUID();
+    const rejected = await fetch(base + "/api/v2/site/jobs", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(videoJob),
+    });
+    const rejectedView = await rejected.json();
+    assert.equal(rejectedView.status, "REJECTED");
+    const job = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../../../contracts/fixtures/valid/job-subtitles-vtt.json", import.meta.url)),
+        "utf8",
+      ),
+    ).value;
+    job.id = randomUUID();
+    job.source.bytes = vtt.length;
+    job.source.sha256 = createHash("sha256").update(vtt).digest("hex");
+    job.params.targetLanguages = ["en", "uk"];
+    const submit = await fetch(base + "/api/v2/site/jobs", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(job),
+    });
+    assert.equal(submit.status, 202);
+    const objectUrl = (name: string) => `http://127.0.0.1:${storagePort}/` + encodeURIComponent(name);
+    await until(async () => {
+      const view = await (await fetch(base + "/api/v2/site/jobs/" + job.id, { headers })).json();
+      const transfers = await (
+        await fetch(base + "/api/v2/site/jobs/" + job.id + "/transfers", { headers })
+      ).json();
+      for (const req of transfers.requests || []) {
+        if (req.kind === "SOURCE") {
+          await fetch(base + "/api/v2/site/jobs/" + job.id + "/transfer-grants", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              protocolVersion: "2.0",
+              requestId: req.id,
+              fence: req.fence,
+              links: [{
+                path: "source",
+                objectName: "uploads/ru.vtt",
+                url: objectUrl("uploads/ru.vtt"),
+                expiresAt: new Date(Date.now() + 3600000).toISOString(),
+                method: "GET",
+                headers: {},
+              }],
+              page: 0,
+              lastPage: true,
+            }),
+          });
+        }
+        if (req.kind === "UPLOAD") {
+          const prefix =
+            "jobs/" + site.id + "/" + job.id + "/" + req.fence.dispatcherEpoch + "/" +
+            req.fence.generation + "/" + req.fence.assignmentId + "/";
+          await fetch(base + "/api/v2/site/jobs/" + job.id + "/transfer-grants", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              protocolVersion: "2.0",
+              requestId: req.id,
+              fence: req.fence,
+              links: req.artifact.manifest.files.map((file: any) => ({
+                path: file.path,
+                objectName: prefix + file.path,
+                url: objectUrl(prefix + file.path),
+                expiresAt: new Date(Date.now() + 3600000).toISOString(),
+                method: "PUT",
+                headers: { "Content-Type": file.contentType },
+              })),
+              page: 0,
+              lastPage: true,
+            }),
+          });
+        }
+      }
+      if (view.status === "AWAITING_PUBLICATION") {
+        const claimId = randomUUID();
+        await fetch(base + "/api/v2/site/jobs/" + job.id + "/publication-claim", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            protocolVersion: "2.0",
+            claimId,
+            artifactId: view.artifact.id,
+            manifestSha256: view.artifact.manifestSha256,
+            fence: view.artifact.fence,
+          }),
+        });
+        await fetch(base + "/api/v2/site/jobs/" + job.id + "/publication-decision", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            protocolVersion: "2.0",
+            artifactId: view.artifact.id,
+            fence: view.artifact.fence,
+            manifestSha256: view.artifact.manifestSha256,
+            decision: "PUBLISHED",
+            publicationId: randomUUID(),
+            claimId,
+          }),
+        });
+        return true;
+      }
+      return ["FAILED", "REJECTED"].includes(view.status);
+    }, 60000);
+    const done = await (await fetch(base + "/api/v2/site/jobs/" + job.id, { headers })).json();
+    assert.equal(done.status, "PARTIAL");
+    assert.ok(done.artifact.manifest.steps.some((s: any) => s.name === "subtitles" && s.language === "en" && s.status === "SUCCEEDED"));
+    assert.ok(done.artifact.manifest.steps.some((s: any) => s.name === "subtitles" && s.language === "uk" && s.status === "FAILED"));
+    assert.ok([...objects.keys()].some((k) => k.endsWith("subtitles/en.vtt")));
+    assert.ok([...objects.keys()].every((k) => !k.endsWith("subtitles/uk.vtt")));
+    assert.ok([...objects.keys()].every((k) => !k.endsWith("subtitles/ru.vtt")));
+    const uploaded = [...objects.entries()].find(([k]) => k.endsWith("subtitles/en.vtt"));
+    assert.ok(uploaded);
+    const body = uploaded[1].toString("utf8");
+    assert.match(body, /intro/);
+    assert.match(body, /00:00:00\.000 --> 00:00:01\.000 align:start/);
+    assert.match(body, /\[en\] Hello from catalog test\./);
+  },
+);

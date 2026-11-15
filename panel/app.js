@@ -402,7 +402,7 @@ on("issueDeviceToken", "click", () =>
         "ID: " + device.id + ". Сохраните токен — он показывается один раз.",
         "caption",
       ),
-      node("code", issued.token, "code"),
+      tokenCode(issued.token),
     );
     $("issued").hidden = false;
   }),
@@ -921,7 +921,7 @@ async function siteAction(kind) {
       $("siteIssued").replaceChildren(
         node("strong", "Новый токен сайта «" + site.name + "»"),
         node("p", "Вставьте его в настройки сервиса обработки на сайте. Токен показывается один раз. Ранее выданные токены продолжают работать.", "caption"),
-        node("code", issued.token, "code")
+        tokenCode(issued.token)
       );
       $("siteIssued").hidden = false;
     } else {

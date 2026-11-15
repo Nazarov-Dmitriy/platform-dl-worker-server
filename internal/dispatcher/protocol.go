@@ -180,6 +180,7 @@ type Capability struct {
 	Formats               []string          `json:"formats"`
 	Availability          string            `json:"availability"`
 	ProfilePolicies       []string          `json:"profilePolicies"`
+	InputKinds            []string          `json:"inputKinds,omitempty"`
 }
 type Usage struct {
 	MemoryTotalBytes   int64    `json:"memoryTotalBytes,omitempty"`
@@ -441,16 +442,15 @@ func (v *Validator) Request(raw []byte) (JobRequest, []byte, string, error) {
 			return r, nil, "", problem(400, "INVALID_SOURCE", "HLS source checksum mismatch")
 		}
 	}
-	var params struct {
-		IncludeOriginal bool     `json:"includeOriginal"`
-		TargetLanguages []string `json:"targetLanguages"`
-		Subtitles       *struct {
-			IncludeOriginal bool     `json:"includeOriginal"`
-			TargetLanguages []string `json:"targetLanguages"`
-		} `json:"subtitles"`
-	}
+	var params subtitleParams
 	_ = json.Unmarshal(r.Params, &params)
-	if r.Type == "media.subtitles" && !params.IncludeOriginal && len(params.TargetLanguages) == 0 || params.Subtitles != nil && !params.Subtitles.IncludeOriginal && len(params.Subtitles.TargetLanguages) == 0 {
+	if r.Type == "media.subtitles" && params.Input == "vtt" {
+		if e := validateVttTranslateRequest(r, params); e != nil {
+			return r, nil, "", e
+		}
+	} else if r.Type == "media.subtitles" && r.Source.ContentType == "text/vtt" {
+		return r, nil, "", problem(400, "INVALID_SOURCE", "Video subtitle jobs cannot use a VTT source")
+	} else if r.Type == "media.subtitles" && !params.IncludeOriginal && len(params.TargetLanguages) == 0 || params.Subtitles != nil && !params.Subtitles.IncludeOriginal && len(params.Subtitles.TargetLanguages) == 0 {
 		return r, nil, "", problem(400, "INVALID_REQUEST", "Select at least one subtitle language")
 	}
 	return r, canonical, digest(canonical), nil
