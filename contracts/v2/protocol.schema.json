@@ -1695,6 +1695,9 @@
           },
           "minItems": 0,
           "maxItems": 4
+        },
+        "diagnosticsCollect": {
+          "type": "boolean"
         }
       },
       "required": [

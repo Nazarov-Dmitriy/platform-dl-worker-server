@@ -198,12 +198,16 @@ func TestCapabilitiesOmitsDiagnosticsCollect(t *testing.T) {
 		t.Fatal(err)
 	}
 	var body struct {
-		Operations []struct {
+		DiagnosticsCollect bool `json:"diagnosticsCollect"`
+		Operations         []struct {
 			Code string `json:"code"`
 		} `json:"operations"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
+	}
+	if !body.DiagnosticsCollect {
+		t.Fatal("expected diagnosticsCollect")
 	}
 	for _, op := range body.Operations {
 		if op.Code == "diagnostics.collect" {

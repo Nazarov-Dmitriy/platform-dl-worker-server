@@ -34,6 +34,7 @@ def extend(d):
         enum.append("diagnostics.collect")
     for name in ("AdminSite", "AdminSiteView"):
         d[name]["properties"]["operations"]["maxItems"] = 5
+    d["Capabilities"]["properties"]["diagnosticsCollect"] = {"type": "boolean"}
     d["AdminSiteView"]["properties"]["diagnosticsLastReceivedAt"] = {
         "type": ["string", "null"], "format": "date-time",
     }

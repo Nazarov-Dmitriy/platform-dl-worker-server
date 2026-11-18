@@ -836,7 +836,13 @@ func (s *Store) Capabilities(ctx context.Context, site string) (map[string]any, 
 			out = append(out, c)
 		}
 		body := encode(out)
-		result = map[string]any{"protocolVersion": "2.0", "revision": digest(body), "checkedAt": stamp(now), "operations": out}
+		result = map[string]any{
+			"protocolVersion":     "2.0",
+			"revision":            digest(body),
+			"checkedAt":           stamp(now),
+			"operations":          out,
+			"diagnosticsCollect":  contains(allowed, "diagnostics.collect"),
+		}
 		if e = s.validator.Check("Capabilities", encode(result)); e != nil {
 			return problem(503, "CAPABILITIES_TOO_LARGE", "Capability catalogue exceeds wire limits")
 		}
