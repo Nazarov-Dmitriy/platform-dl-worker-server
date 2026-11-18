@@ -166,6 +166,7 @@ const operations = {
   "media.transcribe": "Распознавание речи",
   "media.subtitles": "Субтитры",
   "media.generate": "Генерация изображений",
+  "diagnostics.collect": "Сбор ошибок",
 };
 function renderJobs(target, jobs, hasSite) {
   if (!jobs.length)
@@ -419,15 +420,30 @@ function details(target, pairs) {
   });
   $(target).replaceChildren(list);
 }
-function renderOps(data) {
+function renderOps(data, diagnostics) {
   state.ops = data;
-  details("ops", [
+  const rows = [
     ["Режим", data.maintenance ? "Выдача заданий приостановлена" : "Выдача заданий включена"],
     ["В очереди", data.queued],
     ["Назначается", data.offered],
     ["В работе", data.running],
     ["Готовность к обновлению", data.updateReady ? "Готов" : "Не подготовлен"],
-  ]);
+  ];
+  if (diagnostics) {
+    rows.push(
+      ["Журнал ошибок, событий", diagnostics.events],
+      ["Журнал ошибок, групп", diagnostics.groups],
+      ["Журнал ошибок, файл", diagnostics.dbBytes],
+      ["Потери квоты / диска / спама / fallback",
+        [diagnostics.lostQuota, diagnostics.lostDisk, diagnostics.lostSpam, diagnostics.lostFallback].join(" / ")],
+      ["Журнал, свободный бюджет", diagnostics.freeBytes],
+      ["Защищённые примеры", diagnostics.protectedExamples + " / " + diagnostics.protectedBytes + " байт"],
+      ["Предупреждение по диску", diagnostics.diskWarning ? "Да — избранное не удаляется скрытно" : "Нет"],
+      ["Последняя очистка", diagnostics.lastPruneAt || "ещё не было"],
+    );
+    if (diagnostics.lastPruneError) rows.push(["Ошибка очистки", diagnostics.lastPruneError]);
+  }
+  details("ops", rows);
   $("stat-queued").textContent = data.queued ?? "—";
   $("stat-running").textContent = data.running ?? "—";
   $("opsMaintenanceOn").disabled = !!data.maintenance;
@@ -450,6 +466,10 @@ const auditLabels = {
  TRANSFER_SOURCE:"Устройство запросило исходный файл", ARTIFACT_PROPOSED:"Результат подготовлен",
  MAINTENANCE_ON:"Выдача заданий приостановлена", MAINTENANCE_OFF:"Выдача заданий возобновлена",
  BACKUP:"Создана резервная копия", LOGIN:"Вход в панель", LOGOUT:"Выход из панели",
+ DIAGNOSTICS_FAVORITE:"Изменено избранное журнала ошибок", DIAGNOSTICS_STATUS:"Изменён статус ошибки",
+ DIAGNOSTICS_NOTE:"Добавлена заметка журнала ошибок", DIAGNOSTICS_EXAMPLE:"Изменён пример журнала ошибок",
+ DIAGNOSTICS_SETTINGS:"Изменён срок хранения журнала ошибок", DIAGNOSTICS_PRUNE:"Запущена очистка журнала ошибок",
+ DIAGNOSTICS_BACKUP:"Создана копия журнала ошибок",
 };
 const jobErrorLabels = {
  SOURCE_GRANT_TIMEOUT:"Сайт не выдал ссылку на исходный файл. Проверьте доступность и разрешённый адрес хранилища.",

@@ -23,6 +23,8 @@ const icons = {
   lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  alert:
+    '<path d="M12 3 3 20h18z"/><path d="M12 9v5M12 17h.01"/>',
 };
 function icon(name) {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.file}</svg>`;
@@ -47,6 +49,12 @@ const errorCopy = {
   INVALID_PAGE: "Проверьте фильтры и период: начало должно быть не позже конца.",
   INVALID_REQUEST: "Проверьте заполненные поля.",
   CSRF_REJECTED: "Обновите страницу и повторите действие.",
+  CONFIRM_UNPROTECT:
+    "Снятие защиты вернёт выбранные примеры под TTL. Они могут удалиться ближайшей очисткой.",
+  EXPORT_TOO_LARGE: "Слишком много событий. Сузьте период и повторите выгрузку.",
+  EXAMPLES_LIMIT: "Для этой группы уже сохранено максимум примеров.",
+  DIAGNOSTICS_UNAVAILABLE: "Журнал ошибок сейчас недоступен.",
+  STORAGE_FULL: "Журнал заполнен. Избранное не удаляется скрытно — освободите место или сузьте приём.",
   RATE_LIMITED: "Слишком много попыток. Подождите немного.",
   INVALID_CATALOG: "Проверьте поля формы: что-то заполнено не так.",
   MODEL_IN_USE:

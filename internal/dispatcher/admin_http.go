@@ -1,7 +1,10 @@
 package dispatcher
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strconv"
@@ -30,6 +33,21 @@ func (h *HTTP) addAdminRoutes() {
 	h.mux.HandleFunc("DELETE /api/v2/admin/sites/{id}", h.admin(h.adminDeleteSite, true))
 	h.mux.HandleFunc("PUT /api/v2/admin/sites/{id}", h.admin(h.adminUpdateSite, true))
 	h.mux.HandleFunc("POST /api/v2/admin/sites/{id}/tokens", h.admin(h.adminIssueSiteToken, true))
+	h.mux.HandleFunc("POST /api/v2/admin/sites/{id}/diagnostics/probe", h.admin(h.adminDiagnosticsProbe, true))
+	h.mux.HandleFunc("GET /api/v2/admin/diagnostics/status", h.admin(h.adminDiagnosticsStatus, false))
+	h.mux.HandleFunc("GET /api/v2/admin/diagnostics/settings", h.admin(h.adminDiagnosticsSettingsGet, false))
+	h.mux.HandleFunc("PUT /api/v2/admin/diagnostics/settings", h.admin(h.adminDiagnosticsSettingsSet, true))
+	h.mux.HandleFunc("GET /api/v2/admin/diagnostics/groups", h.admin(h.adminDiagnosticsGroups, false))
+	h.mux.HandleFunc("GET /api/v2/admin/diagnostics/groups/{id}", h.admin(h.adminDiagnosticsGroup, false))
+	h.mux.HandleFunc("PUT /api/v2/admin/diagnostics/groups/{id}/favorite", h.admin(h.adminDiagnosticsFavorite, true))
+	h.mux.HandleFunc("PUT /api/v2/admin/diagnostics/groups/{id}/status", h.admin(h.adminDiagnosticsGroupStatus, true))
+	h.mux.HandleFunc("POST /api/v2/admin/diagnostics/groups/{id}/notes", h.admin(h.adminDiagnosticsNote, true))
+	h.mux.HandleFunc("POST /api/v2/admin/diagnostics/groups/{id}/examples", h.admin(h.adminDiagnosticsPin, true))
+	h.mux.HandleFunc("DELETE /api/v2/admin/diagnostics/groups/{id}/examples/{seq}", h.admin(h.adminDiagnosticsUnpin, true))
+	h.mux.HandleFunc("GET /api/v2/admin/diagnostics/groups/{id}/report", h.admin(h.adminDiagnosticsGroup, false))
+	h.mux.HandleFunc("GET /api/v2/admin/diagnostics/export", h.admin(h.adminDiagnosticsExport, false))
+	h.mux.HandleFunc("POST /api/v2/admin/diagnostics/prune", h.admin(h.adminDiagnosticsPrune, true))
+	h.mux.HandleFunc("POST /api/v2/admin/diagnostics/backup", h.admin(h.adminDiagnosticsBackup, true))
 	h.mux.HandleFunc("GET /api/v2/admin/jobs", h.admin(h.adminJobs, false))
 	h.mux.HandleFunc("POST /api/v2/admin/sites/{id}/jobs/{jobId}/cancel", h.admin(h.adminCancelJob, true))
 	h.mux.HandleFunc("POST /api/v2/admin/sites/{id}/cancel-all", h.admin(h.adminCancelAll, true))
@@ -130,6 +148,7 @@ func (h *HTTP) adminCreateSite(w http.ResponseWriter, r *http.Request, a AdminAc
 		h.failure(w, e)
 		return
 	}
+	h.attachSiteDiagnostics(r.Context(), v)
 	h.reply(w, 201, v)
 }
 func (h *HTTP) adminListSites(w http.ResponseWriter, r *http.Request, a AdminActor) {
@@ -137,6 +156,11 @@ func (h *HTTP) adminListSites(w http.ResponseWriter, r *http.Request, a AdminAct
 	if e != nil {
 		h.failure(w, e)
 		return
+	}
+	if items, ok := v["items"].([]map[string]any); ok {
+		for _, item := range items {
+			h.attachSiteDiagnostics(r.Context(), item)
+		}
 	}
 	h.reply(w, 200, v)
 }
@@ -151,7 +175,85 @@ func (h *HTTP) adminUpdateSite(w http.ResponseWriter, r *http.Request, a AdminAc
 		h.failure(w, e)
 		return
 	}
+	h.attachSiteDiagnostics(r.Context(), v)
 	h.reply(w, 200, v)
+}
+
+func (h *HTTP) attachSiteDiagnostics(ctx context.Context, item map[string]any) {
+	if item == nil {
+		return
+	}
+	id, _ := item["id"].(string)
+	if id == "" {
+		return
+	}
+	item["diagnosticsLastReceivedAt"] = nil
+	if h.errors == nil {
+		return
+	}
+	at, ok, e := h.errors.LastReceived(ctx, id)
+	if e != nil || !ok {
+		return
+	}
+	item["diagnosticsLastReceivedAt"] = stamp(at)
+}
+
+func (h *HTTP) adminDiagnosticsStatus(w http.ResponseWriter, r *http.Request, a AdminActor) {
+	if e := requireOwner(a); e != nil {
+		h.failure(w, e)
+		return
+	}
+	if h.errors == nil {
+		h.failure(w, problem(503, "DIAGNOSTICS_UNAVAILABLE", "Error journal is not available"))
+		return
+	}
+	st, e := h.errors.Status(r.Context())
+	if e != nil {
+		h.failure(w, e)
+		return
+	}
+	if h.reporter != nil {
+		st.LostFallback += h.reporter.FallbackCount()
+	}
+	h.reply(w, 200, st)
+}
+
+func (h *HTTP) adminDiagnosticsProbe(w http.ResponseWriter, r *http.Request, a AdminActor) {
+	if e := requireSites(a); e != nil {
+		h.failure(w, e)
+		return
+	}
+	id := r.PathValue("id")
+	var n int
+	e := h.store.db.QueryRowContext(r.Context(), "SELECT count(*) FROM sites WHERE id=? AND deleted=0", id).Scan(&n)
+	if e != nil && !errors.Is(e, sql.ErrNoRows) {
+		h.failure(w, e)
+		return
+	}
+	if n == 0 {
+		h.failure(w, problem(404, "NOT_FOUND", "Site not found"))
+		return
+	}
+	view := map[string]any{
+		"ok":                false,
+		"collectionEnabled": false,
+		"journalAvailable":  h.errors != nil,
+		"probedAt":          stamp(time.Now()),
+		"lastReceivedAt":    nil,
+	}
+	if h.store.RequireSiteDiagnostics(r.Context(), id) == nil {
+		view["collectionEnabled"] = true
+	}
+	if h.errors != nil {
+		if at, ok, err := h.errors.LastReceived(r.Context(), id); err == nil && ok {
+			view["lastReceivedAt"] = stamp(at)
+		}
+		if err := h.errors.db.PingContext(r.Context()); err != nil {
+			view["journalAvailable"] = false
+		}
+	}
+	view["ok"] = view["collectionEnabled"] == true && view["journalAvailable"] == true
+	h.reply(w, 200, view)
 }
 func (h *HTTP) adminIssueSiteToken(w http.ResponseWriter, r *http.Request, a AdminActor) {
 	raw, e := h.body(w, r)
@@ -459,6 +561,11 @@ func (h *HTTP) adminBackup(w http.ResponseWriter, r *http.Request, a AdminActor)
 	if e != nil {
 		h.failure(w, e)
 		return
+	}
+	if h.errors != nil {
+		if path, e := h.errors.Snapshot(r.Context(), defaultBackupKeep); e == nil {
+			v["errorsPath"] = path
+		}
 	}
 	h.reply(w, 200, v)
 }

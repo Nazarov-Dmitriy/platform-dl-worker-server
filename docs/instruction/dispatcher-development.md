@@ -79,7 +79,8 @@ go build -trimpath -ldflags="-s -w" -o ./bin/dispatcher.exe ./cmd/dispatcher
 
 Сайты/устройства/токены по-прежнему можно менять CLI **при остановленном диспетчере**.
 После `owner-bootstrap` живое управление — панель `http://127.0.0.1:8090/panel/`
-и `/api/v2/admin/*` (cookie + CSRF). Сброс пароля владельца без почты:
+и `/api/v2/admin/*` (cookie + CSRF). Журнал ошибок — раздел «Ошибки» (только владелец).
+Сброс пароля владельца без почты:
 
 ```powershell
 ./bin/dispatcher.exe owner-reset-password -db ./data/dispatcher.db -login owner -password "new-long-password"
@@ -113,8 +114,8 @@ device-create `-capabilities <file.json>`: файл содержит масси�
 Неподдержанный основной исполнитель сохраняет REJECTED; offline известного исполнителя — QUEUED.
 
 Admin API: session/sites/devices/accounts/tokens/commands/models, плюс очередь
-`GET /api/v2/admin/jobs?siteId=` и отмена. Сайт выдаёт GET/PUT хранилища сам;
-диспетчер хранит только метаданные и краткоживущие страницы grant.
+`GET /api/v2/admin/jobs?siteId=` и отмена, журнал `/api/v2/admin/diagnostics/*`.
+Сайт выдаёт GET/PUT хранилища сам; диспетчер хранит только метаданные и краткоживущие страницы grant.
 
 Результаты видео создаёт обработчик с FFmpeg; аудио/субтитры — активные модели на устройстве.
 Сайты остаются в SERVER-режиме до клиента v2. Не включать EXTERNAL на рабочем
@@ -152,7 +153,7 @@ docker compose logs dispatcher
 
 Пока `serve` держит файл БД, второй CLI к тому же тому не открывается. Сайты/токены —
 панель `http://127.0.0.1:8090/panel/` или `docker compose stop dispatcher` и затем
-`docker compose run --rm dispatcher …`. Именованный том dispatcher-data хранит БД, WAL и `backups/`.
+`docker compose run --rm dispatcher …`. Именованный том dispatcher-data хранит `dispatcher.db`, `errors.sqlite`, WAL и `backups/`.
 Compose: 256 MiB / 1 CPU, порт только localhost, json-file логи 10m×3, restart unless-stopped.
 Образ UID 10001. Пример HTTPS/WSS: [nginx-dispatcher.conf](../../deploy/nginx-dispatcher.conf).
 Серверная процедура: [dispatcher-server.md](dispatcher-server.md).
@@ -162,6 +163,7 @@ Compose: 256 MiB / 1 CPU, порт только localhost, json-file логи 10
 # CLI backup/restore к тому же файлу — только после stop (эксклюзивная блокировка).
 docker compose stop dispatcher
 docker compose run --rm dispatcher restore -db /data/dispatcher.db -from /data/backups/dispatcher-YYYYMMDDThhmmssZ.db
+docker compose run --rm dispatcher restore-errors -db /data/dispatcher.db -from /data/backups/errors-YYYYMMDDThhmmssZ.db
 docker compose up -d
 ```
 

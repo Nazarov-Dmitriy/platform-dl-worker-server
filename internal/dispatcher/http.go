@@ -17,6 +17,7 @@ const MaxMetadataBytes int64 = 8 << 20
 type HTTP struct {
 	store         *Store
 	errors        *ErrorStore
+	reporter      *Reporter
 	mux           *http.ServeMux
 	hub           *deviceHub
 	secureCookies bool
@@ -84,6 +85,12 @@ func HandlerWithSecureCookies(s *Store, secure bool) http.Handler {
 	return h
 }
 func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			h.reportWorker(r.Context(), "HANDLER_PANIC", "Dispatcher handler panicked", "http", "")
+			h.failure(w, problem(500, "INTERNAL_ERROR", "Dispatcher handler panicked"))
+		}
+	}()
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	h.mux.ServeHTTP(w, r)
@@ -131,8 +138,18 @@ func (h *HTTP) failure(w http.ResponseWriter, e error) {
 	var api *APIError
 	if !errors.As(e, &api) {
 		api = &APIError{Status: 503, Code: "STORAGE_UNAVAILABLE", Message: "Dispatcher storage is temporarily unavailable", Permanent: false}
+		h.reportWorker(context.Background(), api.Code, api.Message, "http", "")
+	} else if api.Status >= 500 && api.Code != "DIAGNOSTICS_UNAVAILABLE" {
+		h.reportWorker(context.Background(), api.Code, api.Message, "http", "")
 	}
 	h.reply(w, api.Status, api)
+}
+
+func (h *HTTP) reportWorker(ctx context.Context, code, message, module, jobID string) {
+	if h.reporter == nil {
+		return
+	}
+	h.reporter.ReportCode(ctx, code, message, module, jobID)
 }
 func (h *HTTP) body(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {

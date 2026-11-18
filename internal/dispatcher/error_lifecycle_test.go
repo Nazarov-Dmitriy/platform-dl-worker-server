@@ -1,6 +1,7 @@
 package dispatcher
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -38,7 +39,7 @@ func TestErrorStorePruneHonorsProtection(t *testing.T) {
 	a.Code = "PROTECTED"
 	recordDiag(t, s, sender, a)
 	groupA := groupIDByCode(t, s, "PROTECTED")
-	if err := s.SetFavorite(testContext, groupA, true, "owner"); err != nil {
+	if _, err := s.SetFavorite(testContext, groupA, true, "owner", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.PinExample(testContext, groupA, eventSeqOf(t, s, groupA), "owner"); err != nil {
@@ -78,7 +79,7 @@ func TestErrorStoreResolvedReactivatesOnNewCase(t *testing.T) {
 	ev.Code = "BUG-1"
 	recordDiag(t, s, sender, ev)
 	group := groupIDByCode(t, s, "BUG-1")
-	if err := s.SetStatus(testContext, group, "RESOLVED", "owner"); err != nil {
+	if _, err := s.SetStatus(testContext, group, "RESOLVED", "owner", true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -113,7 +114,7 @@ func TestErrorStoreNoteAndIgnoredStaysIgnored(t *testing.T) {
 	ev.Code = "BUG-2"
 	recordDiag(t, s, sender, ev)
 	group := groupIDByCode(t, s, "BUG-2")
-	if err := s.SetStatus(testContext, group, "IGNORED", "owner"); err != nil {
+	if _, err := s.SetStatus(testContext, group, "IGNORED", "owner", true); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.AddNote(testContext, group, "owner", "Revisit after the next release"); err != nil {
@@ -138,5 +139,70 @@ func TestErrorStoreNoteAndIgnoredStaysIgnored(t *testing.T) {
 	}
 	if notes != 1 {
 		t.Fatalf("expected 1 note, got %d", notes)
+	}
+}
+
+func TestErrorStoreAutoPinsOnFavoriteAndConfirmsUnprotect(t *testing.T) {
+	s, _ := openErrorsTest(t)
+	sender := DiagnosticsSender{ID: "site-1", Area: "sites", SiteID: "site-1"}
+	ev := testDiagEvent()
+	ev.Code = "PIN-ME"
+	recordDiag(t, s, sender, ev)
+	group := groupIDByCode(t, s, "PIN-ME")
+	if _, err := s.SetFavorite(testContext, group, true, "owner", false); err != nil {
+		t.Fatal(err)
+	}
+	var pinned int
+	if err := s.db.QueryRow("SELECT count(*) FROM error_examples WHERE group_id=?", group).Scan(&pinned); err != nil {
+		t.Fatal(err)
+	}
+	if pinned != 1 {
+		t.Fatalf("favorite must pin the first example, got %d", pinned)
+	}
+	if _, err := s.SetStatus(testContext, group, "RESOLVED", "owner", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetFavorite(testContext, group, false, "owner", false); err == nil {
+		t.Fatal("expected confirm to unprotect")
+	}
+	res, err := s.SetFavorite(testContext, group, false, "owner", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.ProtectionRemoved || res.Warning == "" {
+		t.Fatalf("unprotect result = %+v", res)
+	}
+}
+
+func TestErrorStoreSnapshotRestoresFavorites(t *testing.T) {
+	s, _ := openErrorsTest(t)
+	sender := DiagnosticsSender{ID: "site-1", Area: "sites", SiteID: "site-1"}
+	ev := testDiagEvent()
+	ev.Code = "KEEP"
+	recordDiag(t, s, sender, ev)
+	group := groupIDByCode(t, s, "KEEP")
+	if _, err := s.SetFavorite(testContext, group, true, "owner", false); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := s.Snapshot(testContext, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Close()
+	dest := filepath.Join(t.TempDir(), "restored.sqlite")
+	if err := RestoreErrors(dest, snap); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := OpenErrors(dest, DefaultErrorJournalConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	var favorite, examples int
+	if err := reopened.db.QueryRow("SELECT favorite,(SELECT count(*) FROM error_examples) FROM error_groups WHERE code='KEEP'").Scan(&favorite, &examples); err != nil {
+		t.Fatal(err)
+	}
+	if favorite != 1 || examples != 1 {
+		t.Fatalf("restored favorite=%d examples=%d", favorite, examples)
 	}
 }

@@ -48,7 +48,14 @@ read-only root, cap_drop ALL. Стартовый бюджет не считат�
 ## Снимки
 
 Процесс раз в сутки (03:00 UTC) делает `VACUUM INTO` в `/data/backups/` и оставляет
-семь файлов `dispatcher-*.db`. Владелец может снять копию из панели сразу.
+семь файлов `dispatcher-*.db` и отдельно семь `errors-*.db` журнала ошибок.
+Журнал лежит рядом с очередью: `/data/errors.sqlite` в том же постоянном томе.
+Владелец может снять копию из панели сразу. Снимок очереди не заменяет снимок журнала:
+избранное и разбор живут в `errors.sqlite`. Параметры: `-errors-retention-days` (7–21),
+`-errors-max-db-bytes`, `-errors-sender-hourly-limit`, `-errors-global-hourly-limit`.
+TTL не фиксирует размер файла; закреплённые примеры требуют наблюдения в обслуживании.
+Владелец смотрит журнал в панели, раздел «Ошибки» (вкладки Сайты/Worker, период Europe/Moscow).
+Журнал действий остаётся отдельным. Оператор панель журнала не видит.
 Внешняя копия: переменная `DISPATCHER_BACKUP_S3_URI` (нужен `aws` в образе — по
 умолчанию его нет) или скрипт хоста [backup-dispatcher.sh](../../deploy/backup-dispatcher.sh)
 / [backup-dispatcher.ps1](../../deploy/backup-dispatcher.ps1) после появления файлов.
@@ -58,6 +65,7 @@ Restore только в отдельной среде или после `docker 
 ```sh
 docker compose stop dispatcher
 docker compose run --rm dispatcher restore -db /data/dispatcher.db -from /data/backups/dispatcher-YYYYMMDDThhmmssZ.db
+docker compose run --rm dispatcher restore-errors -db /data/dispatcher.db -from /data/backups/errors-YYYYMMDDThhmmssZ.db
 docker compose up -d
 ```
 

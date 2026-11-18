@@ -223,6 +223,7 @@ func (h *HTTP) deviceConnect(w http.ResponseWriter, r *http.Request) {
 				var api *APIError
 				if !errors.As(e, &api) {
 					api = &APIError{Code: "INTERNAL_ERROR", Message: "Dispatcher operation failed", Permanent: false}
+					h.reportWorker(ctx, api.Code, api.Message, "wss", "")
 				}
 				if h.deviceWrite(ctx, c, "protocol.error", map[string]any{"replyTo": frame.MessageID, "error": api}) != nil {
 					return
@@ -240,6 +241,35 @@ func (h *HTTP) deviceConnect(w http.ResponseWriter, r *http.Request) {
 }
 func (h *HTTP) deviceDispatch(ctx context.Context, p Principal, session string, f deviceFrame, b deviceBody, c *websocket.Conn) error {
 	switch f.Type {
+	case "diagnostics.events":
+		if h.errors == nil {
+			return problem(503, "DIAGNOSTICS_UNAVAILABLE", "Error journal is not available")
+		}
+		var batch struct {
+			Events []DiagnosticsEvent `json:"events"`
+		}
+		if json.Unmarshal(f.Body, &batch) != nil {
+			return problem(400, "INVALID_BATCH", "Invalid diagnostics batch")
+		}
+		raw, _ := json.Marshal(batch)
+		if len(raw) > maxBatchBytes {
+			return problem(413, "BATCH_TOO_LARGE", "Diagnostics batch exceeds 256 KiB")
+		}
+		for _, ev := range batch.Events {
+			if ev.Source != "worker" {
+				return problem(403, "OPERATION_FORBIDDEN", "Device ingress only accepts worker source")
+			}
+		}
+		accepted, duplicates, e := h.errors.Record(ctx, DiagnosticsSender{ID: p.ID, Area: "worker"}, batch.Events)
+		if e != nil {
+			return e
+		}
+		return h.deviceWrite(ctx, c, "diagnostics.ack", map[string]any{
+			"replyTo":    f.MessageID,
+			"accepted":   accepted,
+			"duplicates": duplicates,
+			"receivedAt": stamp(h.errors.Now()),
+		})
 	case "device.heartbeat":
 		return h.store.Heartbeat(ctx, p, session, b.Capabilities, b.Usage)
 	case "job.accept", "job.status":

@@ -1,0 +1,10 @@
+{
+  "schema": "DiagnosticsProbe",
+  "value": {
+    "ok": true,
+    "collectionEnabled": true,
+    "journalAvailable": true,
+    "probedAt": "2026-11-18T10:15:31Z",
+    "lastReceivedAt": "2026-11-18T10:15:30Z"
+  }
+}

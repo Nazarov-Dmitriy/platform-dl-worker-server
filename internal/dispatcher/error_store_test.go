@@ -2,6 +2,8 @@ package dispatcher
 
 import (
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -128,6 +130,85 @@ func TestErrorStoreDeduplicates(t *testing.T) {
 	}
 	if events != 1 || occurrences != 1 {
 		t.Fatalf("replay must not create a second case: events=%d occurrences=%d", events, occurrences)
+	}
+}
+
+func TestErrorStoreQuotaAndStatus(t *testing.T) {
+	s, _ := openErrorsTest(t)
+	s.config.SenderHourlyLimit = 2
+	s.config.GlobalHourlyLimit = 10
+	sender := DiagnosticsSender{ID: "site-1", Area: "sites", SiteID: "site-1"}
+	for i, id := range []string{"event-0001", "event-0002"} {
+		ev := testDiagEvent()
+		ev.EventID = id
+		ev.Code = "C" + string(rune('A'+i))
+		if _, _, err := s.Record(testContext, sender, []DiagnosticsEvent{ev}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ev := testDiagEvent()
+	ev.EventID = "event-0003"
+	ev.Code = "CZ"
+	_, _, err := s.Record(testContext, sender, []DiagnosticsEvent{ev})
+	if err == nil {
+		t.Fatal("expected quota rejection")
+	}
+	st, err := s.Status(testContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Events != 2 || st.LostQuota < 1 {
+		t.Fatalf("status = %+v", st)
+	}
+	replay := testDiagEvent()
+	accepted, dups, err := s.Record(testContext, sender, []DiagnosticsEvent{replay})
+	if err != nil || accepted != 0 || dups != 1 {
+		t.Fatalf("replay under quota: accepted=%d dups=%d err=%v", accepted, dups, err)
+	}
+	page, err := s.PageGroups(testContext, "sites", "site-1", 0, "", 10)
+	if err != nil || len(page) != 2 {
+		t.Fatalf("page = %v %v", page, err)
+	}
+}
+
+func TestErrorStoreSanitizesBeforeWrite(t *testing.T) {
+	s, _ := openErrorsTest(t)
+	sender := DiagnosticsSender{ID: "site-1", Area: "sites", SiteID: "site-1"}
+	ev := testDiagEvent()
+	ev.Message = "fail Bearer abcdefghijklmnop"
+	if _, _, err := s.Record(testContext, sender, []DiagnosticsEvent{ev}); err != nil {
+		t.Fatal(err)
+	}
+	var message string
+	if err := s.db.QueryRow("SELECT message FROM error_events").Scan(&message); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(message, "abcdefghijklmnop") {
+		t.Fatalf("stored secret: %s", message)
+	}
+}
+
+func TestErrorStoreCheckpointAndPage(t *testing.T) {
+	s, _ := openErrorsTest(t)
+	sender := DiagnosticsSender{ID: "site-1", Area: "sites", SiteID: "site-1"}
+	start := time.Now()
+	for i := 0; i < 30; i++ {
+		ev := testDiagEvent()
+		ev.EventID = "event-" + strconv.Itoa(i)
+		ev.Code = "C" + strconv.Itoa(i%3)
+		if _, _, err := s.Record(testContext, sender, []DiagnosticsEvent{ev}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Checkpoint(testContext); err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatalf("record+checkpoint took %s; measure before promising scheduler isolation", time.Since(start))
+	}
+	at, ok, err := s.LastReceived(testContext, "site-1")
+	if err != nil || !ok || at.IsZero() {
+		t.Fatalf("last received %v %v %v", at, ok, err)
 	}
 }
 

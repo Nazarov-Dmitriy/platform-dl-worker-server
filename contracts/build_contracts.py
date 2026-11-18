@@ -307,6 +307,11 @@ def build():
                                        "error": ref("Error")}, ["requestId", "status", "progress"]), "UP"),
         "protocol.ack": (obj({"replyTo": UUID}), "DOWN"),
         "protocol.error": (obj({"replyTo": UUID, "error": ref("Error")}), "DOWN"),
+        "diagnostics.events": (obj({"events": arr(ref("DiagnosticsEvent"), 1, 50)}), "UP"),
+        "diagnostics.ack": (obj({"replyTo": UUID,
+                                 "accepted": {"type": "integer", "minimum": 0, "maximum": 50},
+                                 "duplicates": {"type": "integer", "minimum": 0, "maximum": 50},
+                                 "receivedAt": DATE}), "DOWN"),
     }
     d["DeviceMessage"] = {"oneOf": []}
     for kind, (body, direction) in messages.items():
@@ -414,7 +419,7 @@ def build():
         ("/api/v2/site/jobs/{id}/publication-claim", "post", "claimPublication", "PublicationClaimRequest", "PublicationClaim", [200, 401, 403, 404, 409]),
         ("/api/v2/site/jobs/{id}/cancel", "post", "cancelJob", "Mutation", "JobView", [200, 202, 401, 403, 404, 409]),
         ("/api/v2/site/jobs/{id}/release", "post", "releaseToSite", "Mutation", "JobView", [200, 202, 401, 403, 404, 409]),
-        ("/api/v2/site/diagnostics/events", "post", "submitDiagnostics", "DiagnosticsBatch", "DiagnosticsAck", [200, 400, 401, 403, 413, 503]),
+        ("/api/v2/site/diagnostics/events", "post", "submitDiagnostics", "DiagnosticsBatch", "DiagnosticsAck", [200, 400, 401, 403, 413, 429, 503, 507]),
     ]
     for path, method, oid, request, response, statuses in specs:
         paths.setdefault(path, {})[method] = endpoint(oid, request, response, statuses)
@@ -449,6 +454,22 @@ def build():
         "parameters": [{"name": "repository", "in": "query", "required": True, "schema": TEXT},
                        {"name": "revision", "in": "query", "schema": TEXT}],
         "get": endpoint("repositoryFiles", None, "RepositoryFiles", [200, 400, 401, 403, 404, 502], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/status"] = {"get": endpoint("diagnosticsStatus", None, "DiagnosticsStatus", [200, 401, 403, 503], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/settings"] = {
+        "get": endpoint("diagnosticsSettings", None, "DiagnosticsSettingsView", [200, 401, 403, 503], "AdminSession"),
+        "put": endpoint("setDiagnosticsSettings", "DiagnosticsSettings", "DiagnosticsSettingsView", [200, 400, 401, 403, 503], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/groups"] = {"get": endpoint("listDiagnosticsGroups", None, "DiagnosticsGroupPage", [200, 400, 401, 403, 503], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/groups/{id}"] = {"get": endpoint("getDiagnosticsGroup", None, "DiagnosticsGroupCard", [200, 401, 403, 404, 503], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/groups/{id}/favorite"] = {"put": endpoint("setDiagnosticsFavorite", "DiagnosticsFavorite", "DiagnosticsProtectResult", [200, 400, 401, 403, 404, 409], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/groups/{id}/status"] = {"put": endpoint("setDiagnosticsGroupStatus", "DiagnosticsStatusChange", "DiagnosticsProtectResult", [200, 400, 401, 403, 404, 409], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/groups/{id}/notes"] = {"post": endpoint("addDiagnosticsNote", "DiagnosticsNoteCreate", "DiagnosticsNote", [201, 400, 401, 403, 404], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/groups/{id}/examples"] = {"post": endpoint("pinDiagnosticsExample", "DiagnosticsExamplePin", "DiagnosticsProtectResult", [200, 400, 401, 403, 404, 409], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/groups/{id}/examples/{seq}"] = {"delete": endpoint("unpinDiagnosticsExample", None, "DiagnosticsProtectResult", [200, 401, 403, 404], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/groups/{id}/report"] = {"get": endpoint("diagnosticsGroupReport", None, "DiagnosticsGroupCard", [200, 401, 403, 404, 503], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/export"] = {"get": endpoint("exportDiagnostics", None, "DiagnosticsGroupPage", [200, 400, 401, 403, 413, 503], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/prune"] = {"post": endpoint("pruneDiagnostics", None, "DiagnosticsPruneResult", [200, 401, 403, 503], "AdminSession")}
+    paths["/api/v2/admin/diagnostics/backup"] = {"post": endpoint("backupDiagnostics", None, "DiagnosticsBackup", [200, 401, 403, 503], "AdminSession")}
+    paths["/api/v2/admin/sites/{id}/diagnostics/probe"] = {"post": endpoint("probeSiteDiagnostics", None, "DiagnosticsProbe", [200, 401, 403, 404, 503], "AdminSession")}
     paths["/api/v2/admin/session"] = {"post": endpoint("login", "Login", "Session", [200, 401, 429], "AdminSession"),
                                       "get": endpoint("session", None, "Session", [200, 401], "AdminSession"),
                                       "delete": {"operationId": "logout", "security": [{"AdminSession": []}], "responses": {"204": {"description": "Session revoked"}}}}
@@ -460,10 +481,28 @@ def build():
             methods["parameters"] = [{"name": "id", "in": "path", "required": True, "schema": UUID}]
         if "{requestId}" in path:
             methods["parameters"].append({"name": "requestId", "in": "path", "required": True, "schema": UUID})
+        if "{seq}" in path:
+            methods["parameters"].append({"name": "seq", "in": "path", "required": True,
+                                          "schema": {"type": "integer", "minimum": 1}})
         if path.endswith("/jobs") or path.endswith("/transfers") or any(path.endswith("/" + k) for k in ["sites", "devices", "accounts", "models", "tokens"]):
             if "get" in methods:
                 methods["get"]["parameters"] = [{"name": "cursor", "in": "query", "schema": {"type": "string"}},
                                                  {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}]
+    paths["/api/v2/admin/diagnostics/groups"]["get"]["parameters"] = [
+        {"name": "area", "in": "query", "required": True, "schema": {"enum": ["sites", "worker"]}},
+        {"name": "siteId", "in": "query", "schema": UUID},
+        {"name": "source", "in": "query", "schema": {"enum": ["front", "back"]}},
+        {"name": "from", "in": "query", "schema": DATE},
+        {"name": "to", "in": "query", "schema": DATE},
+        {"name": "status", "in": "query", "schema": {"enum": ["NEW", "IN_PROGRESS", "RESOLVED", "IGNORED"]}},
+        {"name": "favorite", "in": "query", "schema": {"type": "boolean"}},
+        {"name": "q", "in": "query", "schema": {"type": "string", "maxLength": 100}},
+        {"name": "cursor", "in": "query", "schema": {"type": "string"}},
+        {"name": "limit", "in": "query", "schema": {"type": "integer", "enum": [10, 25, 50]}},
+    ]
+    paths["/api/v2/admin/diagnostics/export"]["get"]["parameters"] = paths["/api/v2/admin/diagnostics/groups"]["get"]["parameters"] + [
+        {"name": "format", "in": "query", "required": True, "schema": {"enum": ["json", "csv"]}},
+    ]
     openapi = {"openapi": "3.1.0", "info": {"title": "Dispatcher design contract", "version": VERSION},
                "servers": [{"url": "https://dispatcher.example.invalid"}], "paths": paths,
                "components": {"securitySchemes": {
@@ -572,6 +611,25 @@ def build():
         "device.command.result": {"requestId": rid, "status": "RUNNING", "progress": 0.5},
         "protocol.ack": {"replyTo": rid},
         "protocol.error": {"replyTo": rid, "error": err},
+        "diagnostics.events": {"events": [{
+            "eventId": "event-w001",
+            "occurredAt": "2026-11-18T10:15:30Z",
+            "source": "worker",
+            "service": "processor",
+            "environment": "production",
+            "release": "0.8.3",
+            "severity": "error",
+            "code": "EXECUTOR_FAILED",
+            "module": "executor",
+            "operation": "media.transcode",
+            "stage": "TRANSCODING",
+            "message": "Process exited before packaging",
+            "cause": "encoder error",
+            "jobId": jid,
+            "deviceId": did,
+        }]},
+        "diagnostics.ack": {"replyTo": rid, "accepted": 1, "duplicates": 0,
+                            "receivedAt": "2026-11-18T10:15:31Z"},
     }
     for kind, body in bodies.items():
         payloads.append((kind.replace(".", "-"), "DeviceMessage",
@@ -611,6 +669,15 @@ def build():
     payloads.append(("diagnostics-ack", "DiagnosticsAck",
                      {"protocolVersion": VERSION, "accepted": 2, "duplicates": 0,
                       "receivedAt": "2026-11-18T10:15:31Z"}))
+    payloads.append(("diagnostics-status", "DiagnosticsStatus",
+                     {"events": 12, "groups": 4, "dbBytes": 65536, "freeBytes": 200000000,
+                      "maxDbBytes": 268435456, "protectedExamples": 2, "protectedBytes": 4096,
+                      "lostQuota": 0, "lostDisk": 0, "lostSpam": 0, "lostFallback": 1,
+                      "retentionDays": 14, "diskWarning": False, "lastPruneAt": None,
+                      "lastPruneError": "", "lastPruneRemoved": 0}))
+    payloads.append(("diagnostics-probe", "DiagnosticsProbe",
+                     {"ok": True, "collectionEnabled": True, "journalAvailable": True,
+                      "probedAt": "2026-11-18T10:15:31Z", "lastReceivedAt": "2026-11-18T10:15:30Z"}))
     bads = []
     for name, definition, value in payloads:
         dump(ROOT / f"fixtures/valid/{name}.json", {"schema": definition, "value": value})

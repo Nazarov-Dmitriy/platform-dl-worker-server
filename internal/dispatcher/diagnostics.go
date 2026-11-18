@@ -20,6 +20,10 @@ type DiagnosticsBatch struct {
 // endpoint stays unavailable (503) until the store is attached.
 func (h *HTTP) ConfigureErrors(s *ErrorStore) { h.errors = s }
 
+// ConfigureReporter attaches the Worker diagnostics sink. Reporting never
+// uses the site ingress and does not grant journal read rights.
+func (h *HTTP) ConfigureReporter(r *Reporter) { h.reporter = r }
+
 // RequireSiteDiagnostics enforces that the site is enabled and has the
 // «Сбор ошибок» permission. Turning collection off does not revoke the site
 // token or its other actions; it only rejects this ingress.

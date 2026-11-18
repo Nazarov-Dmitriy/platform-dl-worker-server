@@ -1158,3 +1158,135 @@ section[data-panel="sites"] hr {
   font-size: 12px;
   padding: 0 6px;
 }
+.errors-toolbar {
+  flex-wrap: wrap;
+}
+.errors-seg {
+  display: flex;
+  gap: 6px;
+}
+.errors-seg button {
+  min-height: 38px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+.errors-seg button[aria-pressed="true"] {
+  background: var(--selected);
+  color: var(--accent);
+  border-color: transparent;
+}
+.errors-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+.errors-inline .field,
+.errors-custom .field {
+  margin: 0;
+}
+.errors-controls {
+  display: grid;
+  gap: 14px;
+}
+.errors-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.errors-periods .button[aria-pressed="true"] {
+  background: var(--selected);
+  color: var(--accent);
+  border-color: transparent;
+}
+.errors-custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.errors-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.errors-list {
+  min-height: 280px;
+}
+#errorsMore > summary {
+  padding: 18px 22px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.errors-group {
+  border-bottom: 1px solid var(--border);
+}
+.errors-group:last-child {
+  border-bottom: 0;
+}
+.errors-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 12px 18px;
+  align-items: center;
+  width: 100%;
+  padding: 16px 22px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: inherit;
+}
+.errors-row[aria-expanded="true"] {
+  background: var(--selected);
+}
+.errors-row-title {
+  font-weight: 600;
+}
+.errors-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.errors-count,
+.errors-when {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.errors-detail {
+  padding: 0 22px 20px;
+  display: grid;
+  gap: 14px;
+}
+.errors-detail pre {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 12px;
+  background: var(--soft);
+  border-radius: 8px;
+}
+.errors-copy-text {
+  width: 100%;
+  min-height: 220px;
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+@media (max-width: 850px) {
+  .errors-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .errors-count,
+  .errors-when {
+    white-space: normal;
+  }
+  .errors-stats {
+    grid-template-columns: 1fr;
+  }
+}

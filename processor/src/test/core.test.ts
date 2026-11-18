@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { LeaseClock } from "../lease.js";
 import { Journal } from "../journal.js";
+import { DiagnosticsSpool, safeText } from "../diagnostics.js";
 import { Resources, slotBudget } from "../resources.js";
 import { frame, parseFrame } from "../protocol.js";
 import { Executor } from "../executor.js";
@@ -804,6 +805,26 @@ test("system failures always become valid public error codes", async () => {
     errorCode(new Error("MODEL_NOT_INSTALLED"), "JOB_FAILED"),
     "MODEL_NOT_INSTALLED",
   );
+});
+
+test("diagnostics spool keeps eventId and redacts secrets", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "processor-diag-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  assert.match(safeText("Bearer super-secret and https://x?signature=1"), /\[redacted\]/);
+  assert.doesNotMatch(safeText("ffmpeg -i https://signed"), /https:\/\//);
+  const spool = new DiagnosticsSpool(dir, "device-1");
+  spool.report({
+    code: "EXECUTOR_FAILED",
+    message: "ffmpeg https://storage.example.invalid/x?X-Amz-Signature=abc failed",
+    jobId: "11111111-1111-4111-8111-111111111111",
+  });
+  const firstId = spool.state.pending[0].eventId;
+  const f = spool.nextFrame();
+  assert.equal(f?.type, "diagnostics.events");
+  assert.equal(f?.body.events[0].eventId, firstId);
+  assert.doesNotMatch(f?.body.events[0].message, /Signature=abc/);
+  spool.ack(f!.messageId, 1, 0);
+  assert.equal(new DiagnosticsSpool(dir, "device-1").state.pending.length, 0);
 });
 
 test("video offers accept zero output limit, retain legacy limits and reject negative limits", () => {

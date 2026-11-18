@@ -16,6 +16,7 @@ import {
 import { join, resolve } from "node:path";
 import type { Config } from "./config.js";
 import { Journal, type Attempt } from "./journal.js";
+import { DiagnosticsSpool, safeText } from "./diagnostics.js";
 import { frame, parseFrame, sameFence, type Frame } from "./protocol.js";
 import { LeaseClock } from "./lease.js";
 import { Resources, transcodeCapability } from "./resources.js";
@@ -94,6 +95,7 @@ export class Agent {
   timer?: NodeJS.Timeout;
   reconnect?: NodeJS.Timeout;
   readonly resources: Resources;
+  readonly diagnostics: DiagnosticsSpool;
   readonly ffmpeg: boolean;
   chain: Promise<void> = Promise.resolve();
   commandChain: Promise<void> = Promise.resolve();
@@ -119,6 +121,7 @@ export class Agent {
       );
     }
     this.resources = new Resources(config, journal);
+    this.diagnostics = new DiagnosticsSpool(config.stateDir, config.deviceId);
     this.ffmpeg = hasBin(config.ffmpeg) && hasBin(config.ffprobe);
     if (config.catalogExtra) {
       journal.state.catalog = JSON.parse(
@@ -338,6 +341,7 @@ export class Agent {
         if (!r.ending) this.renew(r, true);
       }
       for (const out of this.journal.state.outbox) this.send(out);
+      this.flushDiagnostics();
       return;
     }
     if (!this.session) throw new Error("WELCOME_REQUIRED");
@@ -457,6 +461,11 @@ export class Agent {
       this.send(accept);
       return;
     }
+    if (f.type === "diagnostics.ack") {
+      this.diagnostics.ack(b.replyTo, b.accepted || 0, b.duplicates || 0);
+      this.flushDiagnostics();
+      return;
+    }
     if (f.type === "protocol.ack") {
       this.journal.state.outbox = this.journal.state.outbox.filter(
         (out) => out.messageId !== b.replyTo,
@@ -467,6 +476,7 @@ export class Agent {
       return;
     }
     if (f.type === "protocol.error") {
+      this.diagnostics.fail(b.replyTo);
       const out = this.journal.state.outbox.find(
         (out) => out.messageId === b.replyTo,
       );
@@ -1250,6 +1260,10 @@ export class Agent {
     if (r.ending) throw new Error("STOPPED");
     return r.grants.find((g) => g.path === path && g.method === method)!;
   }
+  flushDiagnostics() {
+    const f = this.diagnostics.nextFrame();
+    if (f) this.send(f);
+  }
   queue(f: Frame) {
     this.journal.state.outbox.push(f);
     this.journal.save();
@@ -1260,6 +1274,13 @@ export class Agent {
     this.journal.state.attempts = this.journal.state.attempts.filter(
       (x) => x.fence.assignmentId !== a.fence.assignmentId,
     );
+    if (code !== "TEST_EXECUTOR_ONLY")
+      this.diagnostics.report({
+        code,
+        message: safeText(message),
+        jobId: a.jobId,
+        module: "executor",
+      });
 
     this.queue(
       frame("job.failed", {
@@ -1386,10 +1407,16 @@ export class Agent {
           }),
         );
         for (const out of this.journal.state.outbox) this.send(out);
+        this.flushDiagnostics();
         this.nextHeartbeat = Date.now() + this.heartbeat * 1000;
       }
     } catch {
       this.log("LOCAL_STATE_ERROR");
+      this.diagnostics.report({
+        code: "LOCAL_STATE_ERROR",
+        message: "Processor local state failed",
+        module: "agent",
+      });
       void this.close();
     }
   }

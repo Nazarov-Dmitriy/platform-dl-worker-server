@@ -266,7 +266,21 @@ func listBackupNames(dir string) []string {
 }
 
 func pruneBackupDir(dir string, keep int) {
-	names := listBackupNames(dir)
+	pruneBackupPrefixed(dir, "dispatcher-", keep)
+}
+
+func pruneBackupPrefixed(dir, prefix string, keep int) {
+	ents, e := os.ReadDir(dir)
+	if e != nil {
+		return
+	}
+	names := []string{}
+	for _, ent := range ents {
+		if !ent.IsDir() && strings.HasPrefix(ent.Name(), prefix) && strings.HasSuffix(ent.Name(), ".db") {
+			names = append(names, ent.Name())
+		}
+	}
+	sort.Strings(names)
 	if len(names) <= keep {
 		return
 	}

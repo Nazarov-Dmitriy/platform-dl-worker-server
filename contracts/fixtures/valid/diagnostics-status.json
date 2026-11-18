@@ -1,0 +1,21 @@
+{
+  "schema": "DiagnosticsStatus",
+  "value": {
+    "events": 12,
+    "groups": 4,
+    "dbBytes": 65536,
+    "freeBytes": 200000000,
+    "maxDbBytes": 268435456,
+    "protectedExamples": 2,
+    "protectedBytes": 4096,
+    "lostQuota": 0,
+    "lostDisk": 0,
+    "lostSpam": 0,
+    "lostFallback": 1,
+    "retentionDays": 14,
+    "diskWarning": false,
+    "lastPruneAt": null,
+    "lastPruneError": "",
+    "lastPruneRemoved": 0
+  }
+}

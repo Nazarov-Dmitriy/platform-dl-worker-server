@@ -35,16 +35,30 @@ const (
 
 // ErrorJournalConfig holds tunable storage policy for the diagnostics journal.
 type ErrorJournalConfig struct {
-	RetentionDays    int // 7..21, default 14
-	MaxSavedExamples int // default 10
+	RetentionDays          int   // 7..21, default 14
+	MaxSavedExamples       int   // default 10
+	MaxDBBytes             int64 // default 256 MiB; new events are refused when exceeded
+	SenderHourlyLimit      int   // per site or device
+	GlobalHourlyLimit      int
+	MaxNewFingerprintsHour int
 }
 
 func DefaultErrorJournalConfig() ErrorJournalConfig {
-	return ErrorJournalConfig{RetentionDays: 14, MaxSavedExamples: 10}
+	return ErrorJournalConfig{
+		RetentionDays:          14,
+		MaxSavedExamples:       10,
+		MaxDBBytes:             256 << 20,
+		SenderHourlyLimit:      500,
+		GlobalHourlyLimit:      2000,
+		MaxNewFingerprintsHour: 80,
+	}
 }
 
 func (c ErrorJournalConfig) validate() error {
 	if c.RetentionDays < 7 || c.RetentionDays > 21 || c.MaxSavedExamples < 1 || c.MaxSavedExamples > 100 {
+		return errors.New("invalid error journal configuration")
+	}
+	if c.MaxDBBytes < 1<<20 || c.SenderHourlyLimit < 1 || c.GlobalHourlyLimit < c.SenderHourlyLimit || c.MaxNewFingerprintsHour < 1 {
 		return errors.New("invalid error journal configuration")
 	}
 	return nil
@@ -91,6 +105,7 @@ func OpenErrors(path string, config ErrorJournalConfig) (*ErrorStore, error) {
 	q.Add("_pragma", "foreign_keys(1)")
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "synchronous(FULL)")
+	q.Add("_pragma", "auto_vacuum(INCREMENTAL)")
 	q.Set("_txlock", "immediate")
 	u.RawQuery = q.Encode()
 	db, e := sql.Open("sqlite", u.String())
@@ -138,13 +153,26 @@ func OpenErrors(path string, config ErrorJournalConfig) (*ErrorStore, error) {
 	if e = s.seedSettings(); e != nil {
 		return fail(e)
 	}
+	s.loadSettings()
 	return s, nil
 }
 
 func (s *ErrorStore) seedSettings() error {
-	_, e := s.db.Exec("INSERT OR IGNORE INTO error_settings(key,value) VALUES('retention_days',?),('max_saved_examples',?)",
+	_, e := s.db.Exec(`INSERT OR IGNORE INTO error_settings(key,value) VALUES
+		('retention_days',?),('max_saved_examples',?),
+		('lost_quota','0'),('lost_disk','0'),('lost_spam','0'),('lost_fallback','0'),
+		('last_prune_at',''),('last_prune_error',''),('last_prune_removed','0')`,
 		strconv.Itoa(s.config.RetentionDays), strconv.Itoa(s.config.MaxSavedExamples))
 	return e
+}
+
+func (s *ErrorStore) loadSettings() {
+	var raw string
+	if s.db.QueryRow("SELECT value FROM error_settings WHERE key='retention_days'").Scan(&raw) == nil {
+		if n, e := strconv.Atoi(raw); e == nil && n >= 7 && n <= 21 {
+			s.config.RetentionDays = n
+		}
+	}
 }
 
 func (s *ErrorStore) Close() error {
@@ -258,14 +286,23 @@ func (s *ErrorStore) Record(ctx context.Context, sender DiagnosticsSender, event
 	if len(events) == 0 || len(events) > maxEventsPerBatch {
 		return 0, 0, problem(400, "INVALID_BATCH", "A diagnostics batch needs 1..50 events")
 	}
-	for _, ev := range events {
+	clean := make([]DiagnosticsEvent, len(events))
+	for i, ev := range events {
 		if e := ev.validate(); e != nil {
 			return 0, 0, e
 		}
+		clean[i] = sanitizeEvent(ev)
+	}
+	if e := s.checkDisk(); e != nil {
+		s.addLost("lost_disk", len(clean))
+		return 0, 0, e
 	}
 	receivedAt := s.now().UnixMilli()
 	e := s.transaction(ctx, func(tx *sql.Tx) error {
-		for _, ev := range events {
+		if e := s.enforceQuota(tx, sender, clean); e != nil {
+			return e
+		}
+		for _, ev := range clean {
 			dup, e := s.recordEvent(tx, sender, receivedAt, ev)
 			if e != nil {
 				return e
@@ -279,6 +316,18 @@ func (s *ErrorStore) Record(ctx context.Context, sender DiagnosticsSender, event
 		return nil
 	})
 	if e != nil {
+		e = mapStoreError(e)
+		var api *APIError
+		if errors.As(e, &api) {
+			switch {
+			case api.Code == "STORAGE_FULL":
+				s.addLost("lost_disk", len(clean))
+			case api.Code == "QUOTA_EXCEEDED" && strings.Contains(api.Message, "fingerprint"):
+				s.addLost("lost_spam", len(clean))
+			case api.Code == "QUOTA_EXCEEDED":
+				s.addLost("lost_quota", len(clean))
+			}
+		}
 		return 0, 0, e
 	}
 	return accepted, duplicates, nil
@@ -378,112 +427,139 @@ func errorType(stack string) string {
 	return first
 }
 
-// Prune applies the TTL policy: unprotected events older than RetentionDays
-// are removed, saved examples of protected groups (favorite or IN_PROGRESS)
-// survive, and groups left without any event are dropped.
-func (s *ErrorStore) Prune(ctx context.Context) error {
-	cutoff := s.now().Add(-time.Duration(s.config.RetentionDays) * 24 * time.Hour).UnixMilli()
-	return s.transaction(ctx, func(tx *sql.Tx) error {
-		if _, e := tx.Exec(`DELETE FROM error_events WHERE received_at < ? AND seq NOT IN (
-			SELECT e.event_seq FROM error_examples e JOIN error_groups g ON g.id = e.group_id
-			WHERE g.favorite = 1 OR g.status = 'IN_PROGRESS')`, cutoff); e != nil {
-			return e
-		}
-		if _, e := tx.Exec("DELETE FROM error_groups WHERE id NOT IN (SELECT DISTINCT group_id FROM error_events)"); e != nil {
-			return e
-		}
-		return nil
-	})
-}
-
-// SetFavorite toggles protection of a card independently from its status.
-func (s *ErrorStore) SetFavorite(ctx context.Context, groupID string, favorite bool, author string) error {
-	v := 0
-	if favorite {
-		v = 1
-	}
-	return s.transaction(ctx, func(tx *sql.Tx) error {
-		r, e := tx.Exec("UPDATE error_groups SET favorite=? WHERE id=?", v, groupID)
-		if e != nil {
-			return e
-		}
-		if n, _ := r.RowsAffected(); n == 0 {
-			return problem(404, "NOT_FOUND", "Error group not found")
-		}
-		return s.addHistory(tx, groupID, s.now().UnixMilli(), author, "favorite="+strconv.FormatBool(favorite))
-	})
-}
-
-// SetStatus applies a resolution transition and keeps a history entry.
-func (s *ErrorStore) SetStatus(ctx context.Context, groupID, status, author string) error {
-	if !contains([]string{"NEW", "IN_PROGRESS", "RESOLVED", "IGNORED"}, status) {
-		return problem(400, "INVALID_STATUS", "Unknown status")
-	}
-	return s.transaction(ctx, func(tx *sql.Tx) error {
-		var old string
-		e := tx.QueryRow("SELECT status FROM error_groups WHERE id=?", groupID).Scan(&old)
-		if errors.Is(e, sql.ErrNoRows) {
-			return problem(404, "NOT_FOUND", "Error group not found")
-		}
-		if e != nil {
-			return e
-		}
-		if old == status {
-			return nil
-		}
-		if _, e = tx.Exec("UPDATE error_groups SET status=? WHERE id=?", status, groupID); e != nil {
-			return e
-		}
-		return s.addHistory(tx, groupID, s.now().UnixMilli(), author, "status="+old+"->"+status)
-	})
-}
-
-// PinExample saves a diagnostic example with the protected card.
-func (s *ErrorStore) PinExample(ctx context.Context, groupID string, eventSeq int64, author string) error {
-	return s.transaction(ctx, func(tx *sql.Tx) error {
-		var n int
-		if e := tx.QueryRow("SELECT count(*) FROM error_events WHERE group_id=? AND seq=?", groupID, eventSeq).Scan(&n); e != nil {
-			return e
-		}
-		if n == 0 {
-			return problem(404, "NOT_FOUND", "Event not found")
-		}
-		var pinned int
-		if e := tx.QueryRow("SELECT count(*) FROM error_examples WHERE group_id=?", groupID).Scan(&pinned); e != nil {
-			return e
-		}
-		if pinned >= s.config.MaxSavedExamples {
-			return problem(409, "EXAMPLES_LIMIT", "Too many saved examples for this group")
-		}
-		if _, e := tx.Exec("INSERT OR IGNORE INTO error_examples(group_id,event_seq,saved_at) VALUES(?,?,?)", groupID, eventSeq, s.now().UnixMilli()); e != nil {
-			return e
-		}
-		if _, e := tx.Exec("UPDATE error_groups SET pinned_examples=(SELECT count(*) FROM error_examples WHERE group_id=?) WHERE id=?", groupID, groupID); e != nil {
-			return e
-		}
-		return s.addHistory(tx, groupID, s.now().UnixMilli(), author, "example-pinned")
-	})
-}
-
-// AddNote appends an owner note to a group.
-func (s *ErrorStore) AddNote(ctx context.Context, groupID, author, text string) error {
-	if strings.TrimSpace(text) == "" {
-		return problem(400, "INVALID_NOTE", "Note text is required")
-	}
-	return s.transaction(ctx, func(tx *sql.Tx) error {
-		var n int
-		if e := tx.QueryRow("SELECT count(*) FROM error_groups WHERE id=?", groupID).Scan(&n); e != nil {
-			return e
-		}
-		if n == 0 {
-			return problem(404, "NOT_FOUND", "Error group not found")
-		}
-		_, e := tx.Exec("INSERT INTO error_notes(group_id,at,author,text) VALUES(?,?,?,?)", groupID, s.now().UnixMilli(), author, text)
-		return e
-	})
-}
-
 func (s *ErrorStore) addHistory(tx *sql.Tx, groupID string, at int64, author, change string) error {
 	_, e := tx.Exec("INSERT INTO error_history(group_id,at,author,change) VALUES(?,?,?,?)", groupID, at, author, change)
+	return e
+}
+
+func (s *ErrorStore) checkDisk() error {
+	info, e := os.Stat(s.path)
+	if e != nil {
+		return mapStoreError(e)
+	}
+	if info.Size() >= s.config.MaxDBBytes {
+		return problem(507, "STORAGE_FULL", "Diagnostics storage is full")
+	}
+	return nil
+}
+
+func (s *ErrorStore) enforceQuota(tx *sql.Tx, sender DiagnosticsSender, events []DiagnosticsEvent) error {
+	hourAgo := s.now().Add(-time.Hour).UnixMilli()
+	newEvents := 0
+	newFingerprints := map[string]struct{}{}
+	for _, ev := range events {
+		var n int
+		if e := tx.QueryRow("SELECT count(*) FROM error_events WHERE sender_id=? AND event_id=?", sender.ID, ev.EventID).Scan(&n); e != nil {
+			return e
+		}
+		if n > 0 {
+			continue
+		}
+		newEvents++
+		fp := diagnosticsFingerprint(sender.Area, sender.SiteID, ev.Source, ev.Service, ev.Environment, ev.Code, ev.Module, ev.Operation, ev.Stack)
+		var exists int
+		if e := tx.QueryRow("SELECT count(*) FROM error_groups WHERE fingerprint=?", fp).Scan(&exists); e != nil {
+			return e
+		}
+		if exists == 0 {
+			newFingerprints[fp] = struct{}{}
+		}
+	}
+	if newEvents == 0 {
+		return nil
+	}
+	var senderCount, globalCount, recentNew int
+	if e := tx.QueryRow("SELECT count(*) FROM error_events WHERE sender_id=? AND received_at>=?", sender.ID, hourAgo).Scan(&senderCount); e != nil {
+		return e
+	}
+	if e := tx.QueryRow("SELECT count(*) FROM error_events WHERE received_at>=?", hourAgo).Scan(&globalCount); e != nil {
+		return e
+	}
+	if e := tx.QueryRow(`SELECT count(DISTINCT g.id) FROM error_groups g JOIN error_events e ON e.group_id=g.id
+		WHERE g.first_seen>=? AND e.sender_id=?`, hourAgo, sender.ID).Scan(&recentNew); e != nil {
+		return e
+	}
+	if senderCount+newEvents > s.config.SenderHourlyLimit || globalCount+newEvents > s.config.GlobalHourlyLimit {
+		return problem(429, "QUOTA_EXCEEDED", "Diagnostics quota exceeded")
+	}
+	if recentNew+len(newFingerprints) > s.config.MaxNewFingerprintsHour {
+		return problem(429, "QUOTA_EXCEEDED", "Too many distinct diagnostics fingerprints")
+	}
+	return nil
+}
+
+func (s *ErrorStore) addLost(key string, n int) {
+	_, _ = s.db.Exec("UPDATE error_settings SET value=CAST(value AS INTEGER)+? WHERE key=?", n, key)
+}
+
+func mapStoreError(e error) error {
+	if e == nil {
+		return nil
+	}
+	var api *APIError
+	if errors.As(e, &api) {
+		return e
+	}
+	msg := strings.ToLower(e.Error())
+	if strings.Contains(msg, "database or disk is full") || strings.Contains(msg, "sqlite_full") || strings.Contains(msg, "no space") {
+		return problem(507, "STORAGE_FULL", "Diagnostics storage is full")
+	}
+	if strings.Contains(msg, "locked") || strings.Contains(msg, "busy") {
+		return problem(503, "STORAGE_UNAVAILABLE", "Diagnostics storage is busy")
+	}
+	return e
+}
+
+func (s *ErrorStore) LastReceived(ctx context.Context, siteID string) (time.Time, bool, error) {
+	var ms sql.NullInt64
+	e := s.db.QueryRowContext(ctx, "SELECT max(received_at) FROM error_events WHERE area='sites' AND site_id=?", siteID).Scan(&ms)
+	if e != nil {
+		return time.Time{}, false, e
+	}
+	if !ms.Valid {
+		return time.Time{}, false, nil
+	}
+	return time.UnixMilli(ms.Int64).UTC(), true, nil
+}
+
+// ErrorGroupRow is one page item from the diagnostics journal.
+type ErrorGroupRow struct {
+	ID          string
+	Area        string
+	SiteID      string
+	Source      string
+	Code        string
+	Status      string
+	LastSeen    int64
+	Occurrences int
+}
+
+func (s *ErrorStore) PageGroups(ctx context.Context, area, siteID string, before int64, beforeID string, limit int) ([]ErrorGroupRow, error) {
+	if limit < 1 || limit > 50 {
+		limit = 25
+	}
+	if before <= 0 {
+		before = s.now().UnixMilli() + 1
+	}
+	rows, e := s.db.QueryContext(ctx, `SELECT id,area,site_id,source,code,status,last_seen,occurrences FROM error_groups
+		WHERE area=? AND (?='' OR site_id=?) AND (last_seen<? OR (last_seen=? AND id<?))
+		ORDER BY last_seen DESC, id DESC LIMIT ?`, area, siteID, siteID, before, before, beforeID, limit)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	items := []ErrorGroupRow{}
+	for rows.Next() {
+		var g ErrorGroupRow
+		if e = rows.Scan(&g.ID, &g.Area, &g.SiteID, &g.Source, &g.Code, &g.Status, &g.LastSeen, &g.Occurrences); e != nil {
+			return nil, e
+		}
+		items = append(items, g)
+	}
+	return items, rows.Err()
+}
+
+func (s *ErrorStore) Checkpoint(ctx context.Context) error {
+	_, e := s.db.ExecContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)")
 	return e
 }

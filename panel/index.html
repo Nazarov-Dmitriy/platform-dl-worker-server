@@ -6,11 +6,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Панель управления · Worker</title>
     <script src="/panel/theme.js?v=4"></script>
-    <link rel="stylesheet" href="/panel/app.css?v=7" />
-    <script defer src="/panel/common.js?v=5"></script>
+    <link rel="stylesheet" href="/panel/app.css?v=8" />
+    <script defer src="/panel/common.js?v=6"></script>
     <script defer src="/panel/model-compatibility.js?v=6"></script>
-    <script defer src="/panel/render.js?v=7"></script>
-    <script defer src="/panel/app.js?v=7"></script>
+    <script defer src="/panel/render.js?v=9"></script>
+    <script defer src="/panel/errors.js?v=1"></script>
+    <script defer src="/panel/app.js?v=9"></script>
 </head>
 
 <body>
@@ -29,7 +30,9 @@
           aria-pressed="false">
           <span data-icon="monitor"></span>Устройства</button><button type="button" data-tab="sites"
           aria-pressed="false">
-          <span data-icon="globe"></span>Сайты</button><button type="button" data-tab="models" aria-pressed="false">
+          <span data-icon="globe"></span>Сайты</button><button type="button" data-tab="errors"
+          aria-pressed="false" id="errorsTab" hidden>
+          <span data-icon="alert"></span>Ошибки</button><button type="button" data-tab="models" aria-pressed="false">
           <span data-icon="box"></span>Модели</button><button type="button" data-tab="accounts" aria-pressed="false"
           id="accountsTab" hidden>
           <span data-icon="user"></span>Аккаунты</button><button type="button" data-tab="worker" aria-pressed="false">
@@ -168,16 +171,25 @@
                   <div class="option-list">
                     <label class="check-field"><input type="checkbox" name="transcode" />Обработка видео</label><label
                       class="check-field"><input type="checkbox" name="transcribe" />Распознавание речи</label><label
-                      class="check-field"><input type="checkbox" name="subtitles" />Субтитры</label><label class="check-field"><input type="checkbox" name="generate" />Генерация изображений</label>
+                      class="check-field"><input type="checkbox" name="subtitles" />Субтитры</label><label class="check-field"><input type="checkbox" name="generate" />Генерация изображений</label><label class="check-field"><input type="checkbox" name="diagnostics" />Сбор ошибок</label>
                   </div>
                 </fieldset>
-                <p class="caption">Сайт сможет заказывать только отмеченные виды работ. Изменение действует сразу,
-                  текущие задания не отменяются.</p>
+                <p class="caption">Сайт сможет заказывать только отмеченные виды работ. «Сбор ошибок» — приём журнала,
+                  не media-задание. Изменение действует сразу, текущие задания не отменяются, токен не отзывается.</p>
                 <div class="form-actions">
                   <button class="button primary" type="submit">Сохранить операции</button>
                 </div>
               </form>
               <p id="siteOpsOut" class="notice-box" role="status" hidden></p>
+              <div class="notice-box" id="siteDiagnosticsBox">
+                <p class="muted">События ошибок идут Frontend → Backend сайта → Worker по действующему токену сайта. Токен не передаётся в браузер панели. Приём событий не даёт читать журнал.</p>
+                <p class="caption" id="siteDiagnosticsLast">Последнее событие: ещё не было</p>
+                <p class="caption">Отсутствие новых ошибок само по себе не доказывает потерю связи.</p>
+                <div class="form-actions">
+                  <button id="siteDiagnosticsProbe" type="button" class="button">Проверить подключение</button>
+                </div>
+                <p id="siteDiagnosticsOut" class="notice-box" role="status" hidden></p>
+              </div>
               <hr />
               <div class="form-actions"><button id="issueSiteToken" type="button" class="button primary">Выдать новый
                   токен</button><button id="deleteSite" type="button" class="button danger">Удалить сайт</button></div>
@@ -204,7 +216,7 @@
                         <label class="check-field"><input type="checkbox" name="transcode" checked />Обработка
                           видео</label><label class="check-field"><input type="checkbox"
                             name="transcribe" />Распознавание речи</label><label class="check-field"><input
-                            type="checkbox" name="subtitles" />Субтитры</label><label class="check-field"><input type="checkbox" name="generate" />Генерация изображений</label>
+                            type="checkbox" name="subtitles" />Субтитры</label><label class="check-field"><input type="checkbox" name="generate" />Генерация изображений</label><label class="check-field"><input type="checkbox" name="diagnostics" />Сбор ошибок</label>
                       </div>
                     </fieldset>
                     <div class="form-actions">
@@ -214,6 +226,133 @@
                   </form>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+        <section data-panel="errors" hidden>
+          <div class="card">
+            <div class="card-heading errors-toolbar">
+              <div class="errors-seg" role="tablist" aria-label="Область журнала">
+                <button type="button" id="errorsAreaSites" data-errors-area="sites" aria-pressed="true">Сайты</button>
+                <button type="button" id="errorsAreaWorker" data-errors-area="worker" aria-pressed="false">Worker</button>
+              </div>
+              <div id="errorsSiteFilters" class="errors-inline">
+                <label class="field">Сайт<select id="errorsSite" aria-label="Сайт журнала">
+                    <option value="">Все сайты</option>
+                  </select></label>
+                <label class="field">Источник<select id="errorsSource" aria-label="Источник">
+                    <option value="">Фронтенд и бэкенд</option>
+                    <option value="front">Фронтенд</option>
+                    <option value="back">Бэкенд</option>
+                  </select></label>
+              </div>
+            </div>
+            <div class="card-body errors-controls">
+              <div class="errors-periods" role="group" aria-label="Период">
+                <button type="button" class="button" data-errors-period="today" aria-pressed="true">Сегодня</button>
+                <button type="button" class="button" data-errors-period="yesterday" aria-pressed="false">Вчера</button>
+                <button type="button" class="button" data-errors-period="week" aria-pressed="false">За неделю</button>
+                <button type="button" class="button" data-errors-period="all" aria-pressed="false">За всё время</button>
+                <button type="button" class="button" data-errors-period="custom" aria-pressed="false">Свой период</button>
+              </div>
+              <p id="errorsPeriodLabel" class="caption">Период</p>
+              <form id="errorsCustom" class="errors-custom" hidden>
+                <label class="field">С даты<input id="errorsFrom" type="date" required /></label>
+                <label class="field">По дату<input id="errorsTo" type="date" required /></label>
+                <button class="button primary" type="submit">Применить</button>
+              </form>
+              <p class="caption">Счётчики по receivedAt. «За неделю» — сегодня и шесть предыдущих календарных дней в зоне панели. «За всё время» — сохранившиеся данные с учётом TTL и выбранных примеров, без восстановления удалённого.</p>
+            </div>
+          </div>
+          <div class="stats errors-stats">
+            <div class="stat">
+              <span class="stat-icon notice" data-icon="list"></span>
+              <div>
+                <p class="stat-label">Случаев за период</p>
+                <p class="stat-value" id="errorsStatCases">—</p>
+              </div>
+            </div>
+            <div class="stat">
+              <span class="stat-icon" data-icon="file"></span>
+              <div>
+                <p class="stat-label">Разных ошибок</p>
+                <p class="stat-value" id="errorsStatGroups">—</p>
+              </div>
+            </div>
+            <div class="stat">
+              <span class="stat-icon good" data-icon="alert"></span>
+              <div>
+                <p class="stat-label">Новых групп за период</p>
+                <p class="stat-value" id="errorsStatNew">—</p>
+              </div>
+            </div>
+          </div>
+          <p id="errorsDiskWarning" class="notice-box" hidden role="status"></p>
+          <details class="card" id="errorsMore">
+            <summary>Дополнительные фильтры и срок хранения</summary>
+            <form id="errorsExtra" class="card-body form-grid">
+              <label class="field">Статус<select id="errorsStatus">
+                  <option value="">Все статусы</option>
+                  <option value="NEW">Новая</option>
+                  <option value="IN_PROGRESS">В разборе</option>
+                  <option value="RESOLVED">Исправлено</option>
+                  <option value="IGNORED">Игнорировать</option>
+                </select></label>
+              <label class="field">Избранное<select id="errorsFavorite">
+                  <option value="">Все</option>
+                  <option value="true">Только избранное</option>
+                  <option value="false">Без избранного</option>
+                </select></label>
+              <label class="field">Код<input id="errorsCode" maxlength="100" /></label>
+              <label class="field">Модуль<input id="errorsModule" maxlength="100" /></label>
+              <label class="field">Release<input id="errorsRelease" maxlength="100" /></label>
+              <label class="field">Severity<select id="errorsSeverity">
+                  <option value="">Любая</option>
+                  <option value="fatal">fatal</option>
+                  <option value="error">error</option>
+                  <option value="warning">warning</option>
+                  <option value="info">info</option>
+                </select></label>
+              <label class="field full">Поиск<input id="errorsQ" maxlength="100" placeholder="Код, модуль или сообщение" /></label>
+              <label class="field">Срок хранения, дни<input id="errorsRetention" type="number" min="7" max="21" value="14" /></label>
+              <div class="form-actions full">
+                <button class="button primary" type="submit">Применить фильтры</button>
+                <button id="errorsExtraReset" class="button quiet" type="button">Сбросить</button>
+                <button id="errorsSaveRetention" class="button" type="button">Сохранить срок</button>
+              </div>
+              <p id="errorsRetentionHint" class="caption full">TTL применяется к незащищённым событиям при следующей очистке. Избранное и «в разборе» не удаляются скрытно.</p>
+            </form>
+          </details>
+          <div class="card">
+            <div class="card-heading">
+              <h2>Группы ошибок</h2>
+              <div class="errors-inline">
+                <button type="button" class="button quiet" id="errorsCopyReport">Скопировать отчёт</button>
+                <button type="button" class="button quiet" id="errorsDownloadJson">Скачать JSON</button>
+                <button type="button" class="button quiet" id="errorsDownloadCsv">Выгрузить CSV для Excel</button>
+              </div>
+            </div>
+            <div id="errorsList" class="errors-list" role="status"></div>
+            <div class="audit-pagination">
+              <button id="errorsPrev" class="button" type="button" disabled>Назад</button>
+              <span id="errorsPageLabel">—</span>
+              <button id="errorsNext" class="button" type="button" disabled>Далее</button>
+              <label class="field">На странице<select id="errorsLimit" aria-label="Размер страницы">
+                  <option value="10">10</option>
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                </select></label>
+            </div>
+          </div>
+          <p id="errorsOut" class="notice-box" role="status" hidden></p>
+          <div id="errorsCopyFallback" class="card" hidden>
+            <div class="card-heading">
+              <h2>Текст для копирования</h2>
+              <button type="button" class="button quiet" id="errorsCopyFallbackClose">Скрыть</button>
+            </div>
+            <div class="card-body">
+              <p class="caption">Буфер обмена недоступен. Выделите текст и скопируйте вручную.</p>
+              <textarea id="errorsCopyText" class="errors-copy-text" readonly rows="12"></textarea>
             </div>
           </div>
         </section>

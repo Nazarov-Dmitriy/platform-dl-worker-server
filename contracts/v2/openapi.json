@@ -930,7 +930,27 @@
               }
             }
           },
+          "429": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
           "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "507": {
             "description": "See normative protocol.md",
             "content": {
               "application/json": {
@@ -2368,6 +2388,1268 @@
           }
         }
       }
+    },
+    "/api/v2/admin/diagnostics/status": {
+      "get": {
+        "operationId": "diagnosticsStatus",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/diagnostics/settings": {
+      "get": {
+        "operationId": "diagnosticsSettings",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsSettingsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setDiagnosticsSettings",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsSettingsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./protocol.schema.json#/$defs/DiagnosticsSettings"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/diagnostics/groups": {
+      "get": {
+        "operationId": "listDiagnosticsGroups",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsGroupPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "area",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sites",
+                "worker"
+              ]
+            }
+          },
+          {
+            "name": "siteId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "front",
+                "back"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "NEW",
+                "IN_PROGRESS",
+                "RESOLVED",
+                "IGNORED"
+              ]
+            }
+          },
+          {
+            "name": "favorite",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                10,
+                25,
+                50
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/api/v2/admin/diagnostics/groups/{id}": {
+      "get": {
+        "operationId": "getDiagnosticsGroup",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsGroupCard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/api/v2/admin/diagnostics/groups/{id}/favorite": {
+      "put": {
+        "operationId": "setDiagnosticsFavorite",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsProtectResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./protocol.schema.json#/$defs/DiagnosticsFavorite"
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/api/v2/admin/diagnostics/groups/{id}/status": {
+      "put": {
+        "operationId": "setDiagnosticsGroupStatus",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsProtectResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./protocol.schema.json#/$defs/DiagnosticsStatusChange"
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/api/v2/admin/diagnostics/groups/{id}/notes": {
+      "post": {
+        "operationId": "addDiagnosticsNote",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsNote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./protocol.schema.json#/$defs/DiagnosticsNoteCreate"
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/api/v2/admin/diagnostics/groups/{id}/examples": {
+      "post": {
+        "operationId": "pinDiagnosticsExample",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsProtectResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./protocol.schema.json#/$defs/DiagnosticsExamplePin"
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/api/v2/admin/diagnostics/groups/{id}/examples/{seq}": {
+      "delete": {
+        "operationId": "unpinDiagnosticsExample",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsProtectResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "seq",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      ]
+    },
+    "/api/v2/admin/diagnostics/groups/{id}/report": {
+      "get": {
+        "operationId": "diagnosticsGroupReport",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsGroupCard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/api/v2/admin/diagnostics/export": {
+      "get": {
+        "operationId": "exportDiagnostics",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsGroupPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "area",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sites",
+                "worker"
+              ]
+            }
+          },
+          {
+            "name": "siteId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "front",
+                "back"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "NEW",
+                "IN_PROGRESS",
+                "RESOLVED",
+                "IGNORED"
+              ]
+            }
+          },
+          {
+            "name": "favorite",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                10,
+                25,
+                50
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/api/v2/admin/diagnostics/prune": {
+      "post": {
+        "operationId": "pruneDiagnostics",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsPruneResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/diagnostics/backup": {
+      "post": {
+        "operationId": "backupDiagnostics",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsBackup"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/sites/{id}/diagnostics/probe": {
+      "post": {
+        "operationId": "probeSiteDiagnostics",
+        "security": [
+          {
+            "AdminSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsProbe"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
     },
     "/api/v2/admin/session": {
       "post": {

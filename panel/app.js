@@ -15,12 +15,20 @@ const views = {
     "Подключение и управление обработчиками Mac и Windows",
   ],
   sites: ["Сайты", "Источники заданий для обработки медиа"],
+  errors: ["Ошибки", "Журнал front, back и Worker. Журнал действий — отдельно"],
   models: ["Модели", "Доступные модели для обработки медиа"],
   accounts: ["Аккаунты", "Доступ к панели и роли пользователей"],
   audit: ["Журнал", "Последние действия в диспетчере"],
   updates: ["Обновления", "Версии и установка обновлений Worker"],
   ops: ["Обслуживание", "Снимки данных и подготовка к обновлению"],
 };
+const SITE_OPERATION_FIELDS = [
+  ["transcode", "media.transcode"],
+  ["transcribe", "media.transcribe"],
+  ["subtitles", "media.subtitles"],
+  ["generate", "media.generate"],
+  ["diagnostics", "diagnostics.collect"],
+];
 async function api(path, opts = {}) {
   const { mutate, ...options } = opts;
   const headers = { ...(options.headers || {}) };
@@ -85,7 +93,7 @@ mobileNav.addEventListener("change", closeMenu);
 function selectTab(tab) {
   if (
     !views[tab] ||
-    (["accounts", "audit", "ops", "updates"].includes(tab) &&
+    (["accounts", "audit", "ops", "updates", "errors"].includes(tab) &&
       state.role !== "OWNER")
   )
     tab = "overview";
@@ -101,6 +109,7 @@ function selectTab(tab) {
   document.title = views[tab][0] + " · Worker";
   closeMenu();
   if (tab === "audit" && state.role === "OWNER" && overviewReady) void loadAudit();
+  if (tab === "errors" && state.role === "OWNER" && overviewReady) void loadErrors();
   if (tab === "updates") void loadPublicCertificate();
   if (tab === "overview" && overviewReady) void refreshOverview();
 }
@@ -189,6 +198,7 @@ async function reload() {
   state.models = models.models;
   state.placements = models.placements || [];
   options("jobSite", state.sites, (s) => s.name, "Нет доступных сайтов");
+  errorsFillSites();
   options("overviewSite", state.sites, (s) => s.name, "Нет доступных сайтов");
   $("overviewSite").value = $("jobSite").value;
   options(
@@ -222,9 +232,10 @@ async function reload() {
       "globe",
     );
   if (state.role === "OWNER") {
-    const [accounts, ops] = await Promise.all([
+    const [accounts, ops, diagnostics] = await Promise.all([
       api("/api/v2/admin/accounts"),
       api("/api/v2/admin/ops"),
+      api("/api/v2/admin/diagnostics/status").catch(() => null),
     ]);
     table(
       "accounts",
@@ -241,7 +252,9 @@ async function reload() {
     [...state.sites, ...state.devices, ...accounts.items].forEach(item => participant.append(new Option(item.name || item.login || item.id, item.id)));
     participant.value = previousParticipant;
     await loadAudit();
-    renderOps(ops);
+    await errorsLoadSettings();
+    if (!document.querySelector('[data-panel="errors"]').hidden) await loadErrors();
+    renderOps(ops, diagnostics);
     await loadUpdateStatus();
   }
   await Promise.all([loadJobs(), loadDevice()]);
@@ -353,9 +366,7 @@ on("cancelAll", "click", async () => {
 });
 on("siteForm", "submit", async (e) => {
   const fd = new FormData(e.target),
-    ops = ["transcode", "transcribe", "subtitles", "generate"]
-      .filter((k) => fd.get(k))
-      .map((k) => "media." + k);
+    ops = SITE_OPERATION_FIELDS.filter(([name]) => fd.get(name)).map(([, code]) => code);
   await api("/api/v2/admin/sites", {
     method: "POST",
     mutate: true,
@@ -679,7 +690,11 @@ on("accountForm", "submit", async (e) => {
 });
 async function opsAction(method, path, body, success) {
   await api(path, { method, mutate: true, body: JSON.stringify(body || {}) });
-  renderOps(await api("/api/v2/admin/ops"));
+  const [ops, diagnostics] = await Promise.all([
+    api("/api/v2/admin/ops"),
+    api("/api/v2/admin/diagnostics/status").catch(() => null),
+  ]);
+  renderOps(ops, diagnostics);
   message("opsOut", success || "Состояние обновлено.");
 }
 on("opsMaintenanceOn", "click", () =>
@@ -698,7 +713,7 @@ async function init() {
     state.csrf = session.csrfToken;
     state.role = session.role;
     state.manageSites = session.manageSites;
-    ["accounts", "audit", "ops", "updates"].forEach(
+    ["accounts", "audit", "ops", "updates", "errors"].forEach(
       (tab) => ($(tab + "Tab").hidden = state.role !== "OWNER"),
     );
     $("siteCreate").hidden = state.role !== "OWNER" && !state.manageSites;
@@ -838,12 +853,6 @@ window.addEventListener("focus", () => void refreshOverview());
 
 init();
 
-const SITE_OPERATION_FIELDS = [
-  ["transcode", "media.transcode"],
-  ["transcribe", "media.transcribe"],
-  ["subtitles", "media.subtitles"],
-  ["generate", "media.generate"],
-];
 function fillSiteSettings(site) {
   state.selectedSite = site;
   $("siteSettingsTitle").textContent = "Настройки сайта «" + site.name + "»";
@@ -854,6 +863,10 @@ function fillSiteSettings(site) {
   });
   $("siteIssued").hidden = true;
   message("siteOpsOut", "");
+  message("siteDiagnosticsOut", "");
+  $("siteDiagnosticsLast").textContent = site.diagnosticsLastReceivedAt
+    ? "Последнее событие: " + date(site.diagnosticsLastReceivedAt)
+    : "Последнее событие: ещё не было";
   $("siteSettings").hidden = false;
 }
 function siteSettingsButton(site) {
@@ -878,6 +891,24 @@ on("closeSiteSettings", "click", () => {
   $("siteSettings").hidden = true;
   $("siteIssued").hidden = true;
   message("siteOpsOut", "");
+});
+on("siteDiagnosticsProbe", "click", async () => {
+  const site = state.selectedSite;
+  if (!site) return;
+  const probe = await api("/api/v2/admin/sites/" + site.id + "/diagnostics/probe", {
+    method: "POST",
+    mutate: true,
+    body: "{}",
+  });
+  $("siteDiagnosticsLast").textContent = probe.lastReceivedAt
+    ? "Последнее событие: " + date(probe.lastReceivedAt)
+    : "Последнее событие: ещё не было";
+  message(
+    "siteDiagnosticsOut",
+    probe.ok
+      ? "Журнал доступен, сбор ошибок включён. Это проверка Worker, а не доказательство связи сайта."
+      : "Сбор выключен или журнал недоступен. Media-действия и токен не меняются.",
+  );
 });
 on("siteOpsForm", "submit", async () => {
   const site = state.selectedSite;

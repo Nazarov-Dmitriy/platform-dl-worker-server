@@ -2254,6 +2254,12 @@
         },
         {
           "$ref": "#/$defs/Message_protocol_error"
+        },
+        {
+          "$ref": "#/$defs/Message_diagnostics_events"
+        },
+        {
+          "$ref": "#/$defs/Message_diagnostics_ack"
         }
       ]
     },
@@ -3418,6 +3424,105 @@
       ],
       "additionalProperties": false
     },
+    "Message_diagnostics_events": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "2.0"
+        },
+        "messageId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "const": "diagnostics.events"
+        },
+        "direction": {
+          "const": "UP"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DiagnosticsEvent"
+              },
+              "minItems": 1,
+              "maxItems": 50
+            }
+          },
+          "required": [
+            "events"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "messageId",
+        "type",
+        "direction",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "Message_diagnostics_ack": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "2.0"
+        },
+        "messageId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "const": "diagnostics.ack"
+        },
+        "direction": {
+          "const": "DOWN"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "replyTo": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "accepted": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 50
+            },
+            "duplicates": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 50
+            },
+            "receivedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "replyTo",
+            "accepted",
+            "duplicates",
+            "receivedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "messageId",
+        "type",
+        "direction",
+        "body"
+      ],
+      "additionalProperties": false
+    },
     "CommandView": {
       "type": "object",
       "properties": {
@@ -3805,6 +3910,13 @@
         },
         "tokenSet": {
           "type": "boolean"
+        },
+        "diagnosticsLastReceivedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
         }
       },
       "required": [
@@ -4555,6 +4667,782 @@
         "accepted",
         "duplicates",
         "receivedAt"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsStatus": {
+      "type": "object",
+      "properties": {
+        "events": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "groups": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dbBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "freeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxDbBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "protectedExamples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "protectedBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lostQuota": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lostDisk": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lostSpam": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lostFallback": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retentionDays": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 21
+        },
+        "diskWarning": {
+          "type": "boolean"
+        },
+        "lastPruneAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "lastPruneError": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "lastPruneRemoved": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "events",
+        "groups",
+        "dbBytes",
+        "freeBytes",
+        "maxDbBytes",
+        "protectedExamples",
+        "protectedBytes",
+        "lostQuota",
+        "lostDisk",
+        "lostSpam",
+        "lostFallback",
+        "retentionDays",
+        "diskWarning",
+        "lastPruneAt",
+        "lastPruneError",
+        "lastPruneRemoved"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsProbe": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "collectionEnabled": {
+          "type": "boolean"
+        },
+        "journalAvailable": {
+          "type": "boolean"
+        },
+        "probedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastReceivedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ok",
+        "collectionEnabled",
+        "journalAvailable",
+        "probedAt",
+        "lastReceivedAt"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsSettings": {
+      "type": "object",
+      "properties": {
+        "retentionDays": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 21
+        }
+      },
+      "required": [
+        "retentionDays"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsSettingsView": {
+      "type": "object",
+      "properties": {
+        "retentionDays": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 21
+        },
+        "ttlAppliesOnNextPrune": {
+          "type": "boolean"
+        },
+        "maxSavedExamples": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDbBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warning": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "retentionDays",
+        "ttlAppliesOnNextPrune",
+        "maxSavedExamples",
+        "maxDbBytes",
+        "warning"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsNote": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "at",
+        "author",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsNoteCreate": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsHistory": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "change": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "at",
+        "change"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsStoredEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "receivedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "enum": [
+            "front",
+            "back",
+            "worker"
+          ]
+        },
+        "service": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "environment": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "release": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "severity": {
+          "enum": [
+            "fatal",
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "module": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "operation": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "stage": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "cause": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "stack": {
+          "type": "string",
+          "maxLength": 32768
+        },
+        "context": {
+          "type": "string",
+          "maxLength": 16384
+        },
+        "breadcrumbs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiagnosticsBreadcrumb"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        },
+        "requestId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "operationId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "resourceId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "jobId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "deviceId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "pinned": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "seq",
+        "eventId",
+        "occurredAt",
+        "receivedAt",
+        "source",
+        "message",
+        "pinned"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsGroupListItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "area": {
+          "enum": [
+            "sites",
+            "worker"
+          ]
+        },
+        "siteId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "source": {
+          "enum": [
+            "front",
+            "back",
+            "worker"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "module": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "status": {
+          "enum": [
+            "NEW",
+            "IN_PROGRESS",
+            "RESOLVED",
+            "IGNORED"
+          ]
+        },
+        "favorite": {
+          "type": "boolean"
+        },
+        "periodCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lifetimeCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "firstSeenAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastSeenAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "protected": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "area",
+        "source",
+        "status",
+        "favorite",
+        "periodCount",
+        "lifetimeCount",
+        "lastSeenAt",
+        "protected"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsSummary": {
+      "type": "object",
+      "properties": {
+        "cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "groups": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "newGroups": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "cases",
+        "groups",
+        "newGroups"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsGroupPage": {
+      "type": "object",
+      "properties": {
+        "area": {
+          "enum": [
+            "sites",
+            "worker"
+          ]
+        },
+        "from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "to": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "summary": {
+          "$ref": "#/$defs/DiagnosticsSummary"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiagnosticsGroupListItem"
+          },
+          "minItems": 0,
+          "maxItems": 50
+        },
+        "limit": {
+          "type": "integer",
+          "enum": [
+            10,
+            25,
+            50
+          ]
+        },
+        "nextCursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diskWarning": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "area",
+        "from",
+        "to",
+        "summary",
+        "items",
+        "limit",
+        "nextCursor",
+        "diskWarning"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsGroupCard": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "area": {
+          "enum": [
+            "sites",
+            "worker"
+          ]
+        },
+        "siteId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "source": {
+          "enum": [
+            "front",
+            "back",
+            "worker"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "module": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "status": {
+          "enum": [
+            "NEW",
+            "IN_PROGRESS",
+            "RESOLVED",
+            "IGNORED"
+          ]
+        },
+        "favorite": {
+          "type": "boolean"
+        },
+        "periodCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lifetimeCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "firstSeenAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastSeenAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "protected": {
+          "type": "boolean"
+        },
+        "protectedExamples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "latest": {
+          "$ref": "#/$defs/DiagnosticsStoredEvent"
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiagnosticsStoredEvent"
+          },
+          "minItems": 0,
+          "maxItems": 10
+        },
+        "repeats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiagnosticsStoredEvent"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiagnosticsStoredEvent"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiagnosticsNote"
+          },
+          "minItems": 0,
+          "maxItems": 100
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiagnosticsHistory"
+          },
+          "minItems": 0,
+          "maxItems": 200
+        },
+        "report": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "area",
+        "source",
+        "status",
+        "favorite",
+        "periodCount",
+        "lifetimeCount",
+        "lastSeenAt",
+        "protected",
+        "protectedExamples",
+        "latest",
+        "examples",
+        "repeats",
+        "related",
+        "notes",
+        "history",
+        "report"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsFavorite": {
+      "type": "object",
+      "properties": {
+        "favorite": {
+          "type": "boolean"
+        },
+        "confirmUnprotect": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "favorite"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsStatusChange": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "NEW",
+            "IN_PROGRESS",
+            "RESOLVED",
+            "IGNORED"
+          ]
+        },
+        "confirmUnprotect": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsExamplePin": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "seq"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsProtectResult": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "protectionRemoved": {
+          "type": "boolean"
+        },
+        "warning": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "retentionDays": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 21
+        }
+      },
+      "required": [
+        "ok",
+        "protectionRemoved",
+        "warning",
+        "retentionDays"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsPruneResult": {
+      "type": "object",
+      "properties": {
+        "removed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "checkpoint": {
+          "type": "boolean"
+        },
+        "diskWarning": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "removed",
+        "checkpoint",
+        "diskWarning"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsBackup": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "path"
       ],
       "additionalProperties": false
     }

@@ -57,6 +57,10 @@ func run(args []string) error {
 	enabled := flags.Bool("enabled", true, "Enable site/device")
 	history := flags.Int("history-days", 30, "Terminal job history retention")
 	audit := flags.Int("audit-days", 30, "Audit retention")
+	errorsRetention := flags.Int("errors-retention-days", 14, "Diagnostics journal TTL 7..21 days")
+	errorsMaxDB := flags.Int64("errors-max-db-bytes", 256<<20, "Diagnostics sqlite size budget")
+	errorsSenderHourly := flags.Int("errors-sender-hourly-limit", 500, "Diagnostics events per site or device per hour")
+	errorsGlobalHourly := flags.Int("errors-global-hourly-limit", 2000, "Diagnostics events per hour")
 	heartbeat := flags.Duration("heartbeat", 15*time.Second, "Device heartbeat interval")
 	lease := flags.Duration("lease", 120*time.Second, "Execution lease duration")
 	safety := flags.Duration("stop-safety", 5*time.Second, "Local stop safety margin")
@@ -99,6 +103,13 @@ func run(args []string) error {
 			return e
 		}
 		return output(map[string]any{"status": "restored", "epoch": epoch, "maintenance": true})
+	}
+	if command == "restore-errors" {
+		path := filepath.Join(filepath.Dir(*dbPath), "errors.sqlite")
+		if e := dispatcher.RestoreErrors(path, *from); e != nil {
+			return e
+		}
+		return output(map[string]string{"status": "errors-restored", "path": path})
 	}
 	store, e := dispatcher.Open(*dbPath, config)
 	if e != nil {
@@ -265,7 +276,17 @@ func run(args []string) error {
 			}
 			path = *out
 		}
-		return output(map[string]string{"status": "snapshot", "path": path})
+		journal := dispatcher.DefaultErrorJournalConfig()
+		es, e := dispatcher.OpenErrors(filepath.Join(filepath.Dir(*dbPath), "errors.sqlite"), journal)
+		if e != nil {
+			return e
+		}
+		defer es.Close()
+		errorsPath, e := es.Snapshot(ctx, *keep)
+		if e != nil {
+			return e
+		}
+		return output(map[string]string{"status": "snapshot", "path": path, "errorsPath": errorsPath})
 	case "ops":
 		v, e := store.OpsStatus(ctx)
 		if e != nil {
@@ -279,12 +300,19 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	handler := dispatcher.HandlerWithSecureCookies(store, *secureCookies)
-	errorStore, e := dispatcher.OpenErrors(filepath.Join(filepath.Dir(*dbPath), "errors.sqlite"), dispatcher.DefaultErrorJournalConfig())
+	journalCfg := dispatcher.DefaultErrorJournalConfig()
+	journalCfg.RetentionDays = *errorsRetention
+	journalCfg.MaxDBBytes = *errorsMaxDB
+	journalCfg.SenderHourlyLimit = *errorsSenderHourly
+	journalCfg.GlobalHourlyLimit = *errorsGlobalHourly
+	errorStore, e := dispatcher.OpenErrors(filepath.Join(filepath.Dir(*dbPath), "errors.sqlite"), journalCfg)
 	if e != nil {
 		return e
 	}
 	defer errorStore.Close()
 	handler.(*dispatcher.HTTP).ConfigureErrors(errorStore)
+	reporter := dispatcher.NewReporter(errorStore, filepath.Join(filepath.Dir(*dbPath), "errors-fallback.jsonl"), "dispatcher")
+	handler.(*dispatcher.HTTP).ConfigureReporter(reporter)
 	if certificates != nil {
 		handler.(*dispatcher.HTTP).ConfigureConnection(certificates)
 	}
@@ -307,6 +335,7 @@ func run(args []string) error {
 		log.Print("diagnostics cleanup failed; retained for later")
 	}
 	store.StartBackupLoop(ctx)
+	errorStore.StartBackupLoop(ctx)
 	done := make(chan error, 1)
 	go func() {
 		if certificates != nil {
@@ -331,6 +360,7 @@ func run(args []string) error {
 		case <-ticker.C:
 			if e := store.Expire(ctx); e != nil {
 				log.Print("lease expiry failed; durable queue retained")
+				reporter.ReportCode(ctx, "SCHEDULER_EXPIRE", "Lease expiry failed; durable queue retained", "scheduler", "")
 			}
 		case <-prune.C:
 			if certificates != nil {
@@ -340,9 +370,11 @@ func run(args []string) error {
 			}
 			if e := store.Prune(ctx); e != nil {
 				log.Print("history cleanup failed; durable history retained")
+				reporter.ReportCode(ctx, "HISTORY_PRUNE", "History cleanup failed; durable history retained", "scheduler", "")
 			}
 			if e := errorStore.Prune(ctx); e != nil {
 				log.Print("diagnostics cleanup failed; retained for later")
+				reporter.ReportCode(ctx, "DIAGNOSTICS_PRUNE", "Diagnostics cleanup failed; retained for later", "diagnostics", "")
 			}
 		}
 	}
