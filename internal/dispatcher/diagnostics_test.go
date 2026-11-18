@@ -174,3 +174,40 @@ func TestAdminDiagnosticsProbeAndStatus(t *testing.T) {
 		t.Fatalf("status %d", st.StatusCode)
 	}
 }
+
+func TestCapabilitiesOmitsDiagnosticsCollect(t *testing.T) {
+	s, _, h := diagHandler(t)
+	site, err := s.CreateSite(testContext, "diag", 1, []string{
+		"media.transcode", "media.transcribe", "media.subtitles", "media.generate", "diagnostics.collect",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, token, err := s.IssueToken(testContext, "SITE", site.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/site/capabilities", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	if err := s.validator.Check("Capabilities", rec.Body.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		Operations []struct {
+			Code string `json:"code"`
+		} `json:"operations"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range body.Operations {
+		if op.Code == "diagnostics.collect" {
+			t.Fatal("diagnostics.collect must not appear in the compute catalogue")
+		}
+	}
+}

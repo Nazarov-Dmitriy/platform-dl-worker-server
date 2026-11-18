@@ -1328,3 +1328,7 @@ section[data-panel="sites"] hr {
     margin-left: 0;
   }
 }
+
+.pb-12 {
+  padding-bottom: 12px;
+}

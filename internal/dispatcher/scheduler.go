@@ -733,6 +733,9 @@ func (s *Store) Capabilities(ctx context.Context, site string) (map[string]any, 
 		}
 		aggregated := map[string]Capability{}
 		for _, op := range allowed {
+			if op == "diagnostics.collect" {
+				continue
+			}
 			aggregated[op] = Capability{Code: op, RecognitionLanguages: []string{}, TranslationDirections: []Pair{}, Formats: []string{"text"}, Availability: "NOT_INSTALLED", ProfilePolicies: []string{}}
 		}
 		now := s.now()
@@ -807,6 +810,9 @@ func (s *Store) Capabilities(ctx context.Context, site string) (map[string]any, 
 		}
 		out := []Capability{}
 		for _, op := range allowed {
+			if op == "diagnostics.collect" {
+				continue
+			}
 			c := aggregated[op]
 			if op == "media.generate" {
 				models, err := s.readyGenerationModels(tx)

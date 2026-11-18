@@ -163,7 +163,7 @@
             </div>
             <div class="card-body">
               <p id="siteSettingsId" class="caption"></p>
-              <label class="field">Имя сайта<input id="siteNameInput" type="text" required maxlength="200" /></label>
+              <label class="field pb-12">Имя сайта<input id="siteNameInput" type="text" required maxlength="200" /></label>
               <form id="siteOpsForm" class="stacked-form">
                 <fieldset class="form-options">
                   <legend>Разрешённые операции</legend>
@@ -175,7 +175,7 @@
                 </fieldset>
                 <p class="caption">Сайт сможет заказывать только отмеченные виды работ. «Сбор ошибок» — приём журнала,
                   не media-задание. Изменение действует сразу, текущие задания не отменяются, токен не отзывается.</p>
-                <div class="form-actions">
+                <div class="form-actions pb-12">
                   <button class="button primary" type="submit">Сохранить операции</button>
                 </div>
               </form>
@@ -184,7 +184,7 @@
                 <p class="muted">События ошибок идут Frontend → Backend сайта → Worker по действующему токену сайта. Токен не передаётся в браузер панели. Приём событий не даёт читать журнал.</p>
                 <p class="caption" id="siteDiagnosticsLast">Последнее событие: ещё не было</p>
                 <p class="caption">Отсутствие новых ошибок само по себе не доказывает потерю связи.</p>
-                <div class="form-actions">
+                <div class="form-actions pb-12">
                   <button id="siteDiagnosticsProbe" type="button" class="button">Проверить подключение</button>
                 </div>
                 <p id="siteDiagnosticsOut" class="notice-box" role="status" hidden></p>
