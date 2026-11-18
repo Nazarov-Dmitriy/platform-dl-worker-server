@@ -6,11 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Панель управления · Worker</title>
     <script src="/panel/theme.js?v=4"></script>
-    <link rel="stylesheet" href="/panel/app.css?v=8" />
+    <link rel="stylesheet" href="/panel/app.css?v=9" />
     <script defer src="/panel/common.js?v=6"></script>
     <script defer src="/panel/model-compatibility.js?v=6"></script>
     <script defer src="/panel/render.js?v=9"></script>
-    <script defer src="/panel/errors.js?v=1"></script>
+    <script defer src="/panel/errors.js?v=2"></script>
     <script defer src="/panel/app.js?v=9"></script>
 </head>
 
@@ -35,8 +35,7 @@
           <span data-icon="alert"></span>Ошибки</button><button type="button" data-tab="models" aria-pressed="false">
           <span data-icon="box"></span>Модели</button><button type="button" data-tab="accounts" aria-pressed="false"
           id="accountsTab" hidden>
-          <span data-icon="user"></span>Аккаунты</button><button type="button" data-tab="worker" aria-pressed="false">
-          <span data-icon="cpu"></span>Воркер</button><button type="button" data-tab="audit" id="auditTab"
+          <span data-icon="user"></span>Аккаунты</button><button type="button" data-tab="audit" id="auditTab"
           aria-pressed="false" hidden>
           <span data-icon="file"></span>Журнал</button><button type="button" data-tab="ops" aria-pressed="false"
           id="opsTab" hidden>
@@ -333,15 +332,20 @@
               </div>
             </div>
             <div id="errorsList" class="errors-list" role="status"></div>
-            <div class="audit-pagination">
-              <button id="errorsPrev" class="button" type="button" disabled>Назад</button>
-              <span id="errorsPageLabel">—</span>
-              <button id="errorsNext" class="button" type="button" disabled>Далее</button>
-              <label class="field">На странице<select id="errorsLimit" aria-label="Размер страницы">
+            <div class="errors-pagination">
+              <p id="errorsPageLabel" class="errors-page-meta">Нет групп за период</p>
+              <label class="errors-page-size">По
+                <select id="errorsLimit" aria-label="Сколько групп на странице">
                   <option value="10">10</option>
                   <option value="25" selected>25</option>
                   <option value="50">50</option>
-                </select></label>
+                </select>
+                на странице
+              </label>
+              <div class="errors-page-nav">
+                <button id="errorsPrev" class="button" type="button" disabled>Назад</button>
+                <button id="errorsNext" class="button" type="button" disabled>Далее</button>
+              </div>
             </div>
           </div>
           <p id="errorsOut" class="notice-box" role="status" hidden></p>
@@ -632,58 +636,6 @@
               <p id="opsOut" class="notice-box" role="status" hidden></p>
             </div>
           </div>
-        </section>
-        <section data-panel="worker" hidden>
-          <div class="card">
-            <div class="screen-heading">
-              <h2>Обработка заданий</h2>
-              <div class="actions">
-                <button type="button" class="button" data-go="models">Модели</button>
-                <button type="button" class="button" data-go="ops">Настройки</button>
-              </div>
-            </div>
-            <div class="status-row">
-              <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Подключение</span>
-              <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Сборки GitHub</span>
-              <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Видео</span>
-              <span class="status-chip"><span class="ci-dot" data-phase="idle"></span>Аудио</span>
-            </div>
-            <div class="summary">
-              <h2>На этом компьютере</h2>
-              <span id="worker-activity">Заданий в работе: 0</span>
-              <span id="worker-state">Обработчик запущен</span>
-              <span id="worker-detail" class="muted">Готов к обработке</span>
-            </div>
-            <div class="actions dashboard-actions">
-              <button type="button" class="button primary">Подключиться</button>
-              <button type="button" class="button">Пауза</button>
-              <button type="button" class="button">Остановить</button>
-            </div>
-          </div>
-          <div class="card">
-            <h2>Задания на этом устройстве</h2>
-            <div class="jobs-scroll">
-              <table class="jobs-table">
-                <thead>
-                  <tr>
-                    <th>Задание</th>
-                    <th>Этап</th>
-                    <th>Прогресс</th>
-                  </tr>
-                </thead>
-                <tbody id="workerJobs"></tbody>
-              </table>
-            </div>
-            <p class="hint">Новые задания назначает сервер. Общая очередь доступна в панели диспетчера.</p>
-          </div>
-          <details class="card">
-            <summary>
-              <span>Сборка GitHub</span>
-              <span class="ci-dot" data-phase="idle"></span>
-              <span>Не запущены</span>
-            </summary>
-            <p class="hint">Нажмите «Настройки» → «Сборки GitHub» для настройки.</p>
-          </details>
         </section>
         <section data-panel="updates" hidden>
           <div class="card">

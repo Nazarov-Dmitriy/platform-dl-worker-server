@@ -426,8 +426,8 @@ async function loadErrors(action) {
     const start = errorsState.prev.length * errorsState.limit + (page.items?.length ? 1 : 0);
     const end = errorsState.prev.length * errorsState.limit + (page.items?.length || 0);
     $("errorsPageLabel").textContent = total
-      ? start + "–" + end + " из " + total
-      : "0 из 0";
+      ? "Показаны " + start + "–" + end + " из " + total + " групп"
+      : "Нет групп за период";
     const stillOpen = new Set((page.items || []).filter((g) => errorsState.open.has(g.id)).map((g) => g.id));
     errorsState.open = stillOpen;
     errorsRenderList();
