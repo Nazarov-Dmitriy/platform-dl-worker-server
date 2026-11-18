@@ -10,9 +10,9 @@ for a in "$@"; do
   [ "$a" = "--disable" ] && DISABLE=1
 done
 if [ "$(uname -s)" = "Darwin" ]; then
-  PLIST="$HOME/Library/LaunchAgents/com.titunki.processor.plist"
+  PLIST="$HOME/Library/LaunchAgents/com.worker.processor.plist"
   if [ "$DISABLE" = 1 ]; then
-    launchctl disable "gui/$(id -u)/com.titunki.processor" 2>/dev/null || true
+    launchctl disable "gui/$(id -u)/com.worker.processor" 2>/dev/null || true
     rm -f "$PLIST"
     echo '{"status":"autostart-disabled"}'
     exit 0
@@ -32,7 +32,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>com.titunki.processor</string>
+  <key>Label</key><string>com.worker.processor</string>
   <key>WorkingDirectory</key><string>$ROOT_XML</string>
   <key>ProgramArguments</key><array>
     <string>$NODE_XML</string><string>$ROOT_XML/dist/main.js</string><string>$CONFIG_XML</string>
@@ -45,16 +45,16 @@ if [ "$(uname -s)" = "Darwin" ]; then
 </dict></plist>
 EOF
   chmod 600 "$PLIST"
-  launchctl enable "gui/$(id -u)/com.titunki.processor"
-  if ! launchctl print "gui/$(id -u)/com.titunki.processor" >/dev/null 2>&1; then
+  launchctl enable "gui/$(id -u)/com.worker.processor"
+  if ! launchctl print "gui/$(id -u)/com.worker.processor" >/dev/null 2>&1; then
     launchctl load "$PLIST"
   fi
-  echo '{"status":"autostart-enabled","agent":"com.titunki.processor"}'
+  echo '{"status":"autostart-enabled","agent":"com.worker.processor"}'
   exit 0
 fi
-UNIT="$HOME/.config/systemd/user/titunki-processor.service"
+UNIT="$HOME/.config/systemd/user/worker-processor.service"
 if [ "$DISABLE" = 1 ]; then
-  systemctl --user disable titunki-processor.service 2>/dev/null || true
+  systemctl --user disable worker-processor.service 2>/dev/null || true
   rm -f "$UNIT"
   echo '{"status":"autostart-disabled"}'
   exit 0
@@ -70,7 +70,7 @@ CONFIG_UNIT=$(unit_escape "$CONFIG")
 TOKEN_UNIT=$(unit_escape "$TOKEN_FILE")
 cat >"$UNIT" <<EOF
 [Unit]
-Description=Titunki processor
+Description=Worker processor
 After=network-online.target
 [Service]
 WorkingDirectory="$ROOT_UNIT"
@@ -82,5 +82,5 @@ RestartSec=5
 WantedBy=default.target
 EOF
 systemctl --user daemon-reload
-systemctl --user enable --now titunki-processor.service
-echo '{"status":"autostart-enabled","unit":"titunki-processor.service"}'
+systemctl --user enable --now worker-processor.service
+echo '{"status":"autostart-enabled","unit":"worker-processor.service"}'

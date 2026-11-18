@@ -5,12 +5,17 @@
 
 ## Не выполнено
 
+- [ ] **Единый журнал ошибок: фронт, бэк и воркер**
+      Заведено 2026-11-17. Диспетчер: сбор front/back/worker, SQLite, просмотр по датам, избранное/разбор. TTL 14 дней, настройка 7–21. Реализованы: контракт и модель хранения (этап 1), приём событий сайтов (этап 2), жизненный цикл хранилища (этап 3). Панель (этап 4), reporter processor/dispatcher и квоты — не начаты.
+  - [ ] **Бэк / ядро** — [Worker-план](./plan/error-journal-plan.md); [Backend сайта](../../LRIGHT/serverBreasts/docs/plan/error-journal-plan.md).
+  - [ ] **Фронт / панель или приложение** — панель журнала в [Worker-плане](./plan/error-journal-plan.md#этап-4--панель-журнала-и-совместная-приёмка); [Frontend сайта](../../LRIGHT/front/docs/plan/error-journal-plan.md).
+  - [ ] **Тестирование / приёмка** — [Worker](./testing/error-journal.md); связанные проверки по ссылкам в чеклисте.
+
 - [ ] **Субтитры: создание, перевод и замена языков**
       Заведено 2026-11-15. Worker: VTT-перевод отдельной веткой без ASR/видео; контракт `params.input=vtt` и `inputKinds`. Backend и Frontend сайта не начаты.
   - [ ] **Бэк / ядро** — [Worker-план](./plan/lesson-subtitles-management-plan.md) выполнен; [Backend сайта](../../LRIGHT/serverBreasts/docs/plan/lesson-subtitles-management-plan.md) открыт.
   - [ ] **Фронт / панель или приложение** — [Frontend сайта](../../LRIGHT/front/docs/plan/lesson-subtitles-management-plan.md); панель воркера не потребовалась: стадия `TRANSLATING` и `inputKinds` уже в протоколе.
   - [ ] **Тестирование / приёмка** — unit/integration воркера добавлены; [SUB-01…10](./testing/lesson-subtitles-management.md) ждут сайт.
-
 
 - [ ] **Устройства: основные и помощники**
       Выпущено в worker-v0.1.12; проверки CI и панели Desktop/Mobile пройдены. Помощник Windows успешно выполнил две реальные загрузки. Проверка распределения между устройствами отложена владельцем до появления второго компьютера. Результаты — в чеклисте.

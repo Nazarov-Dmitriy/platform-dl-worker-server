@@ -3,7 +3,7 @@ package dispatcher
 import (
 	"encoding/json"
 	"net/http"
-	"titunki/worker-server/internal/servercert"
+	"worker/worker-server/internal/servercert"
 )
 
 func (h *HTTP) ConfigureConnection(manager *servercert.Manager) { h.certificates = manager }

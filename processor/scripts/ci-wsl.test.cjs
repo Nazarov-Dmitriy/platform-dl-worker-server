@@ -5,7 +5,7 @@ const { parseLxss, findDiskFolder, inspectWslDisk, retargetWslDisk, validateWind
 
 const registry = `HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss\\{guid}
     DistributionName    REG_SZ    Worker-CI
-    BasePath    REG_SZ    G:\\old\\titunki\\worker-server\\data\\ci-wsl
+    BasePath    REG_SZ    G:\\old\\worker\\worker-server\\data\\ci-wsl
     VhdFileName    REG_SZ    ext4.vhdx
 `;
 const moved = "G:\\now\\worker-server\\data\\ci-wsl";
@@ -14,13 +14,13 @@ const exists = path => path.replaceAll("/", "\\").toLowerCase() === join(moved, 
 test("registry parser keeps the distro name and Windows disk folder", () => {
   const [entry] = parseLxss(registry);
   assert.equal(entry.DistributionName, "Worker-CI");
-  assert.equal(entry.BasePath, "G:\\old\\titunki\\worker-server\\data\\ci-wsl");
+  assert.equal(entry.BasePath, "G:\\old\\worker\\worker-server\\data\\ci-wsl");
   assert.match(entry.key, /\\\\\{guid\}$|\\{guid}$/);
 });
 
 test("disk search uses the moved project folder and does not follow the stale registry path", () => {
   assert.equal(findDiskFolder({
-    registeredPath: "G:\\old\\titunki\\worker-server\\data\\ci-wsl",
+    registeredPath: "G:\\old\\worker\\worker-server\\data\\ci-wsl",
     roots: ["G:\\now\\worker-server"],
     exists,
   }), moved);
@@ -34,7 +34,7 @@ test("inspect tells the user to retarget instead of reinstalling the runner", ()
   assert.doesNotMatch(disk.message, /ставить заново|Установите/);
   const ok = inspectWslDisk("Worker-CI", {
     platform: "win32",
-    query: () => registry.replace("G:\\old\\titunki\\worker-server\\data\\ci-wsl", moved),
+    query: () => registry.replace("G:\\old\\worker\\worker-server\\data\\ci-wsl", moved),
     exists,
     roots: ["G:\\now\\worker-server"],
   });
@@ -63,7 +63,7 @@ test("a reachable disk is left alone", () => {
   const ok = path => path.replaceAll("/", "\\").toLowerCase() === join(here, "ext4.vhdx").toLowerCase();
   const result = retargetWslDisk("Worker-CI", {
     platform: "win32",
-    query: () => registry.replace("G:\\old\\titunki\\worker-server\\data\\ci-wsl", here),
+    query: () => registry.replace("G:\\old\\worker\\worker-server\\data\\ci-wsl", here),
     exists: ok,
     roots: ["G:\\now\\worker-server"],
     writeBasePath: () => { throw Error("should not write"); },

@@ -7,7 +7,7 @@ import (
 	"errors"
 	"sort"
 
-	"titunki/worker-server/contracts"
+	"worker/worker-server/contracts"
 )
 
 // Languages are taken from the OpenAI Whisper multilingual tokenizer, not a site locale list.

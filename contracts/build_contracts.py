@@ -14,6 +14,9 @@ BYTES = {"type": "integer", "minimum": 0, "maximum": 9007199254740991}
 PATH = {"type": "string", "maxLength": 240,
         "pattern": r"^(?!.*(?:^|/)\.{1,2}(?:/|$))[A-Za-z0-9_-]+(?:[./][A-Za-z0-9_-]+)*$"}
 OP = {"enum": ["media.transcode", "media.transcribe", "media.subtitles"]}
+# Site permissions are independent from job types and compute capabilities:
+# diagnostics.collect is a diagnostic ingress permission, never a media job.
+SITE_OP = {"enum": ["media.transcode", "media.transcribe", "media.subtitles"]}
 STAGE = {"enum": ["WAITING_SOURCE", "DOWNLOADING", "ANALYZING", "TRANSCODING",
                    "TRANSCRIBING", "TRANSLATING", "PACKAGING", "WAITING_UPLOAD",
                    "UPLOADING", "WAITING_PUBLICATION", "STOPPING"]}
@@ -317,7 +320,7 @@ def build():
     d["CommandView"]["allOf"] = [{"if": {"properties": {"status": const("FAILED")}},
                                      "then": {"required": ["error"]}}]
     d["AdminSite"] = obj({"name": TEXT, "enabled": {"type": "boolean"},
-                          "operations": arr(OP, 0, 3, True),
+                          "operations": arr(SITE_OP, 0, 3, True),
                           "weight": {"type": "integer", "minimum": 1, "maximum": 100}})
     d["AdminDevice"] = obj({"name": TEXT, "enabled": {"type": "boolean"},
                             "priority": {"type": "integer", "minimum": 0, "maximum": 100}}, ["name", "enabled"])
@@ -379,6 +382,8 @@ def build():
     d["ModelPage"]["properties"]["placements"] = arr(ref("ModelPlacement"), 0, 10000)
     from generation_schema import extend
     extend(d)
+    from diagnostics_schema import extend as extend_diagnostics
+    extend_diagnostics(d)
     schema = {"$schema": "https://json-schema.org/draft/2020-12/schema",
               "$id": "https://worker.invalid/contracts/2.0/protocol.schema.json",
               "title": "Media worker protocol 2.0 (design contract)", "$defs": d}
@@ -409,6 +414,7 @@ def build():
         ("/api/v2/site/jobs/{id}/publication-claim", "post", "claimPublication", "PublicationClaimRequest", "PublicationClaim", [200, 401, 403, 404, 409]),
         ("/api/v2/site/jobs/{id}/cancel", "post", "cancelJob", "Mutation", "JobView", [200, 202, 401, 403, 404, 409]),
         ("/api/v2/site/jobs/{id}/release", "post", "releaseToSite", "Mutation", "JobView", [200, 202, 401, 403, 404, 409]),
+        ("/api/v2/site/diagnostics/events", "post", "submitDiagnostics", "DiagnosticsBatch", "DiagnosticsAck", [200, 400, 401, 403, 413, 503]),
     ]
     for path, method, oid, request, response, statuses in specs:
         paths.setdefault(path, {})[method] = endpoint(oid, request, response, statuses)
@@ -571,6 +577,40 @@ def build():
         payloads.append((kind.replace(".", "-"), "DeviceMessage",
                          {"protocolVersion": VERSION, "messageId": rid, "type": kind,
                           "direction": messages[kind][1], "body": body}))
+    # The last DeviceMessage keeps its own fixture: diagnostics payloads are
+    # appended afterwards and must not change what payloads[-1] refers to.
+    device_message = payloads[-1][2]
+    diag_event = {
+        "eventId": "event-0001",
+        "occurredAt": "2026-11-18T10:15:30Z",
+        "source": "front",
+        "service": "web-app",
+        "environment": "production",
+        "release": "2026.11.18",
+        "severity": "error",
+        "code": "HTTP_500",
+        "module": "checkout",
+        "operation": "cart.submit",
+        "stage": "submit",
+        "message": "Unhandled checkout failure",
+        "cause": "Payment provider timeout",
+        "stack": "TypeError: cannot read properties of undefined\n    at submit (checkout.js:12:3)",
+        "context": "{\"cartId\": \"c_123\"}",
+        "breadcrumbs": [{"at": "2026-11-18T10:15:29Z", "category": "http",
+                         "message": "POST /api/cart"}],
+        "requestId": "req-0001",
+        "operationId": "op-0001",
+        "resourceId": "course-7",
+    }
+    payloads.append(("diagnostics-events", "DiagnosticsBatch",
+                     {"protocolVersion": VERSION, "events": [
+                         diag_event,
+                         {**diag_event, "eventId": "event-0002", "source": "back",
+                          "service": "site-api", "module": "orders", "operation": "order.create"}],
+                     }))
+    payloads.append(("diagnostics-ack", "DiagnosticsAck",
+                     {"protocolVersion": VERSION, "accepted": 2, "duplicates": 0,
+                      "receivedAt": "2026-11-18T10:15:31Z"}))
     bads = []
     for name, definition, value in payloads:
         dump(ROOT / f"fixtures/valid/{name}.json", {"schema": definition, "value": value})
@@ -590,7 +630,7 @@ def build():
     bad("partial-without-artifact", "JobView", changed)
     changed = deepcopy(view); changed["status"] = "FAILED"; changed.pop("artifact")
     bad("failure-without-reason", "JobView", changed)
-    changed = deepcopy(payloads[-1][2]); changed["protocolVersion"] = "3.0"
+    changed = deepcopy(device_message); changed["protocolVersion"] = "3.0"
     bad("wrong-version", "DeviceMessage", changed)
     changed = deepcopy(grant); changed["links"][0]["expiresAt"] = "not-a-date"
     bad("invalid-expiry", "TransferGrant", changed)
@@ -603,6 +643,13 @@ def build():
     bad("vtt-auto-source", "JobRequest", changed)
     changed = deepcopy(vtt_job); changed["params"]["targetLanguages"] = []
     bad("vtt-empty-targets", "JobRequest", changed)
+    bad("diagnostics-batch-empty", "DiagnosticsBatch", {"protocolVersion": VERSION, "events": []})
+    changed = deepcopy(diag_event); changed.pop("message")
+    bad("diagnostics-event-no-message", "DiagnosticsEvent", changed)
+    changed = deepcopy(diag_event); changed["message"] = "x" * 2049
+    bad("diagnostics-event-oversized-message", "DiagnosticsEvent", changed)
+    changed = deepcopy(diag_event); changed["source"] = "operator"
+    bad("diagnostics-event-bad-source", "DiagnosticsEvent", changed)
     for name, definition, value in bads:
         dump(ROOT / f"fixtures/invalid/{name}.json", {"schema": definition, "value": value})
     semantic_bads = []

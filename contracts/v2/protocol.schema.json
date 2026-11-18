@@ -3486,11 +3486,12 @@
               "media.transcode",
               "media.transcribe",
               "media.subtitles",
-              "media.generate"
+              "media.generate",
+              "diagnostics.collect"
             ]
           },
           "minItems": 0,
-          "maxItems": 4,
+          "maxItems": 5,
           "uniqueItems": true
         },
         "weight": {
@@ -3781,11 +3782,12 @@
               "media.transcode",
               "media.transcribe",
               "media.subtitles",
-              "media.generate"
+              "media.generate",
+              "diagnostics.collect"
             ]
           },
           "minItems": 0,
-          "maxItems": 4,
+          "maxItems": 5,
           "uniqueItems": true
         },
         "weight": {
@@ -4367,6 +4369,192 @@
       "required": [
         "protocolVersion",
         "models"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsBreadcrumb": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "data": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "at",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsEvent": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "enum": [
+            "front",
+            "back",
+            "worker"
+          ]
+        },
+        "service": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "environment": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "release": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "severity": {
+          "enum": [
+            "fatal",
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "module": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "operation": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "stage": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "cause": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "stack": {
+          "type": "string",
+          "maxLength": 32768
+        },
+        "context": {
+          "type": "string",
+          "maxLength": 16384
+        },
+        "breadcrumbs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiagnosticsBreadcrumb"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        },
+        "requestId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "operationId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "resourceId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "jobId": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "deviceId": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "eventId",
+        "occurredAt",
+        "source",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsBatch": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "2.0"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiagnosticsEvent"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "events"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosticsAck": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "2.0"
+        },
+        "accepted": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "duplicates": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "receivedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "accepted",
+        "duplicates",
+        "receivedAt"
       ],
       "additionalProperties": false
     }

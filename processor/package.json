@@ -1,5 +1,5 @@
 {
-  "name": "titunki-processor",
+  "name": "worker-processor",
   "version": "0.8.3",
   "private": true,
   "type": "module",

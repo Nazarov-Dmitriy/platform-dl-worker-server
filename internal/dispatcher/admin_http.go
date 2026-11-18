@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"titunki/worker-server/panel"
+	"worker/worker-server/panel"
 )
 
 const sessionCookie = "dispatcher_session"

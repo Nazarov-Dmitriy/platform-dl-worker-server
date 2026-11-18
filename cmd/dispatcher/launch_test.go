@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"titunki/worker-server/internal/dispatcher"
+	"worker/worker-server/internal/dispatcher"
 )
 
 func TestContainerUsesChosenPasswordAndDoesNotResetAccount(t *testing.T) {

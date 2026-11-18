@@ -23,7 +23,7 @@ python contracts/validate.py
 На Windows без C-компилятора использовать тестовый Docker target:
 
 ```powershell
-docker build --target test -t titunki-dispatcher-tests:stage7 .
+docker build --target test -t worker-dispatcher-tests:stage7 .
 ```
 
 Тесты проверяют конкурентный приём/назначение, права и повторы renewal, fairness/FIFO,
@@ -171,7 +171,7 @@ Restore меняет epoch, закрывает активные назначен
 ## Воспроизводимый нагрузочный стенд
 
 ```powershell
-docker build -t titunki-dispatcher:stage7 .
+docker build -t worker-dispatcher:stage7 .
 ./scripts/load-docker.ps1 -Jobs 2000
 ```
 

@@ -1,6 +1,6 @@
 # Сервер диспетчера: запуск, копии и обновление
 
-Дата: 2026-10-13. Образ `titunki-dispatcher:stage7`, Compose, health/ready,
+Дата: 2026-10-13. Образ `worker-dispatcher:stage7`, Compose, health/ready,
 снимок SQLite, restore с новой epoch и обслуживание из панели. Не копировать
 живой `dispatcher.db`. Не разворачивать исторический config.example.json.
 
@@ -68,7 +68,7 @@ docker compose up -d
 
 1. Панель → Эксплуатация → обслуживание, дождаться `running=0` и `offered=0`.
 2. «Подготовить обновление» (снимок, если очередь пуста).
-3. Сохранить предыдущий образ: `docker tag titunki-dispatcher:stage7 titunki-dispatcher:previous`.
+3. Сохранить предыдущий образ: `docker tag worker-dispatcher:stage7 worker-dispatcher:previous`.
 4. Собрать/подтянуть новый образ, `docker compose up -d`.
 5. Совместимый откат образа: вернуть `previous` и `up -d`.
 6. Несовместимая схема: `restore` из снимка шага 2, не смешивать WAL живой базы.

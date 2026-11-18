@@ -1,11 +1,11 @@
-﻿# Install or remove a logon Scheduled Task for the processor. Token stays in an owner-restricted file, not in config.json.
+# Install or remove a logon Scheduled Task for the processor. Token stays in an owner-restricted file, not in config.json.
 param(
   [string]$Config = (Join-Path (Split-Path $PSScriptRoot -Parent) "config.json"),
   [string]$TokenFile = (Join-Path (Split-Path $PSScriptRoot -Parent) "data\processor.token"),
   [switch]$Disable
 )
 $ErrorActionPreference = "Stop"
-$Name = "TitunkiProcessor"
+$Name = "WorkerProcessor"
 $Root = Split-Path $PSScriptRoot -Parent
 if ($Disable) {
   Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue
@@ -33,4 +33,4 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
 $settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
 $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive
 Register-ScheduledTask -TaskName $Name -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
-Write-Output '{"status":"autostart-enabled","task":"TitunkiProcessor"}'
+Write-Output '{"status":"autostart-enabled","task":"WorkerProcessor"}'

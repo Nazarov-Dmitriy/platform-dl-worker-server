@@ -871,6 +871,88 @@
         }
       ]
     },
+    "/api/v2/site/diagnostics/events": {
+      "post": {
+        "operationId": "submitDiagnostics",
+        "security": [
+          {
+            "SiteToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/DiagnosticsAck"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See normative protocol.md",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./protocol.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./protocol.schema.json#/$defs/DiagnosticsBatch"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/admin/sites": {
       "post": {
         "operationId": "createSites",

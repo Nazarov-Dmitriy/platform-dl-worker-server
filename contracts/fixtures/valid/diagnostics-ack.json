@@ -1,0 +1,9 @@
+{
+  "schema": "DiagnosticsAck",
+  "value": {
+    "protocolVersion": "2.0",
+    "accepted": 2,
+    "duplicates": 0,
+    "receivedAt": "2026-11-18T10:15:31Z"
+  }
+}

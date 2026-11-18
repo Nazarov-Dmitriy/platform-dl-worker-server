@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"titunki/worker-server/internal/servercert"
+	"worker/worker-server/internal/servercert"
 )
 
 func TestPublicCertificateDownloadDoesNotRequireLoginOrExposeKey(t *testing.T) {

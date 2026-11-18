@@ -13,7 +13,7 @@ import (
 	"github.com/dlclark/regexp2"
 	"github.com/gowebpki/jcs"
 	"github.com/santhosh-tekuri/jsonschema/v6"
-	"titunki/worker-server/contracts"
+	"worker/worker-server/contracts"
 )
 
 type APIError struct {
@@ -375,7 +375,7 @@ func NewValidator() (*Validator, error) {
 		return nil, e
 	}
 	v := &Validator{schemas: map[string]*jsonschema.Schema{}}
-	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck", "ModelEntry", "AdminCommand", "CommandView", "Login", "Session", "AdminSite", "AdminDevice", "AdminAccount", "AdminAccountUpdate", "AdminSiteView", "AdminDeviceView", "AdminAccountView", "TokenCreate", "IssuedToken", "TokenPage", "ModelPage", "GenerationModel", "GenerationModelPage"} {
+	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck", "ModelEntry", "AdminCommand", "CommandView", "Login", "Session", "AdminSite", "AdminDevice", "AdminAccount", "AdminAccountUpdate", "AdminSiteView", "AdminDeviceView", "AdminAccountView", "TokenCreate", "IssuedToken", "TokenPage", "ModelPage", "GenerationModel", "GenerationModelPage", "DiagnosticsBatch"} {
 		s, e := c.Compile("schema.json#/$defs/" + name)
 		if e != nil {
 			return nil, e

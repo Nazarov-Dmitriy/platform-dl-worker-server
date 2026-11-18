@@ -1,0 +1,7 @@
+{
+  "schema": "DiagnosticsBatch",
+  "value": {
+    "protocolVersion": "2.0",
+    "events": []
+  }
+}

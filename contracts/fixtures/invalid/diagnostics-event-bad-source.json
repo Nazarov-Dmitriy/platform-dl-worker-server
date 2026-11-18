@@ -1,0 +1,30 @@
+{
+  "schema": "DiagnosticsEvent",
+  "value": {
+    "eventId": "event-0001",
+    "occurredAt": "2026-11-18T10:15:30Z",
+    "source": "operator",
+    "service": "web-app",
+    "environment": "production",
+    "release": "2026.11.18",
+    "severity": "error",
+    "code": "HTTP_500",
+    "module": "checkout",
+    "operation": "cart.submit",
+    "stage": "submit",
+    "message": "Unhandled checkout failure",
+    "cause": "Payment provider timeout",
+    "stack": "TypeError: cannot read properties of undefined\n    at submit (checkout.js:12:3)",
+    "context": "{\"cartId\": \"c_123\"}",
+    "breadcrumbs": [
+      {
+        "at": "2026-11-18T10:15:29Z",
+        "category": "http",
+        "message": "POST /api/cart"
+      }
+    ],
+    "requestId": "req-0001",
+    "operationId": "op-0001",
+    "resourceId": "course-7"
+  }
+}

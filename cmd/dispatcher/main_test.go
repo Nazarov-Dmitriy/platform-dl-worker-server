@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"context"
-	"titunki/worker-server/internal/dispatcher"
+	"worker/worker-server/internal/dispatcher"
 )
 
 func TestOwnerPasswordInput(t *testing.T) {

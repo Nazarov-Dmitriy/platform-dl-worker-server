@@ -1,4 +1,4 @@
-module titunki/worker-server
+module worker/worker-server
 
 go 1.27.0
 

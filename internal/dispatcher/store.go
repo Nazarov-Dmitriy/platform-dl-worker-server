@@ -215,7 +215,7 @@ func (s *Store) CreateSite(ctx context.Context, name string, weight int, ops []s
 	}
 	seen := map[string]bool{}
 	for _, op := range ops {
-		if seen[op] || !contains([]string{"media.transcode", "media.transcribe", "media.subtitles", "media.generate"}, op) {
+		if seen[op] || !contains([]string{"media.transcode", "media.transcribe", "media.subtitles", "media.generate", "diagnostics.collect"}, op) {
 			return v, problem(400, "INVALID_SITE", "Unknown or duplicate operation")
 		}
 		seen[op] = true
@@ -238,7 +238,7 @@ func (s *Store) SetSite(ctx context.Context, id string, enabled bool, weight int
 	if len(operations) == 1 {
 		seen := map[string]bool{}
 		for _, op := range operations[0] {
-			if seen[op] || !contains([]string{"media.transcode", "media.transcribe", "media.subtitles", "media.generate"}, op) {
+			if seen[op] || !contains([]string{"media.transcode", "media.transcribe", "media.subtitles", "media.generate", "diagnostics.collect"}, op) {
 				return problem(400, "INVALID_SITE", "Unknown or duplicate operation")
 			}
 			seen[op] = true

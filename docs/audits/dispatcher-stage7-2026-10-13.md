@@ -1,7 +1,7 @@
 # Отчёт этапа 7 — поставка и эксплуатация
 
 Дата: 2026-10-13. Windows, локальные `go test` и Node tests. Образ Compose
-`titunki-dispatcher:stage7` на VPS не запускался — это этап 8.
+`worker-dispatcher:stage7` на VPS не запускался — это этап 8.
 
 ## Сделано
 

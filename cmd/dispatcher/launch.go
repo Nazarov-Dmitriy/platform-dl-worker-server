@@ -15,8 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"titunki/worker-server/internal/dispatcher"
-	"titunki/worker-server/internal/servercert"
+	"worker/worker-server/internal/dispatcher"
+	"worker/worker-server/internal/servercert"
 )
 
 func bootstrapContainerOwner(store *dispatcher.Store, dir string) error {

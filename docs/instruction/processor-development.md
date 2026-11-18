@@ -77,8 +77,8 @@ chmod 600 data/processor.token
 ./packaging/install.sh --disable
 ```
 
-Linux — user systemd `titunki-processor.service`, macOS — LaunchAgent
-`com.titunki.processor`, Windows — задача `TitunkiProcessor` при входе.
+Linux — user systemd `worker-processor.service`, macOS — LaunchAgent
+`com.worker.processor`, Windows — задача `WorkerProcessor` при входе.
 
 ## Параметры и диск
 
@@ -143,8 +143,8 @@ npm test
 Полная проверка Linux из корня:
 
 ```powershell
-docker build -f processor/Dockerfile -t titunki-processor:stage7-test .
-docker build --target test -t titunki-dispatcher:stage3-test .
+docker build -f processor/Dockerfile -t worker-processor:stage7-test .
+docker build --target test -t worker-dispatcher:stage3-test .
 ```
 
 Образы предназначены для разработки. Тесты создают свои временные БД и устройства;

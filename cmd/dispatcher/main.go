@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"titunki/worker-server/internal/dispatcher"
-	"titunki/worker-server/internal/servercert"
+	"worker/worker-server/internal/dispatcher"
+	"worker/worker-server/internal/servercert"
 )
 
 func main() {
@@ -279,6 +279,12 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	handler := dispatcher.HandlerWithSecureCookies(store, *secureCookies)
+	errorStore, e := dispatcher.OpenErrors(filepath.Join(filepath.Dir(*dbPath), "errors.sqlite"), dispatcher.DefaultErrorJournalConfig())
+	if e != nil {
+		return e
+	}
+	defer errorStore.Close()
+	handler.(*dispatcher.HTTP).ConfigureErrors(errorStore)
 	if certificates != nil {
 		handler.(*dispatcher.HTTP).ConfigureConnection(certificates)
 	}
@@ -296,6 +302,9 @@ func run(args []string) error {
 	}
 	if e = store.Prune(ctx); e != nil {
 		return e
+	}
+	if e = errorStore.Prune(ctx); e != nil {
+		log.Print("diagnostics cleanup failed; retained for later")
 	}
 	store.StartBackupLoop(ctx)
 	done := make(chan error, 1)
@@ -331,6 +340,9 @@ func run(args []string) error {
 			}
 			if e := store.Prune(ctx); e != nil {
 				log.Print("history cleanup failed; durable history retained")
+			}
+			if e := errorStore.Prune(ctx); e != nil {
+				log.Print("diagnostics cleanup failed; retained for later")
 			}
 		}
 	}
