@@ -1308,6 +1308,29 @@ section[data-panel="sites"] hr {
   background: var(--soft);
   border-radius: 8px;
 }
+.errors-examples {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.errors-examples summary {
+  cursor: pointer;
+  padding-bottom: 8px;
+}
+.errors-example-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.errors-example-description {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .errors-copy-text {
   width: 100%;
   min-height: 220px;

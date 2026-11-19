@@ -218,17 +218,19 @@ function errorsEventText(ev) {
 }
 
 function errorsMiniEvent(ev, groupId) {
-  const row = node("div", null, "errors-inline");
-  row.append(
-    node("span", (ev.source || "") + " · " + (ev.message || ev.eventId), "caption"),
-  );
+  const row = node("div", null, "errors-example-row");
+  const description = node("div", null, "errors-example-description");
+  const meta = [ev.receivedAt ? date(ev.receivedAt) : "", ev.source ? errorsSourceLabel(ev.source) : ""].filter(Boolean);
+  description.append(node("span", ev.message || ev.eventId));
+  if (meta.length) description.append(node("span", meta.join(" · "), "caption"));
+  row.append(description);
   if (!ev.pinned) {
-    const pin = node("button", "Сохранить пример", "button quiet");
+    const pin = node("button", "Сохранить этот случай", "button quiet");
     pin.type = "button";
     pin.onclick = () => errorsPin(groupId, ev.seq, true).catch(report);
     row.append(pin);
   } else {
-    const unpin = node("button", "Убрать пример", "button quiet");
+    const unpin = node("button", "Снять защиту случая", "button quiet");
     unpin.type = "button";
     unpin.onclick = () => errorsPin(groupId, ev.seq, false).catch(report);
     row.append(unpin);
@@ -304,12 +306,13 @@ function errorsRenderDetail(group, host) {
     errorsAddNote(group.id, note.value).catch(report);
   };
   host.append(noteForm);
-  const examples = node("div");
-  examples.append(node("p", "Выбранные примеры", "detail-label"));
+  const examples = node("details", null, "errors-examples");
+  examples.append(node("summary", "Сохранённые случаи (" + (card.examples || []).length + ")"));
   (card.examples || []).forEach((ev) => examples.append(errorsMiniEvent(ev, group.id), errorsEventText(ev)));
   if (!(card.examples || []).length) examples.append(node("p", "Нет сохранённых примеров", "caption"));
-  const repeats = node("div");
-  repeats.append(node("p", "Свежие повторы периода", "detail-label"));
+  const repeats = node("details", null, "errors-examples");
+  repeats.append(node("summary", "Повторы за выбранный период"));
+  repeats.append(node("p", "Сохранение защищает стек и контекст этого случая от обычной очистки, пока группа в избранном или в разборе.", "caption"));
   (card.repeats || []).forEach((ev) => repeats.append(errorsMiniEvent(ev, group.id)));
   if (!(card.repeats || []).length) repeats.append(node("p", "Нет повторов периода", "caption"));
   const related = node("div");
@@ -324,7 +327,9 @@ function errorsRenderDetail(group, host) {
   const history = node("div");
   history.append(node("p", "История разбора", "detail-label"));
   (card.history || []).forEach((n) => history.append(node("p", date(n.at) + " · " + (n.author || "") + " · " + n.change, "caption")));
-  host.append(examples, repeats, related, notes, history);
+  host.append(notes, repeats, examples);
+  if (card.related?.length) host.append(related);
+  if (card.history?.length) host.append(history);
 }
 
 function errorsRenderList() {
