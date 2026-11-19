@@ -6,11 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Панель управления · Worker</title>
     <script src="/panel/theme.js?v=4"></script>
-    <link rel="stylesheet" href="/panel/app.css?v=9" />
+    <link rel="stylesheet" href="/panel/app.css?v=10" />
     <script defer src="/panel/common.js?v=6"></script>
     <script defer src="/panel/model-compatibility.js?v=6"></script>
     <script defer src="/panel/render.js?v=9"></script>
-    <script defer src="/panel/errors.js?v=2"></script>
+    <script defer src="/panel/errors.js?v=3"></script>
     <script defer src="/panel/app.js?v=9"></script>
 </head>
 
@@ -289,7 +289,7 @@
           <p id="errorsDiskWarning" class="notice-box" hidden role="status"></p>
           <details class="card" id="errorsMore">
             <summary>Дополнительные фильтры и срок хранения</summary>
-            <form id="errorsExtra" class="card-body form-grid">
+            <form id="errorsExtra" class="card-body form-grid errors-filter-grid">
               <label class="field">Статус<select id="errorsStatus">
                   <option value="">Все статусы</option>
                   <option value="NEW">Новая</option>
@@ -304,15 +304,15 @@
                 </select></label>
               <label class="field">Код<input id="errorsCode" maxlength="100" /></label>
               <label class="field">Модуль<input id="errorsModule" maxlength="100" /></label>
-              <label class="field">Release<input id="errorsRelease" maxlength="100" /></label>
-              <label class="field">Severity<select id="errorsSeverity">
+              <label class="field">Версия<input id="errorsRelease" maxlength="100" /></label>
+              <label class="field">Уровень<select id="errorsSeverity">
                   <option value="">Любая</option>
                   <option value="fatal">fatal</option>
                   <option value="error">error</option>
                   <option value="warning">warning</option>
                   <option value="info">info</option>
                 </select></label>
-              <label class="field full">Поиск<input id="errorsQ" maxlength="100" placeholder="Код, модуль или сообщение" /></label>
+              <label class="field errors-search">Поиск<input id="errorsQ" maxlength="100" placeholder="Код, модуль или сообщение" /></label>
               <label class="field">Срок хранения, дни<input id="errorsRetention" type="number" min="7" max="21" value="14" /></label>
               <div class="form-actions full">
                 <button class="button primary" type="submit">Применить фильтры</button>
@@ -348,6 +348,7 @@
               </div>
             </div>
           </div>
+          <p id="errorsToast" class="notice-box errors-toast" role="status" hidden></p>
           <p id="errorsOut" class="notice-box" role="status" hidden></p>
           <div id="errorsCopyFallback" class="card" hidden>
             <div class="card-heading">

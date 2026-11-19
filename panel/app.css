@@ -1355,3 +1355,34 @@ section[data-panel="sites"] hr {
 .pb-12 {
   padding-bottom: 12px;
 }
+
+#errorsExtra.errors-filter-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#errorsExtra .errors-search {
+  grid-column: span 2;
+}
+.errors-toast {
+  position: fixed;
+  inset: auto 20px 20px auto;
+  max-width: min(440px, calc(100vw - 40px));
+  z-index: 30;
+  box-shadow: var(--shadow);
+}
+.errors-toast.error-box {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+@media (max-width: 850px) {
+  #errorsExtra.errors-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  #errorsExtra.errors-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #errorsExtra .errors-search {
+    grid-column: auto;
+  }
+}

@@ -375,7 +375,7 @@ func NewValidator() (*Validator, error) {
 		return nil, e
 	}
 	v := &Validator{schemas: map[string]*jsonschema.Schema{}}
-	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck", "ModelEntry", "AdminCommand", "CommandView", "Login", "Session", "AdminSite", "AdminDevice", "AdminAccount", "AdminAccountUpdate", "AdminSiteView", "AdminDeviceView", "AdminAccountView", "TokenCreate", "IssuedToken", "TokenPage", "ModelPage", "GenerationModel", "GenerationModelPage", "DiagnosticsBatch"} {
+	for _, name := range []string{"JobRequest", "Usage", "OperationCapability", "JobView", "DeviceMessage", "Fence", "Mutation", "Error", "Step", "Capabilities", "JobPage", "TransferGrant", "TransferPage", "PublicationClaimRequest", "PublicationDecision", "PublicationClaim", "Artifact", "MutationAck", "PublicationAck", "ModelEntry", "AdminCommand", "CommandView", "Login", "Session", "AdminSite", "AdminDevice", "AdminAccount", "AdminAccountUpdate", "AdminSiteView", "AdminDeviceView", "AdminAccountView", "TokenCreate", "IssuedToken", "TokenPage", "ModelPage", "GenerationModel", "GenerationModelPage", "DiagnosticsBatch", "DiagnosticsFavorite", "DiagnosticsStatusChange", "DiagnosticsNoteCreate", "DiagnosticsExamplePin", "DiagnosticsSettings"} {
 		s, e := c.Compile("schema.json#/$defs/" + name)
 		if e != nil {
 			return nil, e

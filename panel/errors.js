@@ -270,16 +270,16 @@ function errorsRenderDetail(group, host) {
   const actions = node("div", null, "errors-inline");
   const fav = node("button", card.favorite ? "Убрать из избранного" : "В избранное", "button");
   fav.type = "button";
-  fav.onclick = () => errorsFavorite(group.id, !card.favorite).catch(report);
+  fav.onclick = () => errorsFavorite(group.id, !card.favorite).catch(errorsActionFailed);
   const progress = node("button", "В разбор", "button");
   progress.type = "button";
-  progress.onclick = () => errorsStatus(group.id, "IN_PROGRESS").catch(report);
+  progress.onclick = () => errorsStatus(group.id, "IN_PROGRESS").catch(errorsActionFailed);
   const resolved = node("button", "Исправлено", "button");
   resolved.type = "button";
-  resolved.onclick = () => errorsStatus(group.id, "RESOLVED").catch(report);
+  resolved.onclick = () => errorsStatus(group.id, "RESOLVED").catch(errorsActionFailed);
   const ignored = node("button", "Игнорировать", "button");
   ignored.type = "button";
-  ignored.onclick = () => errorsStatus(group.id, "IGNORED").catch(report);
+  ignored.onclick = () => errorsStatus(group.id, "IGNORED").catch(errorsActionFailed);
   const copy = node("button", "Скопировать ошибку полностью", "button primary");
   copy.type = "button";
   copy.onclick = () => errorsCopyText(card.report || "", "errorsOut").catch(report);
@@ -589,6 +589,19 @@ async function errorsConfirming(run) {
   }
 }
 
+let errorsToastTimer;
+function errorsToast(text, failed = false) {
+  const toast = $("errorsToast");
+  toast.classList.toggle("error-box", failed);
+  message("errorsToast", text);
+  clearTimeout(errorsToastTimer);
+  if (!failed) errorsToastTimer = setTimeout(() => message("errorsToast", ""), 5000);
+}
+function errorsActionFailed(error) {
+  const suffix = error.status ? " (HTTP " + error.status + ")" : "";
+  errorsToast(humanError(error) + suffix, true);
+}
+
 async function errorsFavorite(id, favorite) {
   const result = await errorsConfirming((confirmUnprotect) =>
     api("/api/v2/admin/diagnostics/groups/" + encodeURIComponent(id) + "/favorite", {
@@ -598,8 +611,8 @@ async function errorsFavorite(id, favorite) {
     }),
   );
   if (!result) return;
-  if (result.warning) message("errorsOut", result.warning);
-  else message("errorsOut", favorite ? "Группа в избранном, первый пример сохранён." : "Избранное снято.");
+  if (result.warning) errorsToast(result.warning);
+  else errorsToast(favorite ? "Группа в избранном, первый пример сохранён." : "Избранное снято.");
   await errorsLoadCard(id);
   await loadErrors();
 }
@@ -613,8 +626,8 @@ async function errorsStatus(id, status) {
     }),
   );
   if (!result) return;
-  if (result.warning) message("errorsOut", result.warning);
-  else message("errorsOut", "Статус: " + errorsStatusLabel(status) + ".");
+  if (result.warning) errorsToast(result.warning);
+  else errorsToast("Статус: " + errorsStatusLabel(status) + ".");
   await errorsLoadCard(id);
   await loadErrors();
 }
