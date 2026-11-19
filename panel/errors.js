@@ -68,44 +68,26 @@ function errorsFormatDay(y, m, d) {
 function errorsAppliedRange(now) {
   const wall = errorsZonedParts(now, ERRORS_TZ);
   const today = { y: wall.y, m: wall.m, d: wall.d };
-  if (errorsState.period === "all") return { from: null, to: null, label: "Все сохранившиеся данные · " + ERRORS_TZ + " · TTL и выбранные примеры" };
+  if (errorsState.period === "all") return { from: null, to: null, label: "" };
   let startDay = today;
   let endDay = errorsAddDays(today.y, today.m, today.d, 1);
-  let title = "Сегодня";
   if (errorsState.period === "yesterday") {
     startDay = errorsAddDays(today.y, today.m, today.d, -1);
     endDay = today;
-    title = "Вчера";
   } else if (errorsState.period === "week") {
     startDay = errorsAddDays(today.y, today.m, today.d, -6);
-    title = "За неделю";
   } else if (errorsState.period === "custom") {
     const [fy, fm, fd] = errorsState.customDraft.from.split("-").map(Number);
     const [ty, tm, td] = errorsState.customDraft.to.split("-").map(Number);
     startDay = { y: fy, m: fm, d: fd };
     endDay = errorsAddDays(ty, tm, td, 1);
-    title = "Свой период";
   }
   const from = errorsZonedDate(startDay.y, startDay.m, startDay.d, 0, 0, 0, ERRORS_TZ);
   const to = errorsZonedDate(endDay.y, endDay.m, endDay.d, 0, 0, 0, ERRORS_TZ);
   const endInclusive = errorsAddDays(endDay.y, endDay.m, endDay.d, -1);
-  return {
-    from,
-    to,
-    label:
-      title +
-      ": " +
-      errorsFormatDay(startDay.y, startDay.m, startDay.d) +
-      ", 00:00 – " +
-      errorsFormatDay(endInclusive.y, endInclusive.m, endInclusive.d) +
-      ", конец дня · " +
-      ERRORS_TZ +
-      " · UTC [" +
-      from.toISOString() +
-      ", " +
-      to.toISOString() +
-      ")",
-  };
+  const first = errorsFormatDay(startDay.y, startDay.m, startDay.d);
+  const last = errorsFormatDay(endInclusive.y, endInclusive.m, endInclusive.d);
+  return { from, to, label: first === last ? first : first + " – " + last };
 }
 
 function errorsSiteName(id) {
@@ -175,7 +157,9 @@ function errorsSyncChrome() {
     b.setAttribute("aria-pressed", String(b.dataset.errorsPeriod === errorsState.period)),
   );
   $("errorsCustom").hidden = errorsState.period !== "custom";
-  $("errorsPeriodLabel").textContent = errorsAppliedRange(new Date()).label;
+  const periodLabel = $("errorsPeriodLabel");
+  periodLabel.textContent = errorsAppliedRange(new Date()).label;
+  periodLabel.hidden = !periodLabel.textContent;
 }
 
 function errorsEventText(ev) {
@@ -493,7 +477,7 @@ function errorsMeta() {
     areaLabel: errorsState.area === "worker" ? "Worker" : "Сайты",
     siteLabel: errorsState.area === "worker" ? "система Worker" : errorsSiteName(errorsState.siteId),
     sourceLabel: errorsState.area === "worker" ? "Worker" : errorsSourceLabel(errorsState.source),
-    periodLabel: range.label,
+    periodLabel: range.label || "За всё время",
   };
 }
 

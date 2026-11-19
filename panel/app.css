@@ -1386,3 +1386,9 @@ section[data-panel="sites"] hr {
     grid-column: auto;
   }
 }
+
+.errors-period-label {
+  align-self: center;
+  margin-inline-start: 6px;
+  white-space: nowrap;
+}

@@ -6,11 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Панель управления · Worker</title>
     <script src="/panel/theme.js?v=4"></script>
-    <link rel="stylesheet" href="/panel/app.css?v=10" />
+    <link rel="stylesheet" href="/panel/app.css?v=11" />
     <script defer src="/panel/common.js?v=6"></script>
     <script defer src="/panel/model-compatibility.js?v=6"></script>
     <script defer src="/panel/render.js?v=9"></script>
-    <script defer src="/panel/errors.js?v=3"></script>
+    <script defer src="/panel/errors.js?v=4"></script>
     <script defer src="/panel/app.js?v=9"></script>
 </head>
 
@@ -253,14 +253,13 @@
                 <button type="button" class="button" data-errors-period="week" aria-pressed="false">За неделю</button>
                 <button type="button" class="button" data-errors-period="all" aria-pressed="false">За всё время</button>
                 <button type="button" class="button" data-errors-period="custom" aria-pressed="false">Свой период</button>
+                <span id="errorsPeriodLabel" class="caption errors-period-label" aria-live="polite"></span>
               </div>
-              <p id="errorsPeriodLabel" class="caption">Период</p>
               <form id="errorsCustom" class="errors-custom" hidden>
                 <label class="field">С даты<input id="errorsFrom" type="date" required /></label>
                 <label class="field">По дату<input id="errorsTo" type="date" required /></label>
                 <button class="button primary" type="submit">Применить</button>
               </form>
-              <p class="caption">Счётчики по receivedAt. «За неделю» — сегодня и шесть предыдущих календарных дней в зоне панели. «За всё время» — сохранившиеся данные с учётом TTL и выбранных примеров, без восстановления удалённого.</p>
             </div>
           </div>
           <div class="stats errors-stats">
