@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -34,7 +35,7 @@ func compatible(r JobRequest, caps []Capability, online bool) bool {
 			continue
 		}
 		p := parseSubtitleParams(r.Params)
-		if r.Type == "media.subtitles" && p.Input == "vtt" {
+		if r.Type == "media.subtitles" && strings.EqualFold(p.Input, "vtt") {
 			if !contains(capInputKinds(c), "vtt") || !subtitleFormatsOK(p.Formats, c.Formats) {
 				continue
 			}

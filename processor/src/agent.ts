@@ -220,7 +220,7 @@ export class Agent {
     );
   }
   vttTranslateJob(job: any) {
-    return job?.type === "media.subtitles" && job?.params?.input === "vtt";
+    return job?.type === "media.subtitles" && String(job?.params?.input ?? "").toLowerCase() === "vtt";
   }
   usage() {
     const usage = this.resources.sample();

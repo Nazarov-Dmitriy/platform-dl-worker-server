@@ -94,7 +94,8 @@
         },
         "revision": {
           "type": "string",
-          "format": "uuid"
+          "minLength": 1,
+          "maxLength": 64
         },
         "bytes": {
           "type": "integer",
@@ -350,7 +351,10 @@
       "type": "object",
       "properties": {
         "input": {
-          "const": "vtt"
+          "enum": ["vtt", "VTT"]
+        },
+        "includeOriginal": {
+          "type": "boolean"
         },
         "sourceLanguage": {
           "type": "string",

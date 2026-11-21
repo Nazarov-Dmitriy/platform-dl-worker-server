@@ -137,3 +137,26 @@ func TestSiteCapabilitiesMergeSubtitleInputKinds(t *testing.T) {
 		t.Fatalf("%+v", sub)
 	}
 }
+
+func TestSiteLessonVttPayloadWithLegacyFieldsIsStored(t *testing.T) {
+	s, _, _ := openTest(t)
+	site := testSite(t, s, 1)
+	d, e := s.CreateDevice(testContext, "translate-only", vttCaps())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, _, e = s.IssueToken(testContext, "DEVICE", d.ID); e != nil {
+		t.Fatal(e)
+	}
+	var job map[string]any
+	if e = json.Unmarshal(readFixture(t, "valid/job-subtitles-vtt.json").Value, &job); e != nil {
+		t.Fatal(e)
+	}
+	job["id"] = UUID()
+	job["source"].(map[string]any)["revision"] = "1"
+	job["params"].(map[string]any)["includeOriginal"] = true
+	v, created, e := s.Submit(testContext, site.ID, encode(job))
+	if e != nil || !created || v.Status != "QUEUED" {
+		t.Fatalf("site VTT payload was not stored: %+v created=%v e=%v", v, created, e)
+	}
+}

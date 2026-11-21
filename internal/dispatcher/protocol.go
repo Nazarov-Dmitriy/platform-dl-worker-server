@@ -444,7 +444,7 @@ func (v *Validator) Request(raw []byte) (JobRequest, []byte, string, error) {
 	}
 	var params subtitleParams
 	_ = json.Unmarshal(r.Params, &params)
-	if r.Type == "media.subtitles" && params.Input == "vtt" {
+	if r.Type == "media.subtitles" && strings.EqualFold(params.Input, "vtt") {
 		if e := validateVttTranslateRequest(r, params); e != nil {
 			return r, nil, "", e
 		}
