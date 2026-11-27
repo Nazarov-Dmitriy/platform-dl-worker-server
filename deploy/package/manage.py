@@ -199,27 +199,31 @@ class PublicCertificate:
         previous = self.state()
         if not enable and not previous.get("enabled"):
             return previous
-        host = self.host()
-        if previous.get("host") and host != previous["host"]:
-            raise ValueError("IP изменился: сначала настройте сертификат для нового сервера")
-        self.publish(busy=True, lastAttempt=int(time.time()), message="Проверяем сертификат Let’s Encrypt…")
         try:
+            host = self.host()
+            host_changed = bool(previous.get("host") and previous["host"] != host)
+            if host_changed and not enable:
+                raise ValueError("IP изменился: нажмите «Проверить продление», чтобы выпустить сертификат для нового сервера")
+            self.publish(busy=True, lastAttempt=int(time.time()), message="Проверяем сертификат Let’s Encrypt…")
             with (self.target / ".install.lock").open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 base = self.target / ("acme-staging" if staging else "acme")
                 base.mkdir(mode=0o700, exist_ok=True)
+                live = base / "live/worker-ip"
+                missing = not (live / "cert.pem").exists() or not (self.target / "data/tls/public.json").exists()
+                # Background checks keep a still-valid cert. A panel click after VPS/IP move must replace it.
+                replace = enable and (host_changed or missing)
                 image, challenge = self.challenge(host)
                 command = ["docker", "run", "--rm", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
                            "-v", str(base) + ":/etc/letsencrypt", *image,
                            "certonly", "--non-interactive", "--agree-tos", "--register-unsafely-without-email",
                            "--preferred-profile", "shortlived", "--ip-address", host,
-                           "--cert-name", "worker-ip", "--keep-until-expiring",
+                           "--cert-name", "worker-ip", "--force-renewal" if replace else "--keep-until-expiring",
                            "--logs-dir", "/etc/letsencrypt/logs", "--work-dir", "/etc/letsencrypt/work", *challenge]
                 if staging: command.append("--staging")
                 result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
                 if result.returncode:
                     raise RuntimeError("Let’s Encrypt не выдал сертификат. Проверьте доступ к TCP 80; журнал: " + str(base / "logs"))
-                live = base / "live/worker-ip"
                 if staging:
                     return self.publish(busy=False, message="Тест Let’s Encrypt staging завершён; рабочий сертификат не изменён")
                 # Validate the full chain and IP before publishing any private key to the dispatcher.
@@ -233,8 +237,9 @@ class PublicCertificate:
                 self.install_bundle(bundle)
                 return self.publish(enabled=True, busy=False, host=host, expiresAt=expires,
                                     lastSuccess=int(time.time()), message="Let’s Encrypt включён. Проверка продления каждые 12 часов.")
-        except BaseException:
-            self.publish(busy=False, message="Не удалось обновить сертификат. Прежний сертификат сохранён; проверьте TCP 80 и журнал службы.")
+        except BaseException as error:
+            detail = str(error).strip() or "проверьте TCP 80 и журнал службы"
+            self.publish(busy=False, message="Не удалось обновить сертификат. " + detail)
             raise
 
 def main():

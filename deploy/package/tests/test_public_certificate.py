@@ -34,10 +34,51 @@ class PublicCertificateTests(unittest.TestCase):
         self.assertTrue(self.manager.state()["enabled"])
         self.assertFalse(self.manager.state()["busy"])
 
+    def test_background_renewal_rejects_changed_ip_and_shows_error(self):
+        self.manager.publish(enabled=True, host="194.5.79.198")
+        (self.target / ".env").write_text("DISPATCHER_HOST=194.5.79.199\n")
+        with self.assertRaises(ValueError) as ctx:
+            self.manager.run()
+        self.assertIn("IP изменился", str(ctx.exception))
+        self.assertFalse(self.manager.state()["busy"])
+        self.assertIn("IP изменился", self.manager.state()["message"])
+
+    def test_panel_click_after_ip_change_force_renews(self):
+        self.manager.publish(enabled=True, host="194.5.79.198")
+        (self.target / ".env").write_text("DISPATCHER_HOST=194.5.79.199\n")
+        live = self.target / "acme/live/worker-ip"
+        live.mkdir(parents=True)
+        for name in ("fullchain.pem", "privkey.pem", "cert.pem", "chain.pem"): (live/name).write_text("fixture")
+        (self.target / "data/tls/public.json").write_text("stale")
+        with patch.object(self.manager, "challenge", return_value=([self.manager.IMAGE],["--standalone"])), \
+             patch("manage.subprocess.run") as execute, patch("manage.run"), \
+             patch("manage.ssl._ssl._test_decode_cert", return_value={"notAfter": "Oct 31 12:00:00 2030 GMT"}), \
+             patch.object(self.manager,"install_bundle") as install:
+            execute.return_value.returncode = 0
+            self.manager.run(enable=True)
+            command = execute.call_args.args[0]
+            self.assertIn("--force-renewal",command)
+            self.assertNotIn("--keep-until-expiring",command)
+            install.assert_called_once()
+        self.assertEqual(self.manager.state()["host"], "194.5.79.199")
+
+    def test_panel_click_without_installed_bundle_force_renews(self):
+        live = self.target / "acme/live/worker-ip"
+        live.mkdir(parents=True)
+        for name in ("fullchain.pem", "privkey.pem", "cert.pem", "chain.pem"): (live/name).write_text("issued")
+        with patch.object(self.manager, "challenge", return_value=([self.manager.IMAGE],["--standalone"])), \
+             patch("manage.subprocess.run") as execute, patch("manage.run"), \
+             patch("manage.ssl._ssl._test_decode_cert", return_value={"notAfter": "Oct 31 12:00:00 2030 GMT"}), \
+             patch.object(self.manager,"install_bundle"):
+            execute.return_value.returncode = 0
+            self.manager.run(enable=True)
+            self.assertIn("--force-renewal", execute.call_args.args[0])
+
     def test_issue_uses_fixed_image_and_profile_without_force_renewal(self):
         live = self.target / "acme/live/worker-ip"
         live.mkdir(parents=True)
         for name in ("fullchain.pem", "privkey.pem", "cert.pem", "chain.pem"): (live/name).write_text("fixture")
+        (self.target / "data/tls/public.json").write_text("{}")
         with patch.object(self.manager, "challenge", return_value=([self.manager.IMAGE],["--standalone"])), \
              patch("manage.subprocess.run") as execute, patch("manage.run"), \
              patch("manage.ssl._ssl._test_decode_cert", return_value={"notAfter": "Oct 31 12:00:00 2030 GMT"}), \
