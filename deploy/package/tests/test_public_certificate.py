@@ -34,6 +34,16 @@ class PublicCertificateTests(unittest.TestCase):
         self.assertTrue(self.manager.state()["enabled"])
         self.assertFalse(self.manager.state()["busy"])
 
+    def test_status_hides_stale_enabled_after_ip_move(self):
+        self.manager.publish(enabled=True, host="194.5.79.198", expiresAt=1893456000,
+                             message="Let’s Encrypt включён. Проверка продления каждые 12 часов.")
+        (self.target / ".env").write_text("DISPATCHER_HOST=137.22.151.6\n")
+        view = self.manager.state()
+        self.assertFalse(view["enabled"])
+        self.assertIsNone(view["expiresAt"])
+        self.assertIn("не действует", view["message"])
+        self.assertTrue(self.manager.raw()["enabled"])
+
     def test_background_renewal_rejects_changed_ip_and_shows_error(self):
         self.manager.publish(enabled=True, host="194.5.79.198")
         (self.target / ".env").write_text("DISPATCHER_HOST=194.5.79.199\n")

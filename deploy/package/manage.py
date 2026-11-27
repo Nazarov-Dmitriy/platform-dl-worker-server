@@ -133,14 +133,43 @@ class PublicCertificate:
         if self.path.exists() and self.state().get("busy"):
             self.publish(busy=False, message="Проверка сертификата была прервана; повторите проверку")
 
-    def state(self):
+    def raw(self):
         value = json.loads(self.path.read_text()) if self.path.exists() else {}
         return dict(enabled=False, busy=False, message="Публичный сертификат пока не включён") | value
 
+    def active_bundle(self, host):
+        path = self.target / "data/tls/public.json"
+        if not path.exists():
+            return False
+        try:
+            return json.loads(path.read_text()).get("host") == host
+        except (OSError, ValueError, TypeError):
+            return False
+
+    def state(self):
+        # Panel status must match the live TLS bundle, not a migrated success flag.
+        value = self.raw()
+        if value.get("busy"):
+            return value
+        try:
+            host = self.host()
+        except ValueError:
+            return value
+        if not value.get("enabled"):
+            return value
+        if value.get("host") == host and self.active_bundle(host):
+            return value
+        previous = value.get("host") or "прежнего сервера"
+        view = dict(value, enabled=False, expiresAt=None)
+        if not str(value.get("message") or "").startswith("Не удалось"):
+            view["message"] = ("Let’s Encrypt не действует на этом IP. Запись осталась от " + previous +
+                               "; сейчас отдаётся локальный сертификат. Нажмите «Проверить продление».")
+        return view
+
     def publish(self, **values):
-        value = self.state() | values
+        value = self.raw() | values
         write(self.path, json.dumps(value, ensure_ascii=False))
-        return value
+        return self.state()
 
     def host(self):
         data = self.target / "data/connection.json"
@@ -196,9 +225,9 @@ class PublicCertificate:
         finally: os.close(data)
 
     def run(self, enable=False, staging=False):
-        previous = self.state()
+        previous = self.raw()
         if not enable and not previous.get("enabled"):
-            return previous
+            return self.state()
         try:
             host = self.host()
             host_changed = bool(previous.get("host") and previous["host"] != host)
@@ -210,7 +239,7 @@ class PublicCertificate:
                 base = self.target / ("acme-staging" if staging else "acme")
                 base.mkdir(mode=0o700, exist_ok=True)
                 live = base / "live/worker-ip"
-                missing = not (live / "cert.pem").exists() or not (self.target / "data/tls/public.json").exists()
+                missing = not (live / "cert.pem").exists() or not self.active_bundle(host)
                 # Background checks keep a still-valid cert. A panel click after VPS/IP move must replace it.
                 replace = enable and (host_changed or missing)
                 image, challenge = self.challenge(host)
