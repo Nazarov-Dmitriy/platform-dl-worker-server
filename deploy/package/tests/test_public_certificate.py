@@ -26,11 +26,12 @@ class PublicCertificateTests(unittest.TestCase):
 
     def test_failure_preserves_active_certificate_and_renewal(self):
         active = self.target / "data/tls/public.json"
-        active.write_text("previous")
+        active.write_text(json.dumps({"host": "194.5.79.198", "certificate": "c", "privateKey": "k"}))
         self.manager.publish(enabled=True, host="194.5.79.198")
         with patch.object(self.manager, "challenge", side_effect=RuntimeError("offline")):
             with self.assertRaises(RuntimeError): self.manager.run()
-        self.assertEqual(active.read_text(), "previous")
+        self.assertEqual(json.loads(active.read_text())["host"], "194.5.79.198")
+        self.assertTrue(self.manager.raw()["enabled"])
         self.assertTrue(self.manager.state()["enabled"])
         self.assertFalse(self.manager.state()["busy"])
 
@@ -65,12 +66,15 @@ class PublicCertificateTests(unittest.TestCase):
              patch("manage.ssl._ssl._test_decode_cert", return_value={"notAfter": "Oct 31 12:00:00 2030 GMT"}), \
              patch.object(self.manager,"install_bundle") as install:
             execute.return_value.returncode = 0
+            # install_bundle is mocked; mark the new IP as active for status.
+            install.side_effect = lambda bundle: (self.target / "data/tls/public.json").write_text(json.dumps(bundle))
             self.manager.run(enable=True)
             command = execute.call_args.args[0]
             self.assertIn("--force-renewal",command)
             self.assertNotIn("--keep-until-expiring",command)
             install.assert_called_once()
         self.assertEqual(self.manager.state()["host"], "194.5.79.199")
+        self.assertTrue(self.manager.state()["enabled"])
 
     def test_panel_click_without_installed_bundle_force_renews(self):
         live = self.target / "acme/live/worker-ip"
@@ -79,8 +83,9 @@ class PublicCertificateTests(unittest.TestCase):
         with patch.object(self.manager, "challenge", return_value=([self.manager.IMAGE],["--standalone"])), \
              patch("manage.subprocess.run") as execute, patch("manage.run"), \
              patch("manage.ssl._ssl._test_decode_cert", return_value={"notAfter": "Oct 31 12:00:00 2030 GMT"}), \
-             patch.object(self.manager,"install_bundle"):
+             patch.object(self.manager,"install_bundle") as install:
             execute.return_value.returncode = 0
+            install.side_effect = lambda bundle: (self.target / "data/tls/public.json").write_text(json.dumps(bundle))
             self.manager.run(enable=True)
             self.assertIn("--force-renewal", execute.call_args.args[0])
 
@@ -88,12 +93,15 @@ class PublicCertificateTests(unittest.TestCase):
         live = self.target / "acme/live/worker-ip"
         live.mkdir(parents=True)
         for name in ("fullchain.pem", "privkey.pem", "cert.pem", "chain.pem"): (live/name).write_text("fixture")
-        (self.target / "data/tls/public.json").write_text("{}")
+        (self.target / "data/tls/public.json").write_text(json.dumps({
+            "host": "194.5.79.198", "certificate": "c", "privateKey": "k"}))
+        self.manager.publish(enabled=True, host="194.5.79.198")
         with patch.object(self.manager, "challenge", return_value=([self.manager.IMAGE],["--standalone"])), \
              patch("manage.subprocess.run") as execute, patch("manage.run"), \
              patch("manage.ssl._ssl._test_decode_cert", return_value={"notAfter": "Oct 31 12:00:00 2030 GMT"}), \
              patch.object(self.manager,"install_bundle") as install:
             execute.return_value.returncode = 0
+            install.side_effect = lambda bundle: (self.target / "data/tls/public.json").write_text(json.dumps(bundle))
             self.manager.run(enable=True)
             command = execute.call_args.args[0]
             self.assertIn("certbot/certbot:v5.4.0",command)
